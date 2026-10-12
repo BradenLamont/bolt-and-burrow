@@ -5,9 +5,9 @@ A browser mining game: steer a robot with swappable parts down through the earth
 **Play:** open `index.html`, or publish the repo with GitHub Pages.
 
 ## Controls
-- Desktop: arrow keys or WASD to move and dig in any direction, Up to jump or ride the lift, Down on a platform to drop through, Space to drop a platform
-- Phone: swipe and hold to move and dig, swipe up to jump (diagonally to jump sideways), tap to drop a platform
-- Recall button: emergency trip to the surface, keeping half your ore
+- Desktop: arrow keys or WASD to move in any direction; push into a block to dig it; stand on the conveyor and hold Up or Down to ride it
+- Phone: swipe and hold to move and dig (diagonals work)
+- Recall button: emergency trip back to base, keeping half your ore
 
 ## Files
 - `index.html` – page layout
@@ -32,6 +32,15 @@ A browser mining game: steer a robot with swappable parts down through the earth
 - Lift extensions can be bought at the dock; extending removes platforms in the shaft
 - The lift stops at the dock; keep holding Down to dig or drop below it
 - Recall button (keeps half your cargo; a dead battery still loses it all)
+
+## v0.4 – top-down cave
+- Switched from a side view with gravity to a top-down 2.5D cave: raised block walls, free 8-direction movement, no jumping or platforms
+- "Down the screen" is deeper into the cave; biomes, ore value and hazards still scale with depth
+- The lift is now a conveyor down the middle column. Dig its path clear, then build an outpost every 25 m
+- Outposts sell ore, recharge your battery and open the full shop; ride the conveyor between them for free
+- Legs now set speed and movement battery cost
+- Loose rock reworked into unstable rock: once two of its sides are dug open it shakes, then caves in, leaving rubble
+- Older saves start fresh (the world shape changed)
 
 ## Ideas for later
 - Nano-Bots: rework pets into nano-bots that live inside the robot, still giving bonuses and passive coins

@@ -1,34 +1,33 @@
-// Bolt & Burrow v0.3 — game logic.
-// Sections: state & saving · world generation · player · hazards · pet · drawing · UI · input · main loop
+// Bolt & Burrow v0.4 — game logic (top-down cave).
+// Sections: state & saving · conveyor & outposts · world · player · hazards · pet · drawing · UI · input · main loop
 (() => {
 'use strict';
 const C = CONFIG;
-const { COLS, ROWS, SURFACE_ROW, GROUND_ROW } = C;
-const SAVE_KEY = 'bolt-burrow-v2'; // v0.3 reads v0.2 saves and adds the shop foundation
+const { COLS, ROWS, BASE_ROWS } = C;
+const BELT = C.CONVEYOR.col;
+const SAVE_KEY = 'bolt-burrow-v4'; // v0.4 changed the world shape, so older saves start fresh
 const $ = id => document.getElementById(id);
 
 // ================= State & saving =================
-// World cells are stored as block-type strings (or null for open space).
-const CODE = { d: 'dirt', c: 'clay', b: 'basalt', l: 'loose', o: 'copper', s: 'silver', g: 'gold', k: 'crystal', f: 'fossil', p: 'plat', n: 'found', x: 'bedrock' };
+const CODE = { d: 'dirt', c: 'clay', b: 'basalt', l: 'loose', r: 'rubble', o: 'copper', s: 'silver', g: 'gold', k: 'crystal', f: 'fossil', n: 'found', t: 'post', x: 'bedrock' };
 const CHAR = Object.fromEntries(Object.entries(CODE).map(([k, v]) => [v, k]));
 const ORES = new Set(['copper', 'silver', 'gold', 'crystal']);
 
 const freshState = () => ({
   coins: 0,
   tiers: { head: 0, arms: 0, body: 0, legs: 0 },
-  liftRow: C.LIFT.startRow, liftExt: 0,
-  pet: 0,                              // pet level (0 = not hatched)
+  outposts: 0,                          // how many outposts the conveyor reaches
+  pet: 0,                               // pet level (0 = not hatched)
   cargo: { n: 0, value: 0 },
   best: 0, biomesSeen: [], last: Date.now(),
   world: null, seen: null, pos: null,
 });
 
 let S = freshState();
-let T = [];                // block types
-let DMG = new Float32Array(COLS * ROWS); // dig damage per cell
-let SEEN = new Uint8Array(COLS * ROWS);  // cells the robot has lit up
+let T = [];
+let DMG = new Float32Array(COLS * ROWS);
+let SEEN = new Uint8Array(COLS * ROWS);
 let isNewGame = true;
-
 try {
   const raw = localStorage.getItem(SAVE_KEY);
   if (raw) { S = Object.assign(freshState(), JSON.parse(raw)); isNewGame = false; }
@@ -38,7 +37,7 @@ function save() {
   S.last = Date.now();
   S.world = T.map(t => (t ? CHAR[t] : '.')).join('');
   S.seen = SEEN.join('');
-  S.pos = { x: P.x, y: P.y, battery: P.battery, plats: P.plats };
+  S.pos = { x: P.x, y: P.y, battery: P.battery };
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(S)); } catch (e) {}
 }
 
@@ -46,14 +45,16 @@ function save() {
 const idx = (c, r) => r * COLS + c;
 const inBounds = (c, r) => c >= 0 && c < COLS && r >= 0 && r < ROWS;
 const at = (c, r) => (inBounds(c, r) ? T[idx(c, r)] : 'bedrock');
-const inLift = (c, r) => c === 0 && r >= SURFACE_ROW && r <= S.liftRow;
+const solidAt = (c, r) => !!at(c, r);
 const biomeAt = r => C.BIOMES.find(b => r >= b.from && r <= b.to) || C.BIOMES[C.BIOMES.length - 1];
 const part = slot => C.PARTS[slot].tiers[S.tiers[slot]];
-const lightRadius = () => part('head').val;
+const lightRadius = () => part('head').val.light;
+const rockScan = () => part('head').val.scan;
 const digPower = () => part('arms').val * (1 + C.PET.digBonusPerLevel * S.pet);
 const batteryMax = () => part('body').val.battery;
 const cargoMax = () => part('body').val.cargo;
 const legs = () => part('legs').val;
+const depthOf = r => Math.max(0, r - BASE_ROWS + 1);
 function hash(a, b, c) { let h = (a * 374761393 + b * 668265263 + c * 1442695041) | 0; h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; }
 function fmt(n) {
   n = Math.floor(n);
@@ -62,116 +63,104 @@ function fmt(n) {
   while (n >= 1000 && i < u.length - 1) { n /= 1000; i++; }
   return n.toFixed(n < 100 ? 1 : 0) + u[i];
 }
-const depthOf = r => Math.max(0, r - SURFACE_ROW);
 
-// ================= World generation =================
+// ================= Conveyor & outposts =================
+// Outpost k (1, 2, 3…) sits on the conveyor at depth 25k. The conveyor runs from the yard to the last outpost.
+const outpostRow = k => BASE_ROWS - 1 + C.CONVEYOR.step * k;
+const beltEnd = () => outpostRow(S.outposts);
+const onBelt = (c, r) => c === BELT && r >= 0 && r <= beltEnd();
+function outpostAt(c, r) {
+  for (let k = 1; k <= S.outposts; k++) { const row = outpostRow(k); if (Math.abs(c - BELT) <= 1 && Math.abs(r - row) <= 1) return k; }
+  return 0;
+}
+const extendCost = () => Math.round(C.CONVEYOR.baseCost * Math.pow(C.CONVEYOR.costGrowth, S.outposts));
+const extendMaxed = () => outpostRow(S.outposts + 1) + 2 >= ROWS - 1;
+function beltBlocked() {
+  if (extendMaxed()) return [];
+  const out = [];
+  for (let r = beltEnd() + 1; r <= outpostRow(S.outposts + 1); r++) if (solidAt(BELT, r)) out.push(r);
+  return out;
+}
+function buildOutpost(k) {
+  const row = outpostRow(k);
+  for (let r = row - 1; r <= row + 1; r++) for (let c = BELT - 1; c <= BELT + 1; c++) { T[idx(c, r)] = null; DMG[idx(c, r)] = 0; SEEN[idx(c, r)] = 1; }
+  T[idx(BELT + 2, row)] = 'post';
+  T[idx(BELT + 2, row - 1)] = 'post';
+}
+
+// ================= World =================
 function genWorld() {
   T = new Array(COLS * ROWS).fill(null);
-  for (let r = GROUND_ROW; r < ROWS; r++) {
-    for (let c = 0; c < COLS; c++) {
-      const i = idx(c, r);
-      if (r === ROWS - 1) { T[i] = 'bedrock'; continue; }
-      const x = Math.random();
-      if (biomeAt(r).id === 'topsoil') {
-        const clayChance = Math.min(0.75, (r - GROUND_ROW) / 55);
-        let t = Math.random() < clayChance ? 'clay' : 'dirt';
-        if (x < 0.09) t = 'copper';
-        else if (r > 18 && x < 0.12) t = 'silver';
-        T[i] = t;
-      } else {
-        const crystal = r > 95 ? 0.03 : 0.015;
-        let t = 'basalt';
-        if (x < 0.04) t = null;                                  // small caves
-        else if (x < 0.04 + C.ROCK.chance) t = 'loose';
-        else if (x < 0.10 + C.ROCK.chance) t = 'gold';
-        else if (x < 0.10 + C.ROCK.chance + crystal) t = 'crystal';
-        else if (x < 0.14 + C.ROCK.chance + crystal) t = 'copper';
-        T[i] = t;
-      }
+  for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+    const i = idx(c, r);
+    if (c === 0 || c === COLS - 1 || r === ROWS - 1) { T[i] = 'bedrock'; continue; }
+    if (r < BASE_ROWS) continue; // the yard
+    const x = Math.random();
+    if (biomeAt(r).id === 'topsoil') {
+      let t = hash(c, r, 7) < Math.min(0.75, (r - BASE_ROWS) / 55) ? 'clay' : 'dirt';
+      if (x < 0.06) t = 'copper';
+      else if (r > 18 && x < 0.085) t = 'silver';
+      T[i] = t;
+    } else {
+      const crystal = r > 95 ? 0.025 : 0.012;
+      let t = 'basalt';
+      if (x < 0.05) t = null;                                    // small caves
+      else if (x < 0.05 + C.ROCK.chance) t = 'loose';
+      else if (x < 0.10 + C.ROCK.chance) t = 'gold';
+      else if (x < 0.10 + C.ROCK.chance + crystal) t = 'crystal';
+      else if (x < 0.13 + C.ROCK.chance + crystal) t = 'copper';
+      T[i] = t;
     }
   }
-  for (let r = GROUND_ROW; r <= S.liftRow; r++) T[idx(0, r)] = null; // the lift shaft
-  layFoundation();
+  const B = C.BASE_BUILDING;
+  for (let r = B.rows[0]; r <= B.rows[1]; r++) for (let c = B.cols[0]; c <= B.cols[1]; c++) T[idx(c, r)] = 'found';
   if (!S.pet) {
     const [a, b] = C.PET.fossilRows;
-    T[idx(2 + Math.floor(Math.random() * (COLS - 3)), a + Math.floor(Math.random() * (b - a)))] = 'fossil';
+    let c; do { c = 1 + Math.floor(Math.random() * (COLS - 2)); } while (c === BELT);
+    T[idx(c, a + Math.floor(Math.random() * (b - a)))] = 'fossil';
   }
+  for (let k = 1; k <= S.outposts; k++) buildOutpost(k);
   SEEN = new Uint8Array(COLS * ROWS);
-}
-// The shop stands on undiggable foundation so it can never be undermined.
-function layFoundation() {
-  const [a, b] = C.SHOP_COLS;
-  for (let r = GROUND_ROW; r < GROUND_ROW + C.FOUNDATION_DEPTH; r++)
-    for (let c = a; c <= b; c++) T[idx(c, r)] = 'found';
 }
 function loadWorld() {
   if (S.world && S.world.length === COLS * ROWS) {
     T = Array.from(S.world, ch => (ch === '.' ? null : CODE[ch] || null));
     SEEN = S.seen && S.seen.length === COLS * ROWS ? Uint8Array.from(S.seen, ch => (ch === '1' ? 1 : 0)) : new Uint8Array(COLS * ROWS);
-    layFoundation(); // older saves had no foundation
   } else genWorld();
 }
 // What an ore block looks like before you've lit it up: the plain rock around it.
 function baseFor(c, r) {
   if (biomeAt(r).id === 'basalt') return 'basalt';
-  return hash(c, r, 7) < Math.min(0.75, (r - GROUND_ROW) / 55) ? 'clay' : 'dirt';
+  return hash(c, r, 7) < Math.min(0.75, (r - BASE_ROWS) / 55) ? 'clay' : 'dirt';
 }
 
 // ================= Player =================
-// The robot moves freely (not cell by cell). P.x, P.y is the centre of its hitbox, in blocks.
-const HW = C.BODY.w / 2, HH = C.BODY.h / 2, EPS = 1e-4;
-const P = { x: C.SPAWN_COL + 0.5, y: SURFACE_ROW + 1 - HH, vx: 0, vy: 0, battery: 0, plats: C.PLATFORMS.carry,
-            face: 1, dockHold: 0, grounded: false, onPlat: false, inLift: false, dropT: 0, digging: null, wantBuild: false, shake: 0 };
+// The robot moves freely in 8 directions. P.x, P.y is the centre of its hitbox, in blocks.
+const HB = C.BODY / 2, EPS = 1e-4;
+const P = { x: C.SPAWN.col + 0.5, y: C.SPAWN.row + 0.5, battery: 0, face: 1, dir: 'down', digging: null, shake: 0, riding: false };
 const pCol = () => Math.floor(P.x);
 const pRow = () => Math.floor(P.y);
-const bottom = () => P.y + HH;
 
-// Solid = blocks you can't pass. Platforms are one-way and handled separately.
-const solidAt = (c, r) => {
-  if (c < 0 || c >= COLS || r >= ROWS) return true;
-  if (r < 0) return false;
-  const t = T[idx(c, r)];
-  return !!t && t !== 'plat';
-};
 function boxSolid(x, y) {
-  const l = x - HW, r = x + HW, t = y - HH, b = y + HH;
-  for (let row = Math.floor(t); row <= Math.floor(b - EPS); row++)
-    for (let col = Math.floor(l); col <= Math.floor(r - EPS); col++)
-      if (solidAt(col, row)) return true;
+  for (let r = Math.floor(y - HB); r <= Math.floor(y + HB - EPS); r++)
+    for (let c = Math.floor(x - HB); c <= Math.floor(x + HB - EPS); c++)
+      if (solidAt(c, r)) return true;
   return false;
 }
-// Is there a platform whose top surface lies between the old and new feet position?
-function platformLanding(x, oldB, newB) {
-  if (P.dropT > 0) return null;
-  const row = Math.floor(newB);
-  if (row < 0 || oldB > row + 0.02) return null;
-  for (let col = Math.floor(x - HW); col <= Math.floor(x + HW - EPS); col++)
-    if (at(col, row) === 'plat') return row;
-  return null;
-}
-function checkGround() {
-  const b = bottom();
-  P.onPlat = false;
-  if (boxSolid(P.x, P.y + 0.03)) return true;
-  const row = Math.floor(b + 0.03);
-  if (P.dropT <= 0 && b <= row + 0.03)
-    for (let col = Math.floor(P.x - HW); col <= Math.floor(P.x + HW - EPS); col++)
-      if (at(col, row) === 'plat') { P.onPlat = true; return true; }
-  return false;
-}
-const liftZone = () => P.x < 1 && pRow() >= SURFACE_ROW && pRow() <= S.liftRow;
-
 function placePlayerFromSave() {
   const p = S.pos;
-  P.vx = P.vy = 0;
-  if (p && typeof p.x === 'number' && !boxSolid(p.x, p.y)) {
-    P.x = p.x; P.y = p.y; P.battery = Math.min(p.battery, batteryMax()); P.plats = p.plats ?? C.PLATFORMS.carry;
-  } else {
-    P.x = C.SPAWN_COL + 0.5; P.y = SURFACE_ROW + 1 - HH; P.battery = batteryMax();
-  }
+  if (p && typeof p.x === 'number' && !boxSolid(p.x, p.y)) { P.x = p.x; P.y = p.y; P.battery = Math.min(p.battery, batteryMax()); }
+  else { P.x = C.SPAWN.col + 0.5; P.y = C.SPAWN.row + 0.5; P.battery = batteryMax(); }
 }
 
-// Returns true if the battery ran out (the robot gets recalled to the surface).
+// Where is the robot standing? 'base' (the yard), 'outpost', or null.
+function station() {
+  if (pRow() < BASE_ROWS) return 'base';
+  if (outpostAt(pCol(), pRow())) return 'outpost';
+  return null;
+}
+
+// Returns true if the battery ran out (the robot gets recalled to base).
 function drain(amount) {
   P.battery -= amount;
   if (P.battery <= 0) { recall('dead'); return true; }
@@ -182,32 +171,24 @@ function recall(kind) {
   let msg;
   if (kind === 'dead') {
     S.cargo = { n: 0, value: 0 };
-    msg = n ? 'A recovery drone hauled you up. Your ' + n + ' ore was lost.' : 'A recovery drone hauled you back to the surface.';
+    msg = n ? 'A recovery drone hauled you back to base. Your ' + n + ' ore was lost.' : 'A recovery drone hauled you back to base.';
   } else {
     const keep = Math.floor(n * C.RECALL.keepCargo);
     S.cargo = { n: keep, value: n ? Math.floor(S.cargo.value * keep / n) : 0 };
-    msg = n ? 'The drone dropped ' + (n - keep) + ' ore on the way up. You kept ' + keep + '.' : 'A drone carried you back to the surface.';
+    msg = n ? 'The drone dropped ' + (n - keep) + ' ore on the way. You kept ' + keep + '.' : 'A drone carried you back to base.';
   }
-  P.x = C.SPAWN_COL + 0.5; P.y = SURFACE_ROW + 1 - HH; P.vx = P.vy = 0;
-  P.battery = batteryMax(); P.digging = null;
+  P.x = C.SPAWN.col + 0.5; P.y = C.SPAWN.row + 0.5; P.battery = batteryMax(); P.digging = null;
   toast(kind === 'dead' ? 'Battery dead' : 'Recalled', msg);
 }
 
-function atSurface() { return pRow() <= SURFACE_ROW && (P.grounded || P.inLift); }
-function atDock() { return P.inLift && pRow() === S.liftRow && Math.abs(P.vy) < 0.01; }
-
 function sellAndCharge(dt) {
-  const here = atSurface() ? 'surface' : atDock() ? 'dock' : null;
+  const here = station();
   if (!here) return;
   if (S.cargo.n > 0) {
     const { n, value } = S.cargo;
     S.coins += value; S.cargo = { n: 0, value: 0 };
     floatText(P.x, P.y - 0.6, '+' + fmt(value), '#e8a160');
-    toast(null, 'Sold ' + n + ' ore for ' + fmt(value) + ' coins at the ' + here + '.');
-  }
-  if (P.plats < C.PLATFORMS.carry && S.coins >= C.PLATFORMS.restockCost) {
-    const n = Math.min(C.PLATFORMS.carry - P.plats, Math.floor(S.coins / C.PLATFORMS.restockCost));
-    P.plats += n; S.coins -= n * C.PLATFORMS.restockCost;
+    toast(null, 'Sold ' + n + ' ore for ' + fmt(value) + ' coins' + (here === 'outpost' ? ' at the outpost. The conveyor carries it up.' : ' at base.'));
   }
   P.battery = Math.min(batteryMax(), P.battery + C.CHARGE_RATE * dt);
 }
@@ -219,7 +200,7 @@ function breakBlock(c, r) {
   burst(c + 0.5, r + 0.5, B.ore || B.color || C.BLOCKS[baseFor(c, r)].color, 10);
   if (B.value) {
     if (S.cargo.n < cargoMax()) {
-      const v = Math.round(B.value * (1 + (r - GROUND_ROW) / C.ORE_DEPTH_BONUS));
+      const v = Math.round(B.value * (1 + (r - BASE_ROWS) / C.ORE_DEPTH_BONUS));
       S.cargo.n++; S.cargo.value += v;
       floatText(c + 0.5, r + 0.3, '+' + B.label, B.ore);
     } else floatText(c + 0.5, r + 0.3, 'Cargo full', '#e2705a');
@@ -229,200 +210,141 @@ function breakBlock(c, r) {
     toast('A fossil!', C.PET.name + ' the ' + C.PET.species + ' hatched and moved into your burrow.');
   }
 }
-
-// Dig one block. `up` digging is slower and uses more battery.
-function dig(c, r, dt, up) {
+function dig(c, r, dt) {
   const t = at(c, r);
   if (!t) return;
-  if (t === 'bedrock') { hintOnce('bedrock', null, 'Bedrock. This is as deep as this version goes.'); return; }
-  if (t === 'found') { hintOnce('found', null, "That's the shop's foundation. It can't be dug."); return; }
+  if (C.BLOCKS[t].hp === Infinity) {
+    if (t === 'bedrock') hintOnce('bedrock', null, 'Bedrock. You can\'t dig through the cave walls.');
+    else hintOnce('build', null, 'Buildings can\'t be dug.');
+    return;
+  }
   const i = idx(c, r);
-  DMG[i] += digPower() * C.DIG_RATE * (up ? C.DIG_UP.speed : 1) * dt;
+  DMG[i] += digPower() * C.DIG_RATE * dt;
   P.digging = { c, r };
   if (Math.random() < dt * 18) burst(c + 0.5, r + 0.5, C.BLOCKS[t].color || C.BLOCKS[baseFor(c, r)].color, 1);
-  if (DMG[i] >= C.BLOCKS[t].hp) {
-    breakBlock(c, r);
-    drain(C.BATTERY.dig * (up ? C.DIG_UP.battery : 1));
-  }
-}
-// Slide toward the middle of the current column (so you fit down or up a 1-wide hole).
-function centre(dt) {
-  const target = pCol() + 0.5, d = target - P.x, step = 6 * dt;
-  P.x += Math.abs(d) < step ? d : Math.sign(d) * step;
+  if (DMG[i] >= C.BLOCKS[t].hp) { breakBlock(c, r); drain(C.BATTERY.dig); }
 }
 
-function tryBuild() {
-  if (P.inLift) return toast(null, 'The lift already carries you up and down.');
-  if (P.grounded) return toast(null, 'Jump first, then drop a platform under yourself.');
-  if (P.plats <= 0) return toast(null, 'Out of platforms. They restock at the surface and the lift dock.');
-  const c = pCol(), r = Math.ceil(bottom() - 0.02);
-  if (!inBounds(c, r) || at(c, r)) return;
-  if (c === 0 && r <= S.liftRow) return;
-  T[idx(c, r)] = 'plat';
-  P.plats--;
-  burst(c + 0.5, r + 0.1, '#a77d48', 6);
-}
-
-// Move horizontally, stopping at walls. Returns true if a wall blocked the move.
-function moveX(dx) {
-  if (!dx) return false;
-  const nx = P.x + dx;
-  if (!boxSolid(nx, P.y)) { P.x = nx; return false; }
-  // step-up assist: hop small lips (e.g. after sinking slightly into a 1-wide gap)
-  if (P.grounded && !boxSolid(nx, P.y - 0.3) && !boxSolid(P.x, P.y - 0.3)) {
-    for (let lift = 0.05; lift <= 0.3; lift += 0.05) if (!boxSolid(nx, P.y - lift)) { P.y -= lift; P.x = nx; return false; }
-  }
-  if (dx > 0) P.x = Math.floor(nx + HW) - HW - EPS;
-  else P.x = Math.floor(nx - HW) + 1 + HW + EPS;
+// Move along one axis; returns true if a block stopped the move.
+function moveAxis(dx, dy) {
+  const nx = P.x + dx, ny = P.y + dy;
+  if (!boxSolid(nx, ny)) { P.x = nx; P.y = ny; return false; }
+  if (dx > 0) P.x = Math.floor(nx + HB) - HB - EPS;
+  else if (dx < 0) P.x = Math.floor(nx - HB) + 1 + HB + EPS;
+  else if (dy > 0) P.y = Math.floor(ny + HB) - HB - EPS;
+  else if (dy < 0) P.y = Math.floor(ny - HB) + 1 + HB + EPS;
   return true;
 }
-// Move vertically; lands on ground and one-way platforms, bumps heads on ceilings.
-function moveY(dy) {
-  if (!dy) return;
-  const ny = P.y + dy;
-  if (dy > 0) {
-    const pr = platformLanding(P.x, bottom(), ny + HH);
-    if (boxSolid(P.x, ny)) { P.y = Math.floor(ny + HH) - HH - EPS; P.vy = 0; return; }
-    if (pr !== null) { P.y = pr - HH - EPS; P.vy = 0; return; }
-    P.y = ny;
-  } else {
-    if (boxSolid(P.x, ny)) { P.y = Math.floor(ny - HH) + 1 + HH + EPS; if (P.vy < 0) P.vy = 0; return; } // head-bump
-    P.y = ny;
-  }
+// Slide toward the middle of the current row or column so you line up with 1-block tunnels.
+function align(axis, dt) {
+  const target = Math.floor(P[axis]) + 0.5, d = target - P[axis], step = C.ALIGN_SPEED * dt;
+  const nv = P[axis] + (Math.abs(d) < step ? d : Math.sign(d) * step);
+  if (!(axis === 'x' ? boxSolid(nv, P.y) : boxSolid(P.x, nv))) P[axis] = nv;
 }
 
 function updatePlayer(dt) {
   P.digging = null;
-  if (P.dropT > 0) P.dropT -= dt;
-  if (P.wantBuild) { P.wantBuild = false; tryBuild(); }
-
   const h = horizDir(), v = vertDir();
-  P.grounded = checkGround();
-  P.inLift = liftZone();
-  const L = legs();
+  const dx = h === 'left' ? -1 : h === 'right' ? 1 : 0;
+  const dy = v === 'up' ? -1 : v === 'down' ? 1 : 0;
+  if (dx) P.face = dx;
+  if (dx && !dy) P.dir = h; else if (dy && !dx) P.dir = v;
 
-  // ---- Vertical intent ----
-  let digV = false;
-  if (P.inLift) {
-    P.vy = 0;
-    if (v === 'up') {
-      if (pRow() > SURFACE_ROW || P.y > SURFACE_ROW + 1 - HH + 0.01) P.vy = -C.LIFT.speed;
-    } else if (v === 'down') {
-      const atBottom = pRow() === S.liftRow && P.y >= S.liftRow + 1 - HH - 0.02;
-      if (atBottom && P.dockHold <= 0.4) P.dockHold += dt; // pause at the dock before digging or dropping below it
-      else if (solidAt(0, pRow() + 1) && P.y >= pRow() + 1 - HH - 0.02) { if (!h) { dig(0, pRow() + 1, dt, false); digV = true; } }
-      else P.vy = C.LIFT.speed;
-    } else if (h) {
-      // ease to the nearest floor height so you can walk out of the lift
-      const target = Math.round(P.y + HH) - HH; P.y += Math.sign(target - P.y) * Math.min(Math.abs(target - P.y), 6 * dt);
-    }
-  } else {
-    if (v === 'down' && P.grounded) {
-      if (P.onPlat && !solidAt(pCol(), pRow() + 1)) { P.dropT = 0.25; P.grounded = false; }
-      else if (!h && solidAt(pCol(), pRow() + 1)) { centre(dt); dig(pCol(), pRow() + 1, dt, false); digV = true; }
-    } else if (v === 'up') {
-      const above = pRow() - 1;
-      if (P.grounded && !h && solidAt(pCol(), above) && P.y - HH - above - 1 < 0.25) {
-        centre(dt); dig(pCol(), above, dt, true); digV = true;
-      } else if (L.fly && !solidAt(pCol(), above)) {
-        P.vy = Math.max(P.vy - C.GRAVITY * 2.2 * dt, -C.JET_SPEED);
-        if (drain(C.BATTERY.jet * dt)) return;
-      } else if (P.grounded) {
-        if (drain(C.BATTERY.jump)) return;
-        P.vy = -Math.sqrt(2 * C.GRAVITY * L.jump);
-        P.grounded = false;
-      }
-    }
-    if (!P.grounded || P.vy < 0) P.vy = Math.min(C.FALL_MAX, P.vy + C.GRAVITY * dt);
+  // Riding the conveyor: stand on the belt and move along it with no battery cost
+  P.riding = onBelt(pCol(), pRow()) && !dx && dy !== 0 && Math.abs(P.x - (BELT + 0.5)) < 0.3;
+  if (P.riding) {
+    align('x', dt);
+    const ny = P.y + dy * C.CONVEYOR.speed * dt;
+    if (ny >= 0.5 && ny <= beltEnd() + 0.5 && !boxSolid(P.x, ny)) { P.y = ny; finishMove(); return; }
+    P.riding = false; // reached an end of the belt; carry on walking
   }
+  if (!dx && !dy) { finishMove(); return; }
 
-  // ---- Horizontal intent ----
-  P.vx = h ? (h === 'left' ? -1 : 1) * L.speed : 0;
-  if (h) P.face = h === 'left' ? -1 : 1;
-  if (P.inLift && !h) P.x += (0.5 - P.x) * Math.min(1, dt * 10);
+  const sp = legs().speed;
+  const len = Math.hypot(dx, dy), vx = dx / len * sp, vy = dy / len * sp;
+  // Line up with the lane you're moving along, so 1-wide tunnels are easy to enter
+  if (dx && !dy) align('y', dt);
+  if (dy && !dx) align('x', dt);
 
-  // ---- Integrate in small steps so fast falls never skip through a block ----
-  const steps = 4;
-  let blocked = false;
-  const x0 = P.x;
+  const x0 = P.x, y0 = P.y;
+  let hitX = false, hitY = false;
+  const steps = 3;
   for (let k = 0; k < steps; k++) {
-    if (!digV) blocked = moveX(P.vx * dt / steps) || blocked;
-    moveY(P.vy * dt / steps);
+    if (vx) hitX = moveAxis(vx * dt / steps, 0) || hitX;
+    if (vy) hitY = moveAxis(0, vy * dt / steps) || hitY;
   }
-  if (P.inLift) {
-    const top = SURFACE_ROW + 1 - HH, dock = S.liftRow + 1 - HH;
-    if (P.y < top) P.y = top;
-    if (P.y > dock && P.dockHold <= 0.4) { P.y = dock; P.vy = 0; } // the lift stops at the dock
-  }
-  if (v !== 'down') P.dockHold = 0;
-  if (Math.abs(P.x - x0) > 0 && P.grounded) { if (drain(Math.abs(P.x - x0) * C.BATTERY.move)) return; }
+  const moved = Math.hypot(P.x - x0, P.y - y0);
+  if (moved && drain(moved * C.BATTERY.move * legs().eff)) return;
 
-  // ---- Dig sideways when you walk into a wall while standing ----
-  if (blocked && h && (P.grounded || P.inLift) && v !== 'up') {
-    const tc = pCol() + (h === 'left' ? -1 : 1);
-    if (tc >= 0 && tc < COLS) dig(tc, pRow(), dt, false);
+  // Dig the block you're pushing against
+  if (hitX && !dy) dig(pCol() + dx, pRow(), dt);
+  else if (hitY && !dx) dig(pCol(), pRow() + dy, dt);
+  else if (hitX && hitY) { // pushing into a corner: dig the side you were last facing
+    if (P.dir === 'left' || P.dir === 'right') dig(pCol() + dx, pRow(), dt); else dig(pCol(), pRow() + dy, dt);
   }
-
-  P.grounded = checkGround();
-  P.inLift = liftZone();
-  onArrive();
+  finishMove();
 }
 
 let lastBiome = null, lastCell = -1;
-function onArrive() {
-  const cell = idx(pCol(), Math.max(0, pRow()));
+function finishMove() {
+  const cell = idx(pCol(), pRow());
   if (cell === lastCell) return;
   lastCell = cell;
   markSeen();
   S.best = Math.max(S.best, depthOf(pRow()));
-  if (pRow() >= GROUND_ROW) {
+  if (pRow() >= BASE_ROWS) {
     const b = biomeAt(pRow());
-    if (b.id !== lastBiome && !S.biomesSeen.includes(b.id)) {
-      S.biomesSeen.push(b.id);
-      toast(b.name, b.note);
-    }
+    if (b.id !== lastBiome && !S.biomesSeen.includes(b.id)) { S.biomesSeen.push(b.id); toast(b.name, b.note); }
     lastBiome = b.id;
   }
 }
 function markSeen() {
-  const R = lightRadius(), cx = P.x - 0.5, cy = P.y - 0.5;
-  for (let r = Math.max(0, Math.floor(cy - R)); r <= Math.min(ROWS - 1, Math.ceil(cy + R)); r++)
-    for (let c = 0; c < COLS; c++)
-      if (Math.hypot(c - cx, r - cy) <= R) SEEN[idx(c, r)] = 1;
+  const R = lightRadius();
+  for (let r = Math.max(0, Math.floor(P.y - R - 1)); r <= Math.min(ROWS - 1, Math.ceil(P.y + R)); r++)
+    for (let c = Math.max(0, Math.floor(P.x - R - 1)); c <= Math.min(COLS - 1, Math.ceil(P.x + R)); c++)
+      if (Math.hypot(c + 0.5 - P.x, r + 0.5 - P.y) <= R) SEEN[idx(c, r)] = 1;
 }
 
-// ================= Hazards: loose rock =================
-let rocks = [];
+// ================= Hazard: unstable rock =================
+// Unstable rock caves in once enough of its sides are dug open: it shakes, then collapses,
+// scattering rubble into nearby open cells and hurting the robot if it's close.
 const wobble = new Map();
+function exposed(c, r) {
+  let n = 0;
+  for (const [a, b] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (!at(c + a, r + b)) n++;
+  return n;
+}
 function updateRocks(dt) {
-  const r0 = Math.max(GROUND_ROW, pRow() - 14), r1 = Math.min(ROWS - 2, pRow() + 14);
-  for (let r = r0; r <= r1; r++) for (let c = 0; c < COLS; c++) {
+  const r0 = Math.max(BASE_ROWS, pRow() - 12), r1 = Math.min(ROWS - 2, pRow() + 12);
+  for (let r = r0; r <= r1; r++) for (let c = 1; c < COLS - 1; c++) {
     const i = idx(c, r);
-    if (T[i] !== 'loose') continue;
-    if (!T[idx(c, r + 1)]) {
+    if (T[i] !== 'loose') { wobble.delete(i); continue; }
+    if (exposed(c, r) >= C.ROCK.exposedSides) {
       const w = (wobble.get(i) || 0) + dt;
-      if (w >= C.ROCK.wobble) { wobble.delete(i); T[i] = null; DMG[i] = 0; rocks.push({ c, y: r, vy: 0 }); }
-      else wobble.set(i, w);
+      if (w >= C.ROCK.wobble) { wobble.delete(i); caveIn(c, r); } else wobble.set(i, w);
     } else wobble.delete(i);
   }
-  for (const k of rocks) {
-    k.vy = Math.min(C.ROCK.maxSpeed, k.vy + C.ROCK.gravity * dt);
-    k.y += k.vy * dt;
-    if (Math.abs(k.c + 0.5 - P.x) < 0.45 + HW && k.y + 0.95 > P.y - HH && k.y < P.y + HH) { hitPlayer(); k.dead = true; burst(k.c + 0.5, k.y + 0.8, C.BLOCKS.loose.color, 14); continue; }
-    const landRow = Math.floor(k.y);
-    if (at(k.c, landRow + 1)) {
-      if (!T[idx(k.c, landRow)]) T[idx(k.c, landRow)] = 'loose';
-      k.dead = true; burst(k.c + 0.5, landRow + 1, C.BLOCKS.loose.color, 6);
-    }
-  }
-  rocks = rocks.filter(k => !k.dead);
 }
-function hitPlayer() {
+function caveIn(c, r) {
+  T[idx(c, r)] = null; DMG[idx(c, r)] = 0;
+  burst(c + 0.5, r + 0.5, C.BLOCKS.loose.color, 18);
+  const spots = [];
+  for (let b = -1; b <= 1; b++) for (let a = -1; a <= 1; a++) {
+    const cc = c + a, rr = r + b;
+    if ((a || b) && inBounds(cc, rr) && !at(cc, rr) && !onBelt(cc, rr) && !outpostAt(cc, rr)) spots.push([cc, rr]);
+  }
+  for (let k = 0; k < C.ROCK.rubble && spots.length; k++) {
+    const [cc, rr] = spots.splice(Math.floor(Math.random() * spots.length), 1)[0];
+    if (Math.abs(cc + 0.5 - P.x) < 0.5 + HB && Math.abs(rr + 0.5 - P.y) < 0.5 + HB) continue; // never bury the robot
+    T[idx(cc, rr)] = 'rubble';
+  }
   P.shake = 0.35;
-  const lostOre = S.cargo.n - Math.floor(S.cargo.n * (1 - C.ROCK.cargoLoss));
-  S.cargo.n -= lostOre; S.cargo.value = Math.floor(S.cargo.value * (1 - C.ROCK.cargoLoss));
-  toast('Rock fall!', 'Lost ' + Math.round(C.ROCK.batteryLoss * 100) + '% battery' + (lostOre ? ' and ' + lostOre + ' ore' : '') + '. Watch for wobbling rocks.');
-  drain(batteryMax() * C.ROCK.batteryLoss);
+  if (Math.hypot(c + 0.5 - P.x, r + 0.5 - P.y) < C.ROCK.hitRadius) {
+    const lost = S.cargo.n - Math.floor(S.cargo.n * (1 - C.ROCK.cargoLoss));
+    S.cargo.n -= lost; S.cargo.value = Math.floor(S.cargo.value * (1 - C.ROCK.cargoLoss));
+    toast('Cave-in!', 'Lost ' + Math.round(C.ROCK.batteryLoss * 100) + '% battery' + (lost ? ' and ' + lost + ' ore' : '') + '. Watch for shaking rock.');
+    drain(batteryMax() * C.ROCK.batteryLoss);
+  }
 }
 
 // ================= Pet =================
@@ -457,15 +379,18 @@ function burst(x, y, col, n) {
   if (reduceMotion) n = Math.ceil(n / 3);
   for (let k = 0; k < n && particles.length < 260; k++) {
     const a = Math.random() * Math.PI * 2, s = 1 + Math.random() * 3;
-    particles.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 1.5, life: 0.4 + Math.random() * 0.4, col });
+    particles.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: 0.35 + Math.random() * 0.35, col });
   }
 }
 function floatText(x, y, text, col) { floats.push({ x, y, text, col, life: 1.1 }); }
 
 // ================= Drawing =================
+// 2.5D: every solid block is a raised wall. Its top face is drawn shifted up by W,
+// and its front face shows wherever the cell below is open floor. Rows are drawn
+// top to bottom so nearer walls overlap the robot and the walls behind them.
 const stage = $('stage'), cv = $('world'), g = cv.getContext('2d');
 const pcv = $('pet'), pg = pcv.getContext('2d');
-let VW = 1, VH = 1, PW = 1, PH = 1, CELL = 40, cam = 0, time = 0;
+let VW = 1, VH = 1, PW = 1, PH = 1, CELL = 40, camX = 0, camY = 0, time = 0;
 function fit(canvas, ctx) {
   const r = canvas.getBoundingClientRect(), dpr = Math.min(2, window.devicePixelRatio || 1);
   canvas.width = Math.max(1, Math.round(r.width * dpr)); canvas.height = Math.max(1, Math.round(r.height * dpr));
@@ -474,67 +399,117 @@ function fit(canvas, ctx) {
 }
 function resize() {
   [VW, VH] = fit(cv, g); [PW, PH] = fit(pcv, pg);
-  CELL = Math.max(18, Math.floor(Math.min(VW / (COLS + 1), VH / 9)));
+  CELL = Math.max(22, Math.floor(Math.min(VW / 15, VH / 9.5)));
 }
 new ResizeObserver(resize).observe(stage);
 new ResizeObserver(resize).observe($('burrowView'));
 
-function rr(x, y, w, h, r) { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); }
+function shade(hex, k) { // k < 1 darkens
+  const n = parseInt(hex.slice(1), 16), f = v => Math.max(0, Math.min(255, Math.round(v * k)));
+  return 'rgb(' + f(n >> 16) + ',' + f((n >> 8) & 255) + ',' + f(n & 255) + ')';
+}
+function rr2(ctx, x, y, w, h, r) { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }
 
-function drawBlock(t, c, r, x, y, s) {
+function drawFloor(c, r, x, y, s) {
+  const yard = r < BASE_ROWS, deep = !yard && biomeAt(r).id === 'basalt';
+  g.fillStyle = yard ? '#3c4a2c' : deep ? '#1b1820' : '#2a1e15';
+  g.fillRect(x, y, s, s);
+  g.fillStyle = yard ? 'rgba(120,150,80,.25)' : 'rgba(255,230,200,.04)';
+  g.fillRect(x + s * (0.2 + hash(c, r, 3) * 0.5), y + s * (0.2 + hash(c, r, 4) * 0.5), s * 0.1, s * 0.1);
+  if (outpostAt(c, r)) { // outpost landing pad
+    g.fillStyle = 'rgba(217,129,59,.16)'; g.fillRect(x, y, s, s);
+    g.strokeStyle = 'rgba(217,129,59,.35)'; g.lineWidth = 1; g.strokeRect(x + 0.5, y + 0.5, s - 1, s - 1);
+  }
+  if (onBelt(c, r)) drawBelt(x, y, s);
+}
+function drawBelt(x, y, s) {
+  g.fillStyle = '#2b2622'; g.fillRect(x + s * 0.18, y, s * 0.64, s);
+  g.fillStyle = '#6a5038'; g.fillRect(x + s * 0.14, y, s * 0.05, s); g.fillRect(x + s * 0.81, y, s * 0.05, s);
+  g.strokeStyle = 'rgba(217,129,59,.5)'; g.lineWidth = Math.max(1, s * 0.04);
+  const off = ((time * 1.5) % 1) * s * 0.5;
+  for (let k = -1; k < 3; k++) {
+    const yy = y + k * s * 0.5 + off;
+    if (yy < y + s * 0.14 || yy > y + s) continue;
+    g.beginPath(); g.moveTo(x + s * 0.32, yy); g.lineTo(x + s * 0.5, yy - s * 0.14); g.lineTo(x + s * 0.68, yy); g.stroke();
+  }
+}
+
+function drawWall(t, c, r, x, y, s, W) {
   const i = idx(c, r), seen = SEEN[i];
   const hidden = (ORES.has(t) || t === 'fossil') && !seen;
   const look = hidden ? baseFor(c, r) : t;
   const base = C.BLOCKS[look].color || C.BLOCKS[baseFor(c, r)].color;
-  const bev = Math.max(2, s * 0.08);
-
-  if (look === 'plat') {
-    g.fillStyle = r >= 65 ? '#121014' : '#1c140e'; g.fillRect(x, y, s, s);
-    g.fillStyle = '#a77d48'; g.fillRect(x + 1, y, s - 2, s * 0.22);
-    g.fillStyle = '#6e5130'; g.fillRect(x + 1, y + s * 0.22, s - 2, s * 0.05);
-    g.strokeStyle = '#6e5130'; g.lineWidth = Math.max(1, s * 0.05);
-    g.beginPath(); g.moveTo(x + s * 0.2, y + s * 0.25); g.lineTo(x + s * 0.45, y + s * 0.6); g.moveTo(x + s * 0.8, y + s * 0.25); g.lineTo(x + s * 0.55, y + s * 0.6); g.stroke();
-    return;
+  const ty = y - W; // top face
+  if (!at(c, r + 1)) { // front face, only where open floor lies in front
+    g.fillStyle = shade(base, 0.62); g.fillRect(x, y + s - W, s, W);
+    g.fillStyle = 'rgba(0,0,0,.25)'; g.fillRect(x, y + s - W, s, Math.max(1, W * 0.18));
   }
   if (look === 'loose') {
-    g.fillStyle = '#121014'; g.fillRect(x, y, s, s);
-    g.fillStyle = base; rr(x + s * 0.1, y + s * 0.12, s * 0.8, s * 0.78, s * 0.3); g.fill();
-    g.fillStyle = 'rgba(255,240,220,.12)'; rr(x + s * 0.2, y + s * 0.18, s * 0.4, s * 0.16, s * 0.08); g.fill();
+    g.fillStyle = shade(C.BLOCKS.basalt.color, 0.9); g.fillRect(x, ty, s, s);
+    g.fillStyle = base; rr2(g, x + s * 0.1, ty + s * 0.1, s * 0.8, s * 0.8, s * 0.3); g.fill();
+    g.fillStyle = 'rgba(255,240,220,.12)'; rr2(g, x + s * 0.2, ty + s * 0.16, s * 0.4, s * 0.14, s * 0.07); g.fill();
     g.strokeStyle = 'rgba(10,6,3,.6)'; g.lineWidth = Math.max(1, s * 0.04);
-    g.beginPath(); g.moveTo(x + s * 0.5, y + s * 0.2); g.lineTo(x + s * 0.42, y + s * 0.5); g.lineTo(x + s * 0.58, y + s * 0.7); g.stroke();
+    g.beginPath(); g.moveTo(x + s * 0.5, ty + s * 0.2); g.lineTo(x + s * 0.42, ty + s * 0.5); g.lineTo(x + s * 0.58, ty + s * 0.72); g.stroke();
+  } else if (look === 'rubble') {
+    g.fillStyle = shade(base, 0.8); g.fillRect(x, ty, s, s);
+    g.fillStyle = base;
+    for (let k = 0; k < 4; k++) { g.beginPath(); g.arc(x + s * (0.25 + hash(c, r, k) * 0.5), ty + s * (0.25 + hash(r, c, k) * 0.5), s * 0.2, 0, 7); g.fill(); }
   } else {
-    g.fillStyle = base; g.fillRect(x, y, s, s);
-    g.fillStyle = 'rgba(255,240,220,.07)'; g.fillRect(x, y, s, bev); g.fillRect(x, y, bev, s);
-    g.fillStyle = 'rgba(0,0,0,.28)'; g.fillRect(x, y + s - bev, s, bev); g.fillRect(x + s - bev, y, bev, s);
-    if (look === 'found') { g.fillStyle = 'rgba(0,0,0,.3)'; const m = s / 2; g.fillRect(x, y + m - 1, s, 2); g.fillRect(x + (r % 2 ? m : s * 0.25), y, 2, m); g.fillRect(x + (r % 2 ? s * 0.25 : m), y + m, 2, m); }
-    if (look === 'bedrock') { g.fillStyle = '#211b20'; for (let k = 0; k < 3; k++) g.fillRect(x + s * 0.1, y + s * (0.2 + k * 0.28), s * 0.8, s * 0.06); }
-    if (look === 'basalt') { g.fillStyle = 'rgba(255,255,255,.05)'; g.fillRect(x + s * (0.15 + hash(c, r, 1) * 0.4), y + s * (0.25 + hash(c, r, 2) * 0.4), s * 0.3, s * 0.07); }
+    g.fillStyle = base; g.fillRect(x, ty, s, s);
+    const bev = Math.max(2, s * 0.07);
+    g.fillStyle = 'rgba(255,240,220,.08)'; g.fillRect(x, ty, s, bev); g.fillRect(x, ty, bev, s);
+    g.fillStyle = 'rgba(0,0,0,.18)'; g.fillRect(x + s - bev, ty, bev, s);
+    if (look === 'basalt') { g.fillStyle = 'rgba(255,255,255,.05)'; g.fillRect(x + s * (0.15 + hash(c, r, 1) * 0.4), ty + s * (0.25 + hash(c, r, 2) * 0.4), s * 0.3, s * 0.07); }
+    if (look === 'bedrock') { g.fillStyle = '#211b20'; for (let k = 0; k < 3; k++) g.fillRect(x + s * 0.1, ty + s * (0.2 + k * 0.28), s * 0.8, s * 0.06); }
   }
   if (!hidden && ORES.has(t)) {
     g.fillStyle = C.BLOCKS[t].ore;
     const q = Math.max(2, s * 0.12);
-    for (let k = 0; k < 5; k++) g.fillRect(x + s * 0.15 + hash(c, r, k * 3) * (s * 0.7 - q), y + s * 0.15 + hash(r, c, k * 7) * (s * 0.7 - q), q, q);
+    for (let k = 0; k < 5; k++) g.fillRect(x + s * 0.15 + hash(c, r, k * 3) * (s * 0.7 - q), ty + s * 0.15 + hash(r, c, k * 7) * (s * 0.7 - q), q, q);
   }
   if (!hidden && t === 'fossil') {
     g.strokeStyle = '#eadfc4'; g.lineWidth = Math.max(2, s * 0.1); g.lineCap = 'round';
-    g.beginPath(); g.moveTo(x + s * 0.28, y + s * 0.72); g.lineTo(x + s * 0.72, y + s * 0.28); g.stroke();
+    g.beginPath(); g.moveTo(x + s * 0.28, ty + s * 0.72); g.lineTo(x + s * 0.72, ty + s * 0.28); g.stroke();
     g.fillStyle = '#eadfc4';
-    [[0.24, 0.7], [0.3, 0.78], [0.7, 0.22], [0.78, 0.3]].forEach(([a, b]) => { g.beginPath(); g.arc(x + s * a, y + s * b, s * 0.07, 0, 7); g.fill(); });
+    [[0.24, 0.7], [0.3, 0.78], [0.7, 0.22], [0.78, 0.3]].forEach(([a, b]) => { g.beginPath(); g.arc(x + s * a, ty + s * b, s * 0.07, 0, 7); g.fill(); });
     g.lineCap = 'butt';
   }
   const hp = C.BLOCKS[t].hp, d = DMG[i] / hp;
   if (d > 0 && hp !== Infinity) {
     g.strokeStyle = 'rgba(10,6,3,' + (0.35 + d * 0.6) + ')'; g.lineWidth = Math.max(1.5, s * 0.05); g.beginPath();
-    g.moveTo(x + s * 0.5, y + s * 0.1); g.lineTo(x + s * 0.36, y + s * 0.5); g.lineTo(x + s * 0.58, y + s * 0.6);
-    if (d > 0.45) { g.lineTo(x + s * 0.46, y + s * 0.9); g.moveTo(x + s * 0.36, y + s * 0.5); g.lineTo(x + s * 0.12, y + s * 0.7); }
+    g.moveTo(x + s * 0.5, ty + s * 0.1); g.lineTo(x + s * 0.36, ty + s * 0.5); g.lineTo(x + s * 0.58, ty + s * 0.6);
+    if (d > 0.45) { g.lineTo(x + s * 0.46, ty + s * 0.9); g.moveTo(x + s * 0.36, ty + s * 0.5); g.lineTo(x + s * 0.12, ty + s * 0.7); }
     g.stroke();
   }
 }
 
-// The robot, built from its four equipped parts. Drawn around (0,0) at roughly 36 units tall.
+// Buildings are drawn as one piece over their cells.
+function drawBaseBuilding(sx, sy, s, W) {
+  const B = C.BASE_BUILDING, x = sx(B.cols[0]), w = (B.cols[1] - B.cols[0] + 1) * s, h = (B.rows[1] - B.rows[0] + 1) * s;
+  const y = sy(B.rows[0]) - W * 2.2;
+  g.fillStyle = '#2a1f17'; g.fillRect(x, y + h, w, W * 2.2);                           // front wall
+  g.fillStyle = '#3a2b20'; g.fillRect(x, y, w, h);                                      // roof
+  g.fillStyle = '#4a372a'; for (let k = 1; k < 6; k++) g.fillRect(x, y + k * h / 6, w, 2);
+  g.fillStyle = '#e8a160'; g.fillRect(x + s * 0.4, y + h + W * 0.5, s * 0.5, W * 0.9);   // window
+  g.fillStyle = '#16110d'; g.fillRect(x + w - s * 1.1, y + h + W * 0.4, s * 0.6, W * 1.8); // door
+  g.fillStyle = '#efe3d3'; g.font = '700 ' + Math.round(s * 0.42) + 'px "Pixelify Sans", monospace'; g.textAlign = 'center';
+  g.fillText('BASE', x + w / 2, y + h / 2 + s * 0.15);
+}
+function drawOutpost(k, sx, sy, s, W) {
+  const row = outpostRow(k), x = sx(BELT + 2), y = sy(row - 1) - W * 1.6;
+  g.fillStyle = '#2a1f17'; g.fillRect(x, y + s * 2, s, W * 1.6);
+  g.fillStyle = '#3a2b20'; g.fillRect(x, y, s, s * 2);
+  g.fillStyle = '#4b4038'; g.fillRect(x + s * 0.1, y + s * 0.1, s * 0.8, s * 1.8);
+  g.fillStyle = 'rgba(217,129,59,' + (0.7 + Math.sin(time * 4) * 0.3) + ')'; g.beginPath(); g.arc(x + s * 0.5, y + s * 0.5, s * 0.14, 0, 7); g.fill();
+  g.fillStyle = '#efe3d3'; g.font = '700 ' + Math.round(s * 0.3) + 'px "Pixelify Sans", monospace'; g.textAlign = 'center';
+  g.fillText('OP' + k, x + s * 0.5, y + s * 1.3);
+}
+
+// The robot, built from its four equipped parts. Drawn around (0,0), roughly 36 units tall.
 function drawBot(ctx, x, y, s, face, t, ids) {
   ctx.save(); ctx.translate(x, y); ctx.scale(s * face, s);
   const L = ids.legs, B = ids.body, A = ids.arms, H = ids.head;
+  ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.ellipse(0, 14, 11, 3, 0, 0, 7); ctx.fill(); // shadow
   if (L === 'treads') {
     ctx.fillStyle = '#4a3f36'; rr2(ctx, -10, 6, 20, 7, 3); ctx.fill();
     ctx.fillStyle = '#8a7a6a'; [-6, 0, 6].forEach((wx, k) => { ctx.beginPath(); ctx.arc(wx, 9.5, 2 + (Math.sin(t * 18 + k) > 0 ? 0.3 : 0), 0, 7); ctx.fill(); });
@@ -545,7 +520,7 @@ function drawBot(ctx, x, y, s, face, t, ids) {
     ctx.stroke(); ctx.fillStyle = '#7a5f36'; ctx.fillRect(-8, 12 + b, 6, 2); ctx.fillRect(2, 12 + b, 6, 2);
   } else {
     ctx.fillStyle = '#5e7c86'; rr2(ctx, -8, 6, 16, 4, 2); ctx.fill();
-    ctx.fillStyle = '#9fe3f0'; ctx.beginPath(); ctx.moveTo(-5, 10); ctx.lineTo(5, 10); ctx.lineTo(0, 15 + Math.sin(t * 40) * 2); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#9fe3f0'; ctx.beginPath(); ctx.moveTo(-5, 10); ctx.lineTo(5, 10); ctx.lineTo(0, 14 + Math.sin(t * 40) * 1.5); ctx.closePath(); ctx.fill();
   }
   ctx.fillStyle = '#6e665e'; ctx.fillRect(-12, -1, 3, 5);
   ctx.fillStyle = B === 'tin' ? '#8f8b85' : B === 'iron' ? '#56616b' : '#3a3f4b';
@@ -580,124 +555,86 @@ function drawBot(ctx, x, y, s, face, t, ids) {
   }
   ctx.restore();
 }
-function rr2(ctx, x, y, w, h, r) { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }
 const partIds = () => ({ head: part('head').id, arms: part('arms').id, body: part('body').id, legs: part('legs').id });
 
 function render(dt) {
-  const s = CELL, ox = Math.round((VW - COLS * s) / 2);
-  const target = P.y * s - VH * 0.55;
-  cam += (target - cam) * Math.min(1, dt * 8);
-  if (cam < -s * 2) cam = -s * 2;
+  const s = CELL, W = Math.round(s * 0.32);
+  const worldW = COLS * s;
+  const tx = worldW <= VW ? (worldW - VW) / 2 : Math.max(0, Math.min(worldW - VW, P.x * s - VW / 2));
+  const ty = Math.max(-s * 1.6, P.y * s - VH * 0.5); // leave room above the yard for the HUD
+  const k = Math.min(1, dt * 8);
+  camX += (tx - camX) * k; camY += (ty - camY) * k;
   const shake = P.shake > 0 ? (Math.random() - 0.5) * 6 : 0;
-  const sy = r => Math.round(r * s - cam + shake);
-  const sx = c => ox + c * s;
-  const groundY = sy(GROUND_ROW);
+  const sx = c => Math.round(c * s - camX + shake);
+  const sy = r => Math.round(r * s - camY + shake);
 
-  // sky and side walls
   g.fillStyle = '#0b0806'; g.fillRect(0, 0, VW, VH);
-  if (groundY > 0) {
-    const sky = g.createLinearGradient(0, groundY - s * 4, 0, groundY);
-    sky.addColorStop(0, '#1f2638'); sky.addColorStop(1, '#8a5136');
-    g.fillStyle = sky; g.fillRect(0, 0, VW, groundY);
-  }
-  g.fillStyle = '#140e0a'; g.fillRect(0, Math.max(0, groundY), ox, VH); g.fillRect(ox + COLS * s, Math.max(0, groundY), VW, VH);
+  const r0 = Math.max(0, Math.floor((camY - W) / s)), r1 = Math.min(ROWS - 1, Math.ceil((camY + VH + W) / s));
+  const c0 = Math.max(0, Math.floor(camX / s)), c1 = Math.min(COLS - 1, Math.ceil((camX + VW) / s));
+  const robotRow = pRow();
+  const ids = partIds();
+  const blocked = new Set(beltBlocked());
 
-  // surface buildings: lift tower and shop
-  if (groundY > 0) {
-    const tx = sx(0);
-    g.strokeStyle = '#6a5038'; g.lineWidth = Math.max(2, s * 0.06);
-    g.beginPath(); g.moveTo(tx + s * 0.12, groundY); g.lineTo(tx + s * 0.12, sy(0.4)); g.moveTo(tx + s * 0.88, groundY); g.lineTo(tx + s * 0.88, sy(0.4));
-    g.moveTo(tx + s * 0.12, sy(0.4)); g.lineTo(tx + s * 0.88, sy(0.4)); g.stroke();
-    g.fillStyle = '#d9813b'; g.beginPath(); g.arc(tx + s * 0.5, sy(0.4), s * 0.12, 0, 7); g.fill();
-    const hx = sx(C.SHOP_COLS[0]), hy = sy(1.1), hw = s * (C.SHOP_COLS[1] - C.SHOP_COLS[0] + 1), hh = groundY - hy;
-    g.fillStyle = '#3a2b20'; g.fillRect(hx, hy, hw, hh);
-    g.fillStyle = '#2a1f17'; g.beginPath(); g.moveTo(hx - s * 0.2, hy); g.lineTo(hx + hw / 2, hy - s * 0.6); g.lineTo(hx + hw + s * 0.2, hy); g.closePath(); g.fill();
-    g.fillStyle = '#e8a160'; g.fillRect(hx + s * 0.3, hy + s * 0.35, s * 0.5, s * 0.4);
-    g.fillStyle = '#16110d'; g.fillRect(hx + hw - s * 1, hy + hh - s * 1.1, s * 0.6, s * 1.1);
-    g.fillStyle = '#efe3d3'; g.font = '700 ' + Math.round(s * 0.36) + 'px "Pixelify Sans", monospace'; g.textAlign = 'center';
-    g.fillText('SHOP', hx + hw / 2 + s * 0.1, hy + s * 0.68);
-  }
-
-  // cells
-  const r0 = Math.max(GROUND_ROW, Math.floor(cam / s) - 1), r1 = Math.min(ROWS - 1, r0 + Math.ceil(VH / s) + 2);
   for (let r = r0; r <= r1; r++) {
-    const y = sy(r), deep = biomeAt(r).id === 'basalt';
-    for (let c = 0; c < COLS; c++) {
-      const x = sx(c), t = T[idx(c, r)];
-      if (!t) {
-        g.fillStyle = deep ? '#121014' : '#1c140e'; g.fillRect(x, y, s, s);
-        if (inLift(c, r)) drawShaft(x, y, s, r);
-        continue;
-      }
+    for (let c = c0; c <= c1; c++) if (!at(c, r)) drawFloor(c, r, sx(c), sy(r), s);
+    for (let c = c0; c <= c1; c++) {
+      const t = at(c, r);
+      if (!t || t === 'found' || t === 'post') continue;
       const w = wobble.get(idx(c, r));
-      drawBlock(t, c, r, x + (w ? Math.sin(time * 60) * s * 0.06 : 0), y, s);
+      drawWall(t, c, r, sx(c) + (w ? Math.sin(time * 60) * s * 0.06 : 0), sy(r), s, W);
+      if (c === BELT && blocked.has(r)) { // conveyor path still to dig
+        g.setLineDash([4, 4]); g.strokeStyle = 'rgba(217,129,59,.6)'; g.lineWidth = 1.5;
+        g.strokeRect(sx(c) + 3, sy(r) - W + 3, s - 6, s - 6); g.setLineDash([]);
+      }
     }
-    if (r === GROUND_ROW) for (let c = 0; c < COLS; c++) if (T[idx(c, r)] && T[idx(c, r)] !== 'plat' && T[idx(c, r)] !== 'found') { g.fillStyle = '#5f7a3c'; g.fillRect(sx(c), y, s, Math.max(2, s * 0.12)); }
+    if (r === C.BASE_BUILDING.rows[1]) drawBaseBuilding(sx, sy, s, W);
+    for (let k2 = 1; k2 <= S.outposts; k2++) if (r === outpostRow(k2)) drawOutpost(k2, sx, sy, s, W);
+    if (r === robotRow) {
+      const nudge = P.digging ? Math.sin(time * 40) * s * 0.04 : 0;
+      const ndx = P.digging ? (P.digging.c - pCol()) * nudge : 0, ndy = P.digging ? (P.digging.r - pRow()) * nudge : 0;
+      drawBot(g, sx(P.x) + ndx, sy(P.y) - s * 0.12 + ndy, s / 40, P.face, time, ids);
+    }
   }
 
-  // the next lift extension: dashed outline of cells that must be dug out
-  const nextBlocked = liftBlockedRows();
-  if (nextBlocked.length) {
-    g.setLineDash([4, 4]); g.strokeStyle = 'rgba(217,129,59,.55)'; g.lineWidth = 1.5;
-    nextBlocked.forEach(r => g.strokeRect(sx(0) + 3, sy(r) + 3, s - 6, s - 6));
-    g.setLineDash([]);
-  }
-
-  // falling rocks
-  rocks.forEach(k => drawBlock('loose', k.c, Math.floor(k.y), sx(k.c), sy(k.y), s));
-
-  // robot
-  const px = ox + P.x * s, py = sy(P.y);
-  if (P.inLift) { g.fillStyle = '#d9813b'; g.fillRect(sx(0) + s * 0.1, py + HH * s, s * 0.8, s * 0.08); } // the lift car
-  let nudge = 0;
-  if (P.digging) nudge = Math.sin(time * 40) * s * 0.04;
-  const dx = P.digging ? (P.digging.c - pCol()) * nudge : 0, dyy = P.digging ? (P.digging.r - pRow()) * nudge : 0;
-  drawBot(g, px + dx, py + dyy + s * 0.02, s / 36, P.face, time, partIds());
-
-  // particles
-  particles.forEach(p => { g.globalAlpha = Math.max(0, p.life * 1.8); g.fillStyle = p.col; const q = Math.max(2, s * 0.07); g.fillRect(sx(p.x) - q / 2, sy(p.y) - q / 2, q, q); });
+  particles.forEach(p => { g.globalAlpha = Math.max(0, p.life * 2); g.fillStyle = p.col; const q = Math.max(2, s * 0.07); g.fillRect(sx(p.x) - q / 2, sy(p.y) - W - q / 2, q, q); });
   g.globalAlpha = 1;
 
-  // darkness: light radius around the robot, only below ground
-  if (groundY < VH) {
-    g.save(); g.beginPath(); g.rect(0, Math.max(0, groundY), VW, VH); g.clip();
+  // darkness inside the cave, with a pool of light around the robot
+  const caveTop = sy(BASE_ROWS) - W;
+  if (caveTop < VH) {
+    const px = sx(P.x), py = sy(P.y);
+    g.save(); g.beginPath(); g.rect(0, Math.max(0, caveTop), VW, VH); g.clip();
     const R = lightRadius() * s;
     const fog = g.createRadialGradient(px, py, R * 0.5, px, py, R * 1.1);
     fog.addColorStop(0, 'rgba(8,5,3,0)'); fog.addColorStop(1, 'rgba(8,5,3,.94)');
     g.fillStyle = fog; g.fillRect(0, 0, VW, VH);
-    // loose rock stays outlined in the dark so you can plan around it
-    g.strokeStyle = 'rgba(205,184,156,.35)'; g.lineWidth = 1;
-    for (let r = r0; r <= r1; r++) for (let c = 0; c < COLS; c++) {
-      if (T[idx(c, r)] !== 'loose') continue;
-      if (Math.hypot(c + 0.5 - P.x, r + 0.5 - P.y) > lightRadius() + 4) continue;
-      g.beginPath(); g.arc(sx(c) + s / 2, sy(r) + s / 2, s * 0.36, 0, 7); g.stroke();
+    for (let k2 = 1; k2 <= S.outposts; k2++) { // outposts keep a lamp lit
+      const oy = sy(outpostRow(k2)), ox2 = sx(BELT + 1);
+      if (oy < -s * 3 || oy > VH + s * 3) continue;
+      const glow = g.createRadialGradient(ox2, oy, 0, ox2, oy, s * 2.2);
+      glow.addColorStop(0, 'rgba(217,129,59,.18)'); glow.addColorStop(1, 'rgba(217,129,59,0)');
+      g.fillStyle = glow; g.fillRect(ox2 - s * 3, oy - s * 3, s * 6, s * 6);
     }
-    // an unseen fossil glows faintly when you are close
-    for (let r = r0; r <= r1; r++) for (let c = 0; c < COLS; c++) {
+    if (rockScan()) { // a scanning head outlines unstable rock in the dark
+      g.strokeStyle = 'rgba(205,184,156,.4)'; g.lineWidth = 1;
+      for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) {
+        if (T[idx(c, r)] !== 'loose') continue;
+        if (Math.hypot(c + 0.5 - P.x, r + 0.5 - P.y) > lightRadius() + rockScan()) continue;
+        g.beginPath(); g.arc(sx(c) + s / 2, sy(r) - W + s / 2, s * 0.36, 0, 7); g.stroke();
+      }
+    }
+    for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) { // an unseen fossil glows faintly when you're close
       if (T[idx(c, r)] !== 'fossil' || SEEN[idx(c, r)]) continue;
       if (Math.hypot(c + 0.5 - P.x, r + 0.5 - P.y) > lightRadius() + 2.5) continue;
       g.fillStyle = 'rgba(234,223,196,' + (0.12 + Math.sin(time * 3) * 0.08) + ')';
-      g.beginPath(); g.arc(sx(c) + s / 2, sy(r) + s / 2, s * 0.45, 0, 7); g.fill();
+      g.beginPath(); g.arc(sx(c) + s / 2, sy(r) - W + s / 2, s * 0.45, 0, 7); g.fill();
     }
     g.restore();
   }
 
-  // floating text
   g.textAlign = 'center'; g.font = '600 ' + Math.max(11, Math.round(s * 0.28)) + 'px "IBM Plex Mono", monospace';
-  floats.forEach(f => { g.globalAlpha = Math.min(1, f.life * 1.5); g.fillStyle = f.col; g.fillText(f.text, sx(f.x), sy(f.y)); });
+  floats.forEach(f => { g.globalAlpha = Math.min(1, f.life * 1.5); g.fillStyle = f.col; g.fillText(f.text, sx(f.x), sy(f.y) - W); });
   g.globalAlpha = 1;
-}
-function drawShaft(x, y, s, r) {
-  g.fillStyle = '#0f0b09'; g.fillRect(x, y, s, s);
-  g.strokeStyle = '#5a4632'; g.lineWidth = Math.max(2, s * 0.06);
-  g.beginPath(); g.moveTo(x + s * 0.14, y); g.lineTo(x + s * 0.14, y + s); g.moveTo(x + s * 0.86, y); g.lineTo(x + s * 0.86, y + s);
-  g.moveTo(x + s * 0.14, y + s * 0.5); g.lineTo(x + s * 0.86, y + s * 0.5); g.stroke();
-  g.strokeStyle = '#2e241b'; g.lineWidth = 1; g.beginPath(); g.moveTo(x + s * 0.5, y); g.lineTo(x + s * 0.5, y + s); g.stroke();
-  if (r === S.liftRow) {
-    g.fillStyle = '#3a2b20'; g.fillRect(x + 2, y + s * 0.82, s - 4, s * 0.18);
-    g.fillStyle = '#d9813b';
-    g.beginPath(); g.moveTo(x + s * 0.55, y + s * 0.2); g.lineTo(x + s * 0.38, y + s * 0.5); g.lineTo(x + s * 0.52, y + s * 0.5); g.lineTo(x + s * 0.44, y + s * 0.76); g.lineTo(x + s * 0.64, y + s * 0.42); g.lineTo(x + s * 0.5, y + s * 0.42); g.closePath(); g.fill();
-  }
 }
 
 function renderPet() {
@@ -720,10 +657,9 @@ function renderPet() {
     pg.fillStyle = '#a8937c'; pg.textAlign = 'center'; pg.font = '500 16px "Pixelify Sans", monospace';
     pg.fillText('Empty burrow', PW / 2, PH / 2 - 4);
     pg.font = '400 11px "IBM Plex Mono", monospace';
-    pg.fillText('Find the fossil hidden ' + (C.PET.fossilRows[0] - SURFACE_ROW) + '–' + (C.PET.fossilRows[1] - SURFACE_ROW) + ' m down', PW / 2, PH / 2 + 14);
+    pg.fillText('Find the fossil hidden ' + depthOf(C.PET.fossilRows[0]) + '–' + depthOf(C.PET.fossilRows[1]) + ' m into the cave', PW / 2, PH / 2 + 14);
     return;
   }
-  // Pip the mole, digging the block under him
   const k = Math.min(1, PET.prog / petDigTime());
   const mx = ox + (PET.c + 0.5) * s, my = oy + (PET.r + 0.5) * s + Math.sin(time * 14) * s * 0.04;
   pg.save(); pg.translate(mx, my);
@@ -733,23 +669,12 @@ function renderPet() {
   pg.fillRect(-s * 0.32, s * 0.24 + claw, s * 0.14, s * 0.1); pg.fillRect(s * 0.18, s * 0.24 - claw, s * 0.14, s * 0.1);
   pg.fillStyle = '#16110d'; pg.fillRect(-s * 0.12, s * 0.12, s * 0.05, s * 0.05); pg.fillRect(s * 0.07, s * 0.12, s * 0.05, s * 0.05);
   pg.restore();
-  // dig progress crack on the target block
   const tx = ox + PET.c * s, ty = oy + (PET.r + 1) * s;
   pg.strokeStyle = 'rgba(10,6,3,' + (0.2 + k * 0.7) + ')'; pg.lineWidth = 1.5; pg.beginPath();
   pg.moveTo(tx + s * 0.5, ty + s * 0.1); pg.lineTo(tx + s * 0.38, ty + s * 0.5 * (0.4 + k)); pg.stroke();
   pg.textAlign = 'center'; pg.font = '600 11px "IBM Plex Mono", monospace';
   petFloats.forEach(f => { pg.globalAlpha = Math.min(1, f.life * 1.5); pg.fillStyle = f.ore ? '#e8a160' : '#efe3d3'; pg.fillText(f.text, ox + f.c * s, oy + (f.r + 1 - (1 - f.life) * 0.8) * s); });
   pg.globalAlpha = 1;
-}
-
-// ================= Lift =================
-const liftCost = () => Math.round(C.LIFT.baseCost * Math.pow(C.LIFT.costGrowth, S.liftExt));
-const liftMaxed = () => S.liftRow + C.LIFT.step > ROWS - 2;
-function liftBlockedRows() {
-  if (liftMaxed()) return [];
-  const out = [];
-  for (let r = S.liftRow + 1; r <= S.liftRow + C.LIFT.step; r++) if (T[idx(0, r)] && T[idx(0, r)] !== 'plat') out.push(r); // platforms don't count
-  return out;
 }
 
 // ================= UI =================
@@ -761,21 +686,20 @@ $('parts').innerHTML = SLOTS.map(s => `
   </div>`).join('');
 
 $('parts').addEventListener('click', e => {
-  const s = e.target.closest('button')?.dataset.slot; if (!s || !atSurface()) return;
+  const s = e.target.closest('button')?.dataset.slot; if (!s || !station()) return;
   const next = C.PARTS[s].tiers[S.tiers[s] + 1]; if (!next || S.coins < next.cost) return;
   S.coins -= next.cost; S.tiers[s]++;
   if (s === 'body') P.battery = batteryMax();
   toast(null, next.name + ' installed.'); save(); updateUI();
 });
 $('extend').addEventListener('click', () => {
-  if (!(atSurface() || atDock()) || liftMaxed() || liftBlockedRows().length || S.coins < liftCost()) return;
-  S.coins -= liftCost(); S.liftExt++;
-  for (let r = S.liftRow + 1; r <= S.liftRow + C.LIFT.step; r++) T[idx(0, r)] = null; // the lift clears any platforms in its way
-  S.liftRow += C.LIFT.step;
-  toast(null, 'Lift extended to ' + depthOf(S.liftRow) + ' m.'); save(); updateUI();
+  if (!station() || extendMaxed() || beltBlocked().length || S.coins < extendCost()) return;
+  S.coins -= extendCost(); S.outposts++; buildOutpost(S.outposts);
+  toast('Outpost ' + S.outposts + ' built', 'The conveyor now reaches ' + depthOf(beltEnd()) + ' m. Sell, recharge and shop there.');
+  save(); updateUI();
 });
 $('train').addEventListener('click', () => {
-  if (!atSurface() || !S.pet || S.pet >= C.PET.maxLevel || S.coins < trainCost()) return;
+  if (!station() || !S.pet || S.pet >= C.PET.maxLevel || S.coins < trainCost()) return;
   S.coins -= trainCost(); S.pet++;
   toast(null, C.PET.name + ' is now level ' + S.pet + '.'); save(); updateUI();
 });
@@ -784,46 +708,52 @@ $('reset').addEventListener('click', () => {
   const b = $('reset');
   if (!armed) { b.textContent = 'Click again to reset'; b.classList.add('armed'); armed = setTimeout(() => { armed = 0; b.textContent = 'Reset progress'; b.classList.remove('armed'); }, 3000); return; }
   clearTimeout(armed); armed = 0; b.textContent = 'Reset progress'; b.classList.remove('armed');
-  S = freshState(); genWorld(); regenPet(); placePlayerFromSave(); P.plats = C.PLATFORMS.carry;
-  rocks = []; wobble.clear(); lastBiome = null; lastCell = -1; markSeen(); save(); updateUI();
-  toast('New dig', 'Head down and find some ore. Sell it at the surface or the lift dock.');
+  S = freshState(); genWorld(); regenPet(); placePlayerFromSave();
+  wobble.clear(); lastBiome = null; lastCell = -1; markSeen(); save(); updateUI();
+  toast('New dig', 'Head into the cave for ore. Sell it at base or an outpost, then upgrade your robot.');
+});
+let recallArmed = 0;
+$('recall').addEventListener('click', () => {
+  const b = $('recall');
+  if (station() === 'base') return;
+  if (!recallArmed) { b.textContent = 'Tap again · keep ' + Math.round(C.RECALL.keepCargo * 100) + '% ore'; b.classList.add('armed'); recallArmed = setTimeout(() => { recallArmed = 0; b.textContent = 'Recall'; b.classList.remove('armed'); }, 3000); return; }
+  clearTimeout(recallArmed); recallArmed = 0; b.textContent = 'Recall'; b.classList.remove('armed');
+  recall('manual');
 });
 
 function updateUI() {
-  const shop = atSurface(), dock = atDock();
+  const st = station();
   $('depth').textContent = depthOf(pRow()) + ' m';
-  $('biome').textContent = pRow() < GROUND_ROW ? 'Surface' : biomeAt(pRow()).name;
+  $('biome').textContent = st === 'base' ? 'Base' : st === 'outpost' ? 'Outpost ' + outpostAt(pCol(), pRow()) : biomeAt(pRow()).name;
   $('coins').textContent = fmt(S.coins);
-  const bm = batteryMax(), bp = Math.max(0, P.battery / bm);
+  const bp = Math.max(0, P.battery / batteryMax());
   $('batBar').style.width = (bp * 100) + '%';
   $('batBar').parentElement.classList.toggle('low', bp < 0.25);
   $('batTxt').textContent = Math.ceil(Math.max(0, P.battery));
   $('cargoBar').style.width = (S.cargo.n / cargoMax() * 100) + '%';
   $('cargoTxt').textContent = S.cargo.n + '/' + cargoMax();
-  $('platCount').textContent = P.plats;
 
   const chip = $('shopState');
-  chip.textContent = shop ? 'Shop open' : dock ? 'At the dock · lift extensions only' : 'Shop opens at the surface';
-  chip.classList.toggle('open', shop || dock);
-  const rc = $('recall'); rc.hidden = shop; if (!recallArmed) rc.textContent = 'Recall';
+  chip.textContent = st === 'base' ? 'Shop open · base' : st === 'outpost' ? 'Shop open · outpost' : 'Opens at base or an outpost';
+  chip.classList.toggle('open', !!st);
+  $('recall').hidden = st === 'base';
   SLOTS.forEach(s => {
     const cur = part(s), next = C.PARTS[s].tiers[S.tiers[s] + 1], btn = $('up-' + s);
     $('cur-' + s).textContent = cur.name;
     $('stat-' + s).textContent = C.PARTS[s].fmt(cur.val);
     if (!next) { btn.textContent = 'Maxed'; btn.disabled = true; }
-    else { btn.textContent = next.name + ' · ' + fmt(next.cost); btn.disabled = !shop || S.coins < next.cost; }
+    else { btn.textContent = next.name + ' · ' + fmt(next.cost); btn.disabled = !st || S.coins < next.cost; }
   });
 
-  $('liftDepth').textContent = 'Reaches ' + depthOf(S.liftRow) + ' m';
-  const blocked = liftBlockedRows();
-  const ext = $('extend');
-  if (liftMaxed()) { ext.textContent = 'Max depth'; ext.disabled = true; $('liftNote').textContent = 'The lift reaches as deep as it can go.'; }
+  $('liftDepth').textContent = S.outposts ? 'Reaches ' + depthOf(beltEnd()) + ' m · ' + S.outposts + ' outpost' + (S.outposts > 1 ? 's' : '') : 'No outposts yet';
+  const blocked = beltBlocked(), ext = $('extend');
+  if (extendMaxed()) { ext.textContent = 'Max length'; ext.disabled = true; $('liftNote').textContent = 'The conveyor reaches as deep as it can go.'; }
   else {
-    ext.textContent = 'Extend ' + C.LIFT.step + ' m · ' + fmt(liftCost());
-    ext.disabled = !(shop || dock) || blocked.length > 0 || S.coins < liftCost();
+    ext.textContent = 'Build outpost ' + (S.outposts + 1) + ' · ' + fmt(extendCost());
+    ext.disabled = !st || blocked.length > 0 || S.coins < extendCost();
     $('liftNote').textContent = blocked.length
-      ? 'Dig out the far-left column to ' + depthOf(S.liftRow + C.LIFT.step) + ' m first (' + blocked.length + ' blocks left).'
-      : 'The shaft is clear. Buy the extension here or at the dock.';
+      ? 'Dig the conveyor path (the dashed middle column) to ' + depthOf(outpostRow(S.outposts + 1)) + ' m first: ' + blocked.length + ' blocks left.'
+      : 'The path is clear. Build the next outpost at ' + depthOf(outpostRow(S.outposts + 1)) + ' m.';
   }
 
   if (S.pet) {
@@ -832,19 +762,9 @@ function updateUI() {
     $('petInfo').innerHTML = '<b>' + C.PET.name + ' the ' + C.PET.species + '.</b> ' + C.PET.pattern + ' Earns about ' + fmt(petRate() * 60) + ' coins a minute, even while you are away. Gives you +' + Math.round(C.PET.digBonusPerLevel * S.pet * 100) + '% dig power.';
     const tb = $('train'); tb.hidden = false;
     if (S.pet >= C.PET.maxLevel) { tb.textContent = 'Max level'; tb.disabled = true; }
-    else { tb.textContent = 'Train · ' + fmt(trainCost()); tb.disabled = !shop || S.coins < trainCost(); }
+    else { tb.textContent = 'Train · ' + fmt(trainCost()); tb.disabled = !st || S.coins < trainCost(); }
   }
 }
-
-// Recall: tap once to arm, again within 3 seconds to confirm.
-let recallArmed = 0;
-$('recall').addEventListener('click', () => {
-  const b = $('recall');
-  if (atSurface()) return;
-  if (!recallArmed) { b.textContent = 'Tap again · keep ' + Math.round(C.RECALL.keepCargo * 100) + '% ore'; b.classList.add('armed'); recallArmed = setTimeout(() => { recallArmed = 0; b.textContent = 'Recall'; b.classList.remove('armed'); }, 3000); return; }
-  clearTimeout(recallArmed); recallArmed = 0; b.textContent = 'Recall'; b.classList.remove('armed');
-  recall('manual');
-});
 
 let toastTimer;
 const hinted = new Set();
@@ -860,38 +780,27 @@ function hintOnce(key, title, msg) { if (hinted.has(key)) return; hinted.add(key
 const KEYMAP = { ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right', ArrowDown: 'down', KeyS: 'down', ArrowUp: 'up', KeyW: 'up' };
 const held = [];
 let swipeH = null, swipeV = null;
-// Horizontal and vertical input are tracked separately so you can jump while moving.
 const lastOf = (a, b) => { for (let i = held.length - 1; i >= 0; i--) if (held[i] === a || held[i] === b) return held[i]; return null; };
 const horizDir = () => swipeH || lastOf('left', 'right');
 const vertDir = () => swipeV || lastOf('up', 'down');
-addEventListener('keydown', e => {
-  if (e.target.closest && e.target.closest('button') && e.code === 'Space') return;
-  const d = KEYMAP[e.code];
-  if (d) { e.preventDefault(); if (!held.includes(d)) held.push(d); }
-  if (e.code === 'Space' || e.code === 'KeyB') { e.preventDefault(); if (!e.repeat) P.wantBuild = true; }
-});
+addEventListener('keydown', e => { const d = KEYMAP[e.code]; if (d) { e.preventDefault(); if (!held.includes(d)) held.push(d); } });
 addEventListener('keyup', e => { const d = KEYMAP[e.code]; if (d) { const i = held.indexOf(d); if (i >= 0) held.splice(i, 1); } });
 addEventListener('blur', () => { held.length = 0; swipeH = swipeV = null; });
 
-// Swipe: drag and hold to move or dig; drag diagonally to jump sideways; a quick tap drops a platform.
+// Swipe: drag and hold to move or dig in that direction (diagonals work too).
 let touch = null;
-cv.addEventListener('pointerdown', e => { touch = { x: e.clientX, y: e.clientY, moved: false, id: e.pointerId, type: e.pointerType }; cv.setPointerCapture(e.pointerId); });
+cv.addEventListener('pointerdown', e => { touch = { x: e.clientX, y: e.clientY, id: e.pointerId }; cv.setPointerCapture(e.pointerId); });
 cv.addEventListener('pointermove', e => {
   if (!touch || e.pointerId !== touch.id) return;
   const dx = e.clientX - touch.x, dy = e.clientY - touch.y, ax = Math.abs(dx), ay = Math.abs(dy);
   if (Math.hypot(dx, dy) < 22) return;
   swipeH = ax > ay * 0.5 ? (dx > 0 ? 'right' : 'left') : null;
   swipeV = ay > ax * 0.5 ? (dy > 0 ? 'down' : 'up') : null;
-  touch.moved = true; touch.x = e.clientX; touch.y = e.clientY;
+  touch.x = e.clientX; touch.y = e.clientY;
 });
-const endTouch = e => {
-  if (!touch || e.pointerId !== touch.id) return;
-  if (!touch.moved && touch.type !== 'mouse') P.wantBuild = true;
-  touch = null; swipeH = swipeV = null;
-};
+const endTouch = e => { if (!touch || e.pointerId !== touch.id) return; touch = null; swipeH = swipeV = null; };
 cv.addEventListener('pointerup', endTouch);
-cv.addEventListener('pointercancel', () => { touch = null; swipeH = swipeV = null; });
-$('build').addEventListener('click', () => { P.wantBuild = true; });
+cv.addEventListener('pointercancel', endTouch);
 
 // ================= Main loop =================
 let prev = performance.now(), uiT = 0, saveT = 0;
@@ -902,10 +811,10 @@ function frame(now) {
   updateRocks(dt);
   updatePet(dt);
   if (P.shake > 0) P.shake -= dt;
-  particles.forEach(p => { p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 9 * dt; p.life -= dt; });
+  particles.forEach(p => { p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 0.92; p.vy *= 0.92; p.life -= dt; });
   particles = particles.filter(p => p.life > 0);
   floats.forEach(f => { f.y -= 0.8 * dt; f.life -= dt; }); floats = floats.filter(f => f.life > 0);
-  petFloats.forEach(f => (f.life -= dt)); for (let i = petFloats.length - 1; i >= 0; i--) if (petFloats[i].life <= 0) petFloats.splice(i, 1);
+  for (let i = petFloats.length - 1; i >= 0; i--) { petFloats[i].life -= dt; if (petFloats[i].life <= 0) petFloats.splice(i, 1); }
   render(dt);
   renderPet();
   uiT += dt; if (uiT > 0.15) { uiT = 0; updateUI(); }
@@ -918,12 +827,12 @@ loadWorld();
 placePlayerFromSave();
 regenPet();
 markSeen();
-lastBiome = pRow() >= GROUND_ROW ? biomeAt(pRow()).id : null;
+lastBiome = pRow() >= BASE_ROWS ? biomeAt(pRow()).id : null;
 resize();
-cam = P.y * CELL - VH * 0.55;
+camX = Math.max(0, P.x * CELL - VW / 2); camY = P.y * CELL - VH * 0.5;
 
 if (isNewGame) {
-  setTimeout(() => toast('Bolt & Burrow', 'Dig down for ore. Sell it at the surface or the lift dock, then upgrade your robot.'), 300);
+  setTimeout(() => toast('Bolt & Burrow', 'Dig into the cave for ore and bring it back to base. Clear the middle column to build your first outpost at 25 m.'), 300);
 } else if (S.pet) {
   const away = Math.min((Date.now() - S.last) / 1000, C.PET.offlineCapHours * 3600);
   const gain = Math.floor(away * petRate());
