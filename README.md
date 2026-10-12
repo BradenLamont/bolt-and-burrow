@@ -5,15 +5,23 @@ A browser mining game: steer a robot with swappable parts down through the earth
 **Play:** open `index.html`, or publish the repo with GitHub Pages.
 
 ## Controls
-- Desktop: arrow keys or WASD to move in any direction; push into a block to dig it; stand on the conveyor and hold Up or Down to ride it
-- Phone: swipe and hold to move and dig (diagonals work)
-- Recall button: emergency trip back to base, keeping half your ore
+- Desktop: arrow keys or WASD to move. Push into blocks to dig them (standing between two blocks digs both). Up goes deeper into the cave. Stand on the conveyor and hold Up or Down to ride it.
+- Phone: touch and drag anywhere on the cave for a joystick.
+- Recall button: emergency trip back to base, keeping half your ore.
 
 ## Files
-- `index.html` – page layout
+- `index.html` – page layout and script load order
 - `css/style.css` – look and layout
-- `js/config.js` – every balance number (part stats, costs, block toughness, lift, pet)
-- `js/game.js` – game logic
+- `js/config.js` – every balance number (part stats, costs, blocks, conveyor, relic, pet)
+- `js/state.js` – shared game state, saving, helpers
+- `js/world.js` – cave generation, conveyor and outposts, relic chamber
+- `js/player.js` – robot movement, digging, battery, recall, fast travel
+- `js/hazards.js` – unstable rock cave-ins
+- `js/pet.js` – Pip the Mole
+- `js/render.js` – all drawing
+- `js/ui.js` – HUD, workshop, inventory
+- `js/input.js` – keyboard and touch joystick
+- `js/main.js` – start-up and the main loop
 
 ## v0.2
 - Player-controlled robot; dig left, right and down (never up)
@@ -42,6 +50,17 @@ A browser mining game: steer a robot with swappable parts down through the earth
 - Loose rock reworked into unstable rock: once two of its sides are dug open it shakes, then caves in, leaving rubble
 - Older saves start fresh (the world shape changed)
 
+## v0.5
+- Flipped the view: base at the bottom of the screen, the cave goes up from there
+- Inventory panel replaces the workshop when you're away from base or an outpost
+- Area digging: standing between two blocks digs both
+- Low battery warning, with a marker on the battery bar for roughly what the trip back needs
+- Fast travel between base and any built outpost
+- The Ancient Relic: sealed in a chamber near the end of the Basalt Deeps, past the last outpost. Bring it back to claim 5,000 coins
+- Touch joystick replaces swipe controls
+- Split the game code into separate files by job
+- Removed the leftover platform button
+
 ## Ideas for later
 - Nano-Bots: rework pets into nano-bots that live inside the robot, still giving bonuses and passive coins
 - Ways for pets / nano-bots to interact with the player
@@ -52,3 +71,11 @@ A browser mining game: steer a robot with swappable parts down through the earth
 - Prestige (rebuild the bot for a permanent bonus)
 - Separate game modes: timed or challenge runs
 - Store release (mobile and PC)
+- New artwork for the 2.5D style, including up and down facing for the robot (next, after v0.5)
+- Replace the base shop with a town (cosmetic at first, still gives shop access)
+- Unique caves alongside the biomes, and a way to travel between them
+- Sound effects and a mute button
+- Save backup (export / import)
+- Tutorial for new players
+- More upgrade tiers per part
+- Redesign the pet view if pets start helping in the player's cave

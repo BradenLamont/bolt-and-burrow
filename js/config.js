@@ -1,7 +1,8 @@
 // Bolt & Burrow — balance and tuning.
 // Every number that changes how the game *feels* lives here, so you can
 // rebalance without touching the game logic in game.js.
-// v0.4: top-down cave. "Down the screen" means deeper into the cave.
+// Top-down cave: your base is at the bottom of the screen and the cave goes up from there.
+// In the code, row 0 is the base yard and higher rows are deeper.
 
 const CONFIG = {
   // ----- World -----
@@ -30,6 +31,7 @@ const CONFIG = {
     gold:    { hp: 8,   value: 40, ore: '#f2c94c', label: 'gold' },
     crystal: { hp: 11,  value: 95, ore: '#9fe3f0', label: 'crystal' },
     fossil:  { hp: 4 },
+    relic:   { hp: 40 },                        // the Ancient Relic at the deep end of the cave
     found:   { hp: Infinity, color: '#4b4038' }, // base building: can't be dug
     post:    { hp: Infinity, color: '#4b4038' }, // outpost building
     bedrock: { hp: Infinity, color: '#141115' },
@@ -66,15 +68,26 @@ const CONFIG = {
   BODY: 0.68,         // robot hitbox size in blocks (fits through 1-block tunnels)
   DIG_RATE: 4,        // damage per second for each point of dig power
   ALIGN_SPEED: 6,     // how quickly you slide to the centre of a tunnel
+  ALIGN_SNAP: 0.22,   // only line up when you're this close to a lane's centre, so you can still dig between two blocks
 
   // ----- Battery -----
   CHARGE_RATE: 45,    // power per second at the base or an outpost
   BATTERY: { move: 0.5, dig: 1.2 }, // move = per block travelled
 
+  // ----- Low battery warning -----
+  // The battery bar marks roughly how much power the trip back needs (walking to the
+  // conveyor, then riding it for free). You get a warning when you're close to that mark.
+  LOW_BATTERY: { safety: 1.3, buffer: 6 },
+
   // ----- Conveyor & outposts -----
   // The conveyor runs straight down the middle column. Dig its path clear, then
   // extend it; every extension ends in a new outpost (sell, recharge, shop).
   CONVEYOR: { col: 12, step: 25, baseCost: 80, costGrowth: 1.6, speed: 11 },
+
+  // ----- Ancient Relic -----
+  // Sits in a sealed chamber near the end of the Basalt Deeps, past the last outpost.
+  // Dig it out, then carry it to base or an outpost to claim the reward.
+  RELIC: { row: 156, reward: 5000, name: 'Ancient Relic' },
 
   // ----- Recall (emergency exit) -----
   RECALL: { keepCargo: 0.5 }, // a manual recall keeps half your ore; a dead battery loses it all

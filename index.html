@@ -11,17 +11,19 @@
 </head>
 <body>
 <main class="app">
-  <section class="stage" id="stage" aria-label="Mine">
-    <canvas id="world" aria-label="The mine. Use the arrow keys or swipe to move and dig."></canvas>
+  <section class="stage" id="stage" aria-label="Cave">
+    <canvas id="world" aria-label="The cave, seen from above. Your base is at the bottom. Use the arrow keys or the touch joystick to move and dig."></canvas>
+    <div class="joy" id="joy" hidden><i id="joyKnob"></i></div>
     <div class="hud">
       <div class="readout">
         <small>Depth</small>
         <b id="depth">0 m</b>
-        <span id="biome">Surface</span>
+        <span id="biome">Base</span>
       </div>
       <div class="meters">
-        <div class="meter"><span>Battery</span><div class="bar"><i id="batBar"></i></div><em id="batTxt">80</em></div>
+        <div class="meter"><span>Battery</span><div class="bar"><i id="batBar"></i><u id="batMark" hidden></u></div><em id="batTxt">80</em></div>
         <div class="meter"><span>Cargo</span><div class="bar cargo"><i id="cargoBar"></i></div><em id="cargoTxt">0/8</em></div>
+        <p class="warn" id="batWarn" hidden>Low battery · head back to the conveyor</p>
       </div>
       <div class="readout end">
         <small>Coins</small>
@@ -29,28 +31,40 @@
       </div>
     </div>
     <div class="controls">
-      <p class="keys">Arrows or WASD: move and dig in any direction · Up: jump or ride the lift · Down on a platform: drop through · Space: drop a platform</p>
-      <p class="swipe">Swipe and hold to move and dig · Swipe up to jump, diagonally to jump sideways · Tap to drop a platform</p>
+      <p class="keys">Arrows or WASD: move · push into blocks to dig · Up goes deeper · ride the conveyor by holding Up or Down on it</p>
+      <p class="touch">Touch and drag anywhere for the joystick · push into blocks to dig</p>
       <div class="btns">
         <button id="recall" type="button">Recall</button>
-        <button id="build" type="button">Platform <span id="platCount">12</span></button>
       </div>
     </div>
   </section>
 
-  <section class="panel workshop" aria-label="Workshop">
+  <section class="panel workshop" aria-label="Workshop and inventory">
     <header>
-      <h2>Workshop</h2>
-      <span class="chip" id="shopState">Shop open</span>
+      <h2 id="panelTitle">Workshop</h2>
+      <span class="chip" id="shopState">At base</span>
     </header>
-    <div class="rows" id="parts"></div>
-    <div class="row lift">
-      <div>
-        <small>Lift · far-left column</small>
-        <strong id="liftDepth">Reaches 8 m</strong>
-        <span id="liftNote">Docks sell ore and recharge your battery.</span>
+    <div class="view" id="shopView">
+      <div class="rows" id="parts"></div>
+      <div class="row lift">
+        <div>
+          <small>Conveyor · outposts every 25 m</small>
+          <strong id="liftDepth">No outposts yet</strong>
+          <span id="liftNote">Outposts sell ore, recharge you and open the shop.</span>
+        </div>
+        <button id="extend" type="button">Build outpost</button>
       </div>
-      <button id="extend" type="button">Extend</button>
+      <div class="row travel" id="travelRow" hidden>
+        <div>
+          <small>Fast travel</small>
+          <span>Jump to any stop you've built.</span>
+        </div>
+        <div class="travel-btns" id="travel"></div>
+      </div>
+    </div>
+    <div class="view" id="invView" hidden>
+      <ul class="inv" id="invList"></ul>
+      <p class="inv-total" id="invTotal"></p>
     </div>
     <footer>
       <span>Progress saves in this browser.</span>
@@ -72,7 +86,16 @@
 </main>
 <div id="toast" role="status" hidden></div>
 
-<script src="js/config.js"></script>
-<script src="js/game.js"></script>
+<!-- Game scripts, in load order. Each file is one part of the game. -->
+<script src="js/config.js"></script>  <!-- balance numbers -->
+<script src="js/state.js"></script>   <!-- shared state, saving, helpers -->
+<script src="js/world.js"></script>   <!-- cave generation, conveyor, outposts, relic -->
+<script src="js/player.js"></script>  <!-- robot movement, digging, battery -->
+<script src="js/hazards.js"></script> <!-- unstable rock -->
+<script src="js/pet.js"></script>     <!-- Pip the Mole -->
+<script src="js/render.js"></script>  <!-- drawing -->
+<script src="js/ui.js"></script>      <!-- HUD, workshop, inventory -->
+<script src="js/input.js"></script>   <!-- keyboard and joystick -->
+<script src="js/main.js"></script>    <!-- start-up and main loop -->
 </body>
 </html>

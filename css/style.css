@@ -60,7 +60,7 @@ body { margin: 0; font-family: var(--body); font-size: 14px; line-height: 1.45; 
 }
 .controls p { margin: 0; color: var(--muted); font-size: .72rem; background: rgba(11, 8, 6, .7); padding: 3px 8px; border-radius: 3px; }
 @media (pointer: coarse) { .keys { display: none; } }
-@media (pointer: fine) { .swipe { display: none; } }
+@media (pointer: fine) { .touch { display: none; } }
 
 button { font: inherit; color: inherit; cursor: pointer; }
 button:focus-visible { outline: 2px solid var(--crystal); outline-offset: 2px; }
@@ -70,13 +70,25 @@ button:focus-visible { outline: 2px solid var(--crystal); outline-offset: 2px; }
   background: rgba(33, 25, 19, .9); color: var(--muted); font-size: .78rem;
 }
 #recall.armed { border-color: var(--danger); color: var(--danger); }
-#build {
-  pointer-events: auto;
-  padding: 8px 14px; border-radius: 4px; border: 2px solid var(--copper);
-  background: rgba(33, 25, 19, .9); color: var(--fg);
-  font-family: var(--display); font-size: 1rem; letter-spacing: .04em;
+
+/* Touch joystick: appears under your thumb */
+.joy {
+  position: absolute; width: 104px; height: 104px; transform: translate(-50%, -50%);
+  border: 2px solid rgba(239, 227, 211, .25); border-radius: 50%; background: rgba(11, 8, 6, .35);
+  pointer-events: none;
 }
-#build span { color: var(--copper); margin-left: 4px; font-variant-numeric: tabular-nums; }
+.joy i {
+  position: absolute; left: 50%; top: 50%; width: 44px; height: 44px; border-radius: 50%;
+  background: rgba(217, 129, 59, .55); border: 2px solid var(--copper); transform: translate(-50%, -50%);
+}
+
+/* Battery: the marker shows roughly what the trip back needs */
+.bar { position: relative; }
+.bar u { position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; background: var(--fg); text-decoration: none; }
+.bar.low { border-color: var(--danger); animation: lowpulse 1s ease-in-out infinite; }
+@keyframes lowpulse { 50% { box-shadow: 0 0 0 3px rgba(226, 112, 90, .35); } }
+@media (prefers-reduced-motion: reduce) { .bar.low { animation: none; } }
+.meters .warn { margin: 2px 0 0; color: var(--danger); font-size: .72rem; }
 
 /* Panels */
 .panel {
@@ -88,6 +100,23 @@ button:focus-visible { outline: 2px solid var(--crystal); outline-offset: 2px; }
 .panel h2 { font-family: var(--display); font-weight: 500; font-size: 1.2rem; margin: 0; }
 .chip { font-size: .7rem; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
 .chip.open { border-color: var(--copper); color: var(--copper); }
+
+.view { display: flex; flex-direction: column; gap: 10px; }
+.view[hidden] { display: none; }
+.travel-btns { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+
+/* Inventory */
+.inv { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.inv li {
+  display: grid; grid-template-columns: 14px minmax(0, 1fr) auto 70px; gap: 10px; align-items: center;
+  padding: 8px 10px; border: 1px solid var(--line); border-radius: 5px; font-size: .85rem;
+}
+.inv li i { width: 12px; height: 12px; border-radius: 2px; }
+.inv li b { font-weight: 600; font-variant-numeric: tabular-nums; }
+.inv li em { font-style: normal; color: var(--copper); text-align: right; font-variant-numeric: tabular-nums; }
+.inv li.relic { border-color: #c9a2ff; }
+.inv li.empty { display: block; color: var(--muted); font-size: .78rem; }
+.inv-total { margin: 0; color: var(--muted); font-size: .75rem; }
 
 .rows { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px; }
 .row {
