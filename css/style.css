@@ -64,8 +64,14 @@ body { margin: 0; font-family: var(--body); font-size: 14px; line-height: 1.45; 
 
 button { font: inherit; color: inherit; cursor: pointer; }
 button:focus-visible { outline: 2px solid var(--crystal); outline-offset: 2px; }
+.btns { display: flex; gap: 8px; margin-left: auto; pointer-events: auto; }
+#recall {
+  padding: 8px 12px; border-radius: 4px; border: 2px solid var(--line);
+  background: rgba(33, 25, 19, .9); color: var(--muted); font-size: .78rem;
+}
+#recall.armed { border-color: var(--danger); color: var(--danger); }
 #build {
-  pointer-events: auto; margin-left: auto;
+  pointer-events: auto;
   padding: 8px 14px; border-radius: 4px; border: 2px solid var(--copper);
   background: rgba(33, 25, 19, .9); color: var(--fg);
   font-family: var(--display); font-size: 1rem; letter-spacing: .04em;

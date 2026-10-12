@@ -8,6 +8,9 @@ const CONFIG = {
   ROWS: 150,         // world depth in blocks (last row is bedrock)
   SURFACE_ROW: 2,    // the row the robot stands on at the surface
   GROUND_ROW: 3,     // first row of dirt
+  SHOP_COLS: [1, 3], // the shop sits on these columns, right beside the lift
+  FOUNDATION_DEPTH: 4, // rows of undiggable foundation under the shop
+  SPAWN_COL: 5,
 
   BIOMES: [
     { id: 'topsoil', name: 'Topsoil',      from: 3,  to: 64,  hazards: false,
@@ -28,6 +31,7 @@ const CONFIG = {
     crystal: { hp: 11,  value: 95, ore: '#9fe3f0', label: 'crystal' },
     fossil:  { hp: 4 },
     plat:    { hp: 0.3, color: '#a77d48' },
+    found:   { hp: Infinity, color: '#4b4038' },
     bedrock: { hp: Infinity, color: '#141115' },
   },
   ORE_DEPTH_BONUS: 60, // ore is worth +100% for every 60 blocks of depth
@@ -49,22 +53,27 @@ const CONFIG = {
       { id: 'iron',    name: 'Iron Core', cost: 150,  val: { battery: 140, cargo: 16 } },
       { id: 'reactor', name: 'Reactor',   cost: 1400, val: { battery: 240, cargo: 30 } },
     ]},
-    legs: { label: 'Legs', stat: 'Speed · climb', fmt: v => v.speed + ' blocks/s · ' + (v.fly ? 'jetpack' : 'jump ' + v.jump), tiers: [
-      { id: 'treads',  name: 'Rusty Treads', cost: 0,    val: { speed: 4,   jump: 1, fly: false } },
-      { id: 'springs', name: 'Spring Legs',  cost: 90,   val: { speed: 5.5, jump: 2, fly: false } },
-      { id: 'jets',    name: 'Hover Jets',   cost: 1200, val: { speed: 6.5, jump: 2, fly: true } },
+    legs: { label: 'Legs', stat: 'Speed · climb', fmt: v => v.speed + ' blocks/s · ' + (v.fly ? 'jetpack' : 'jumps ' + v.jump + ' blocks'), tiers: [
+      { id: 'treads',  name: 'Rusty Treads', cost: 0,    val: { speed: 4,   jump: 2.2, fly: false } },
+      { id: 'springs', name: 'Spring Legs',  cost: 90,   val: { speed: 5.5, jump: 3.2, fly: false } },
+      { id: 'jets',    name: 'Hover Jets',   cost: 1200, val: { speed: 6.5, jump: 3.2, fly: true } },
     ]},
   },
 
-  // ----- Movement -----
+  // ----- Movement (all distances in blocks) -----
+  GRAVITY: 30,        // blocks per second², sets how "heavy" jumps feel
+  FALL_MAX: 12,       // top falling speed
+  JET_SPEED: 4.5,     // climb speed while holding Up with Hover Jets
+  BODY: { w: 0.66, h: 0.84 }, // robot hitbox (fits through 1-block gaps)
   DIG_RATE: 4,        // damage per second for each point of dig power
-  JUMP_SPEED: 8,      // blocks per second while rising
-  FALL_SPEED: 12,     // blocks per second while falling
-  HANG_TIME: 0.45,    // seconds you float at the top of a jump (time to drop a platform)
+  DIG_UP: { speed: 0.75, battery: 1.5 }, // digging upward is slower and costs 50% more battery
 
   // ----- Battery -----
   CHARGE_RATE: 45,    // power per second at the surface or the lift dock
-  BATTERY: { move: 0.5, dig: 1.2, jump: 1, jet: 2 },
+  BATTERY: { move: 0.5, dig: 1.2, jump: 1, jet: 4 }, // move = per block walked, jet = per second
+
+  // ----- Recall (emergency exit) -----
+  RECALL: { keepCargo: 0.5 }, // a manual recall keeps half your ore; a dead battery loses it all
 
   // ----- Platforms -----
   PLATFORMS: { carry: 12, restockCost: 2 }, // auto-restocked at the surface and dock
