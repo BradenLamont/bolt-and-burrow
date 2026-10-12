@@ -181,9 +181,13 @@ function render(dt) {
   lastDrawX = P.x; lastDrawY = P.y;
   const blocked = new Set(beltBlocked());
 
+  // Pass 1: all floor tiles first, so floor never paints over the walker's feet
+  for (let r = rTop; r >= rBot; r--) for (let c = c0; c <= c1; c++) if (!at(c, r)) drawFloor(c, r, X(c), Y(r + 1), s);
+  // Pass 2: walls, buildings and the walker, top of screen to bottom.
+  // The walker is drawn with the row its feet stand in, so only walls in front of it overlap it.
+  const walkerRow = Math.floor(P.y - HB + 0.01);
   for (let r = rTop; r >= rBot; r--) {
     const y = Y(r + 1); // top edge of this row's cells
-    for (let c = c0; c <= c1; c++) if (!at(c, r)) drawFloor(c, r, X(c), y, s);
     for (let c = c0; c <= c1; c++) {
       const t = at(c, r);
       if (!t || t === 'found' || t === 'post') continue;
@@ -198,7 +202,7 @@ function render(dt) {
     P.digging.forEach(d => { if (d.r === r) { g.strokeStyle = 'rgba(239,227,211,.55)'; g.lineWidth = 1.5; g.strokeRect(X(d.c) + 1.5, y - W + 1.5, s - 3, s - 3); } });
     if (r === C.BASE_BUILDING.rows[0]) drawBaseBuilding(X, Y, s, W);
     for (let k2 = 1; k2 <= S.outposts; k2++) if (r === outpostRow(k2) - 1) drawOutpost(k2, X, Y, s, W);
-    if (r === pRow()) {
+    if (r === walkerRow) {
       // The Canopy Walker: feet sit near the bottom of its block; it faces the way it last moved
       const view = P.dir === 'up' ? 'back' : P.dir === 'down' ? 'front' : 'side';
       drawWalker(g, X(P.x), Y(P.y) + s * 0.4, s * 1.15 / 64, view, P.face, time, ids, { moving, digging: P.digging.length > 0 });
