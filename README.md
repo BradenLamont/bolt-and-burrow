@@ -5,7 +5,7 @@ A browser mining game: steer a robot with swappable parts down through the earth
 **Play:** open `index.html`, or publish the repo with GitHub Pages.
 
 ## Controls
-- Desktop: arrow keys or WASD to move. Push into blocks to dig them (standing between two blocks digs both). Up goes deeper into the cave. Stand on the conveyor and hold Up or Down to ride it.
+- Desktop: arrow keys or WASD to move. Push into blocks to dig them (standing between two blocks digs both). Up goes deeper into the cave. Stand on the conveyor and hold Up or Down to ride it. E (or the Deploy button) uses a bridge pad.
 - Phone: touch and drag anywhere on the cave for a joystick.
 - Recall button: emergency trip back to base, keeping half your ore.
 
@@ -14,12 +14,12 @@ A browser mining game: steer a robot with swappable parts down through the earth
 - `css/style.css` – look and layout
 - `js/config.js` – every balance number (part stats, costs, blocks, conveyor, relic, pet)
 - `js/state.js` – shared game state, saving, helpers
-- `js/world.js` – cave generation, conveyor and outposts, relic chamber
-- `js/player.js` – robot movement, digging, battery, recall, fast travel
+- `js/world.js` – the three caves: generation, conveyor and outpost, chasms and bridges, caches, relic chambers, switching caves
+- `js/player.js` – walker movement, digging and hard rock, battery, caches, bridge pads, recall, fast travel
 - `js/hazards.js` – unstable rock cave-ins
 - `js/pet.js` – Pip the Mole
 - `js/walker.js` – the Canopy Walker mech (every part, every facing, walk and dig animation)
-- `js/render.js` – drawing the cave, buildings and effects
+- `js/render.js` – drawing the cave, buildings, effects and the minimap
 - `js/ui.js` – HUD, workshop, inventory
 - `js/input.js` – keyboard and touch joystick
 - `js/main.js` – start-up and the main loop
@@ -68,6 +68,19 @@ A browser mining game: steer a robot with swappable parts down through the earth
 - Every part tier has its own look: Glass Bubble / Armored Visor / Sensor Dome canopies, Rock Claws / Drill Arms / Plasma Cutters, Small Tank / Twin Tanks / Reactor Tank, Piston Legs / Spring Struts / Hover Jets
 - Part names updated to match the art (saves still work; stats unchanged)
 
+## v0.6 – three caves
+- The game is now three caves (levels), about 50 m deep each, sharing one base. Pick a cave at base
+- Each cave has one outpost halfway in and its own relic at the end; bringing a relic home unlocks the next cave
+  - Cave 1 · Topsoil Hollow: soft soil, copper and silver, a little granite
+  - Cave 2 · Granite Rift: lots of granite, some obsidian, a chasm across the cave, relic sealed in granite
+  - Cave 3 · Basalt Deeps: gold and crystal, granite and obsidian, a chasm and pits, falling unstable rock, relic sealed in obsidian
+- Hard rock: Granite needs Drill Arms, Obsidian needs Plasma Cutters. Pushing into it with weaker arms shows "Too hard" and tells you what you need
+- Chasms block the walker. Cross on the old bridge, or stand on a bridge pad and pay coins to deploy a new one
+- Treasure caches hidden in the rock: coins plus the cave's best ore. Canopies with a scanner reveal them nearby
+- Open caverns with stalagmites (and crystals in the Basalt Deeps)
+- Minimap of everything you've explored in the current cave
+- Ore is worth more in deeper caves. Coins, parts and the pet carry over from v0.5 saves (the cave layout starts fresh)
+
 ## Ideas for later
 - Nano-Bots: rework pets into nano-bots that live inside the robot, still giving bonuses and passive coins
 - Ways for pets / nano-bots to interact with the player
@@ -90,3 +103,8 @@ A browser mining game: steer a robot with swappable parts down through the earth
 - Interchangeable parts system: parts become items you collect and swap, each with its own stats and abilities
 - Possibly a gacha-style system later: summon parts with different rarities, stats and abilities
 - Pilot customization (the pilot robot is separate from the mech)
+- RPG / adventure direction: each cave is its own level (started in v0.6)
+- Player-made custom caves, plus procedurally generated caves to keep things fresh
+- Combat: split the arms into two slots, one arm for digging and one for combat
+- Contracts from the town (e.g. bring back 10 silver)
+- Pilot XP: the pilot levels up separately from the mech, with small perks

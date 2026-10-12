@@ -10,22 +10,25 @@ function frame(now) {
   updatePet(dt);
   updateEffects(dt);
   render(dt);
+  renderMinimap(dt);
   renderPet();
   uiT += dt; if (uiT > 0.15) { uiT = 0; updateUI(); }
   saveT += dt; if (saveT > 5) { saveT = 0; save(); }
   requestAnimationFrame(frame);
 }
 
-loadWorld();
+loadCave();
 placePlayerFromSave();
 regenPet();
 markSeen();
-lastBiome = pRow() >= BASE_ROWS ? biomeAt(pRow()).id : null;
 resize();
 [camX, camY] = cameraTarget();
 
 if (isNewGame) {
-  setTimeout(() => toast('Bolt & Burrow', 'Dig up into the cave for ore and bring it back to base. Clear the middle column to build your first outpost at 25 m.'), 300);
+  S.seenNotes.push(cave().id);
+  setTimeout(() => toast('Bolt & Burrow', 'Dig up into the cave for ore and bring it back to base. Clear the middle column to build the outpost at 25 m. The relic at the end opens the next cave.'), 300);
+} else if (migrated) {
+  setTimeout(() => toast('Three caves', 'The cave is now three caves, each with its own relic. Your coins, parts and pet came with you.'), 300);
 } else if (S.pet) {
   const away = Math.min((Date.now() - S.last) / 1000, C.PET.offlineCapHours * 3600);
   const gain = Math.floor(away * petRate());

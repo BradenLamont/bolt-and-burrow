@@ -1,47 +1,71 @@
 // Bolt & Burrow — shared state, saving and small helpers.
 // Every other file reads and changes the values defined here.
-// Load order (see index.html): config → state → world → player → hazards → pet → render → ui → input → main
+// Load order (see index.html): config → state → world → player → hazards → pet → walker → render → ui → input → main
 'use strict';
 
 const C = CONFIG;
 const { COLS, ROWS, BASE_ROWS } = C;
 const BELT = C.CONVEYOR.col;
-const SAVE_KEY = 'bolt-burrow-v4';
+const SAVE_KEY = 'bolt-burrow-v6';
+const OLD_SAVE_KEY = 'bolt-burrow-v4';   // v0.4–v0.5.1 saves (one long cave)
 const $ = id => document.getElementById(id);
 
 // World cells are saved as one character each ('.' = open floor)
-const CODE = { d: 'dirt', c: 'clay', b: 'basalt', l: 'loose', r: 'rubble', o: 'copper', s: 'silver', g: 'gold', k: 'crystal', f: 'fossil', q: 'relic', n: 'found', t: 'post', x: 'bedrock' };
+const CODE = { d: 'dirt', c: 'clay', e: 'stone', b: 'basalt', l: 'loose', r: 'rubble', o: 'copper', s: 'silver', g: 'gold', k: 'crystal',
+  f: 'fossil', q: 'relic', n: 'found', t: 'post', x: 'bedrock', G: 'granite', O: 'obsidian', h: 'cache', v: 'chasm', B: 'bridge', w: 'oldbridge', p: 'pad' };
 const CHAR = Object.fromEntries(Object.entries(CODE).map(([k, v]) => [v, k]));
 const ORES = new Set(['copper', 'silver', 'gold', 'crystal']);
+// Tiles you can walk on even though they aren't empty
+const WALKABLE = new Set(['bridge', 'oldbridge', 'pad']);
 
+const freshCave = () => ({ world: null, seen: null, deco: null, outposts: 0, relicDone: false });
 const freshState = () => ({
   coins: 0,
   tiers: { head: 0, arms: 0, body: 0, legs: 0 },
-  outposts: 0,                  // how many outposts the conveyor reaches
   pet: 0,                       // pet level (0 = not hatched)
   cargo: { items: {} },         // ore carried, by type: { copper: { n, value } }
-  relicHeld: false, relics: 0, relicPlaced: false,
-  best: 0, biomesSeen: [], last: Date.now(),
-  world: null, seen: null, pos: null,
+  cave: 0,                      // which cave you're in (0, 1, 2)
+  unlocked: 1,                  // how many caves are open
+  caves: C.CAVES.map(freshCave),
+  relicHeld: 0,                 // cave number + 1 of the relic you're carrying (0 = none)
+  relics: 0,
+  best: 0, last: Date.now(), pos: null, seenNotes: [],
 });
 
 let S = freshState();
 let T = [];                                  // block type per cell (null = open floor)
 let DMG = new Float32Array(COLS * ROWS);     // dig damage per cell
-let SEEN = new Uint8Array(COLS * ROWS);      // cells the robot has lit up
-let isNewGame = true;
+let SEEN = new Uint8Array(COLS * ROWS);      // 1 = lit up, 2 = a cache the scanner has revealed
+let DECO = new Uint8Array(COLS * ROWS);      // 1 = cavern floor (gets stalagmites)
+let isNewGame = true, migrated = false;
 
 try {
   const raw = localStorage.getItem(SAVE_KEY);
   if (raw) { S = Object.assign(freshState(), JSON.parse(raw)); isNewGame = false; }
+  else {
+    // Carry coins, parts and the pet over from the single-cave versions
+    const old = localStorage.getItem(OLD_SAVE_KEY);
+    if (old) {
+      const o = JSON.parse(old);
+      Object.assign(S, { coins: o.coins || 0, tiers: o.tiers || S.tiers, pet: o.pet || 0 });
+      isNewGame = false; migrated = true;
+    }
+  }
 } catch (e) { /* storage unavailable: play without saving */ }
-// v0.4 saves stored cargo as a single count
-if (!S.cargo || !S.cargo.items) S.cargo = { items: S.cargo && S.cargo.n ? { mixed: { n: S.cargo.n, value: S.cargo.value } } : {} };
+while (S.caves.length < C.CAVES.length) S.caves.push(freshCave());
 
+const cave = () => C.CAVES[S.cave];        // the current cave's settings
+const CS = () => S.caves[S.cave];          // the current cave's saved progress
+
+function stashCave() {
+  const cs = CS();
+  cs.world = T.map(t => (t ? CHAR[t] : '.')).join('');
+  cs.seen = SEEN.join('');
+  cs.deco = DECO.join('');
+}
 function save() {
   S.last = Date.now();
-  S.world = T.map(t => (t ? CHAR[t] : '.')).join('');
-  S.seen = SEEN.join('');
+  stashCave();
   S.pos = { x: P.x, y: P.y, battery: P.battery };
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(S)); } catch (e) {}
 }
@@ -50,12 +74,12 @@ function save() {
 const idx = (c, r) => r * COLS + c;
 const inBounds = (c, r) => c >= 0 && c < COLS && r >= 0 && r < ROWS;
 const at = (c, r) => (inBounds(c, r) ? T[idx(c, r)] : 'bedrock');
-const solidAt = (c, r) => !!at(c, r);
-const biomeAt = r => C.BIOMES.find(b => r >= b.from && r <= b.to) || C.BIOMES[C.BIOMES.length - 1];
+const isFloor = t => !t || WALKABLE.has(t);
+const solidAt = (c, r) => !isFloor(at(c, r));            // blocks movement (rock, chasm, buildings)
 const depthOf = r => Math.max(0, r - BASE_ROWS + 1);
 function hash(a, b, c) { let h = (a * 374761393 + b * 668265263 + c * 1442695041) | 0; h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; }
 
-// ---------- Robot stats from equipped parts ----------
+// ---------- Walker stats from equipped parts ----------
 const part = slot => C.PARTS[slot].tiers[S.tiers[slot]];
 const lightRadius = () => part('head').val.light;
 const rockScan = () => part('head').val.scan;
@@ -63,6 +87,7 @@ const digPower = () => part('arms').val * (1 + C.PET.digBonusPerLevel * S.pet);
 const batteryMax = () => part('body').val.battery;
 const cargoMax = () => part('body').val.cargo;
 const legs = () => part('legs').val;
+const oreValue = (t, r) => Math.round(C.BLOCKS[t].value * cave().valueMult * (1 + (r - BASE_ROWS) / C.ORE_DEPTH_BONUS));
 
 // ---------- Cargo ----------
 const cargoCount = () => Object.values(S.cargo.items).reduce((a, i) => a + i.n, 0);

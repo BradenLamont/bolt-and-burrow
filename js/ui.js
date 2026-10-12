@@ -23,8 +23,8 @@ $('parts').addEventListener('click', e => {
 // ---------- Workshop: conveyor, outposts and fast travel ----------
 $('extend').addEventListener('click', () => {
   if (!station() || extendMaxed() || beltBlocked().length || S.coins < extendCost()) return;
-  S.coins -= extendCost(); S.outposts++; buildOutpost(S.outposts);
-  toast('Outpost ' + S.outposts + ' built', 'The conveyor now reaches ' + depthOf(beltEnd()) + ' m. Sell, recharge, shop and fast travel there.');
+  S.coins -= extendCost(); CS().outposts++; buildOutpost(CS().outposts);
+  toast('Outpost built', 'The conveyor now reaches ' + depthOf(beltEnd()) + ' m. Sell, recharge, shop and fast travel there.');
   save(); updateUI();
 });
 $('travel').addEventListener('click', e => {
@@ -34,14 +34,36 @@ $('travel').addEventListener('click', e => {
 let travelSig = '';
 function renderTravel() {
   const here = station() === 'outpost' ? outpostAt(pCol(), pRow()) : station() === 'base' ? 0 : -1;
-  const sig = S.outposts + ':' + here;
+  const sig = S.cave + ':' + CS().outposts + ':' + here;
   if (sig === travelSig) return;
   travelSig = sig;
-  $('travelRow').hidden = S.outposts === 0;
+  $('travelRow').hidden = CS().outposts === 0;
   let html = '';
-  for (let k = 0; k <= S.outposts; k++) html += `<button type="button" data-k="${k}" ${k === here ? 'disabled' : ''}>${k ? 'OP' + k + ' · ' + depthOf(outpostRow(k)) + ' m' : 'Base'}</button>`;
+  for (let k = 0; k <= CS().outposts; k++) html += `<button type="button" data-k="${k}" ${k === here ? 'disabled' : ''}>${k ? 'Outpost · ' + depthOf(outpostRow(k)) + ' m' : 'Base'}</button>`;
   $('travel').innerHTML = html;
 }
+
+// ---------- Caves (picked at base) ----------
+$('caves').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b || b.disabled) return;
+  switchCave(Number(b.dataset.k));
+});
+let caveSig = '';
+function renderCaves(st) {
+  $('caveRow').hidden = st !== 'base';
+  const sig = S.cave + ':' + S.unlocked + ':' + S.caves.map(c => c.relicDone).join();
+  if (sig === caveSig) return;
+  caveSig = sig;
+  $('caves').innerHTML = C.CAVES.map((cv, k) => {
+    const locked = k >= S.unlocked, here = k === S.cave, done = S.caves[k].relicDone;
+    const label = (k + 1) + ' · ' + cv.name + (locked ? ' · locked' : done ? ' · cleared' : '');
+    return `<button type="button" data-k="${k}" ${locked || here ? 'disabled' : ''} class="${here ? 'here' : ''}">${label}</button>`;
+  }).join('');
+}
+
+// ---------- Context action ----------
+function runAction() { const a = actionHere(); if (a) { a.run(); updateUI(); } }
+$('action').addEventListener('click', runAction);
 
 // ---------- Pet ----------
 $('train').addEventListener('click', () => {
@@ -59,7 +81,7 @@ function renderInventory() {
   invSig = sig;
   const types = Object.keys(items).filter(t => items[t].n > 0).sort((a, b) => items[b].value - items[a].value);
   let html = '';
-  if (S.relicHeld) html += `<li class="relic"><i style="background:#c9a2ff"></i><span>${C.RELIC.name}</span><b>1</b><em>${fmt(C.RELIC.reward)}</em></li>`;
+  if (S.relicHeld) { const rl = C.CAVES[S.relicHeld - 1].relic; html += `<li class="relic"><i style="background:#c9a2ff"></i><span>${rl.name}</span><b>1</b><em>${fmt(rl.reward)}</em></li>`; }
   for (const t of types) {
     const col = (C.BLOCKS[t] && C.BLOCKS[t].ore) || '#a8937c';
     html += `<li><i style="background:${col}"></i><span>${ORE_NAMES[t] || t}</span><b>×${items[t].n}</b><em>${fmt(items[t].value)}</em></li>`;
@@ -82,8 +104,8 @@ function confirmButton(id, label, armedLabel, onConfirm) {
 }
 confirmButton('recall', 'Recall', () => 'Tap again · keep ' + Math.round(C.RECALL.keepCargo * 100) + '% ore', () => { if (station() !== 'base') recall('manual'); });
 confirmButton('reset', 'Reset progress', () => 'Click again to reset', () => {
-  S = freshState(); genWorld(); regenPet(); placePlayerFromSave();
-  wobble.clear(); lastBiome = null; lastCell = -1; markSeen(); save(); updateUI();
+  S = freshState(); S.seenNotes.push(cave().id); loadCave(); regenPet(); placePlayerFromSave();
+  wobble.clear(); lastCell = -1; markSeen(); caveSig = ''; travelSig = ''; save(); updateUI();
   toast('New dig', 'Head into the cave for ore. Sell it at base or an outpost, then upgrade your robot.');
 });
 
@@ -91,7 +113,7 @@ confirmButton('reset', 'Reset progress', () => 'Click again to reset', () => {
 function updateUI() {
   const st = station();
   $('depth').textContent = depthOf(pRow()) + ' m';
-  $('biome').textContent = st === 'base' ? 'Base' : st === 'outpost' ? 'Outpost ' + outpostAt(pCol(), pRow()) : biomeAt(pRow()).name;
+  $('biome').textContent = st === 'base' ? 'Base' : st === 'outpost' ? 'Outpost' : 'Cave ' + (S.cave + 1) + ' · ' + cave().name;
   $('coins').textContent = fmt(S.coins);
 
   // battery bar with a "trip back" marker
@@ -111,7 +133,7 @@ function updateUI() {
   $('shopView').hidden = !st; $('invView').hidden = !!st;
   $('panelTitle').textContent = st ? 'Workshop' : 'Inventory';
   const chip = $('shopState');
-  chip.textContent = st === 'base' ? 'At base' : st === 'outpost' ? 'At outpost ' + outpostAt(pCol(), pRow()) : 'Cargo ' + cn + '/' + cargoMax();
+  chip.textContent = st === 'base' ? 'At base' : st === 'outpost' ? 'At the outpost' : 'Cargo ' + cn + '/' + cargoMax();
   chip.classList.toggle('open', !!st);
   $('recall').hidden = st === 'base';
 
@@ -123,21 +145,26 @@ function updateUI() {
       if (!next) { btn.textContent = 'Maxed'; btn.disabled = true; }
       else { btn.textContent = next.name + ' · ' + fmt(next.cost); btn.disabled = S.coins < next.cost; }
     });
-    $('liftDepth').textContent = S.outposts ? 'Reaches ' + depthOf(beltEnd()) + ' m · ' + S.outposts + ' outpost' + (S.outposts > 1 ? 's' : '') : 'No outposts yet';
+    $('liftDepth').textContent = CS().outposts ? 'Reaches the outpost at ' + depthOf(beltEnd()) + ' m' : 'No outpost in this cave yet';
     const blocked = beltBlocked(), ext = $('extend');
-    if (extendMaxed()) { ext.textContent = 'Max length'; ext.disabled = true; $('liftNote').textContent = 'The conveyor reaches as deep as it can. The relic lies further in.'; }
+    if (extendMaxed()) { ext.textContent = 'Built'; ext.disabled = true; $('liftNote').textContent = 'The relic lies at the end of the cave, about ' + depthOf(C.RELIC.row) + ' m in.'; }
     else {
-      ext.textContent = 'Build outpost ' + (S.outposts + 1) + ' · ' + fmt(extendCost());
+      ext.textContent = 'Build outpost · ' + fmt(extendCost());
       ext.disabled = blocked.length > 0 || S.coins < extendCost();
       $('liftNote').textContent = blocked.length
-        ? 'Dig the conveyor path (the dashed middle column) to ' + depthOf(outpostRow(S.outposts + 1)) + ' m first: ' + blocked.length + ' blocks left.'
-        : 'The path is clear. Build the next outpost at ' + depthOf(outpostRow(S.outposts + 1)) + ' m.';
+        ? 'Dig the conveyor path (the dashed middle column) to ' + depthOf(outpostRow(1)) + ' m first: ' + blocked.length + ' blocks left.'
+        : 'The path is clear. Build the outpost at ' + depthOf(outpostRow(1)) + ' m.';
     }
     renderTravel();
+    renderCaves(st);
   } else {
     travelSig = '';
     renderInventory();
   }
+
+  // context action (bridge pads)
+  const act = actionHere(), ab = $('action');
+  ab.hidden = !act; if (act) ab.textContent = act.label;
 
   if (S.pet) {
     $('petTag').textContent = C.PET.name + ' · level ' + S.pet;

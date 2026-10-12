@@ -62,7 +62,7 @@ function recall(kind) {
     const lost = cargoRemove(n - Math.floor(n * C.RECALL.keepCargo));
     msg = n ? 'The drone dropped ' + lost + ' ore on the way. You kept ' + (n - lost) + '.' : 'A drone carried you back to base.';
   }
-  if (S.relicHeld) msg += ' The relic made it back safely.';
+  if (S.relicHeld) msg += ' The ' + C.CAVES[S.relicHeld - 1].relic.name + ' made it back safely.';
   P.x = C.SPAWN.col + 0.5; P.y = C.SPAWN.row + 0.5; P.battery = batteryMax(); P.digging = [];
   toast(kind === 'dead' ? 'Battery dead' : 'Recalled', msg);
 }
@@ -79,12 +79,20 @@ function sellAndCharge(dt) {
     floatText(P.x, P.y + 0.6, '+' + fmt(value), '#e8a160');
     toast(null, 'Sold ' + n + ' ore for ' + fmt(value) + ' coins' + (here === 'outpost' ? ' at the outpost. The conveyor carries it up.' : ' at base.'));
   }
-  if (S.relicHeld) {
-    S.relicHeld = false; S.relics++; S.coins += C.RELIC.reward;
-    toast(C.RELIC.name + ' recovered!', 'You claimed ' + fmt(C.RELIC.reward) + ' coins. That\'s the end of this version. More caves are coming.');
-    save();
-  }
+  if (S.relicHeld) claimRelic();
   P.battery = Math.min(batteryMax(), P.battery + C.CHARGE_RATE * dt);
+}
+
+// Bringing a cave's relic home pays out and unlocks the next cave
+function claimRelic() {
+  const k = S.relicHeld - 1, cv = C.CAVES[k];
+  S.relicHeld = 0; S.relics++; S.coins += cv.relic.reward;
+  S.caves[k].relicDone = true;
+  const next = C.CAVES[k + 1];
+  if (next && S.unlocked < k + 2) S.unlocked = k + 2;
+  toast(cv.relic.name + ' recovered!', 'You claimed ' + fmt(cv.relic.reward) + ' coins. ' +
+    (next ? 'Cave ' + (k + 2) + ', ' + next.name + ', is now open. Pick it at base.' : 'You\'ve cleared every cave in this version. More are coming.'));
+  save();
 }
 
 // ---------- Digging ----------
@@ -95,7 +103,7 @@ function breakBlock(c, r) {
   burst(c + 0.5, r + 0.5, B.ore || B.color || (t === 'relic' ? '#c9a2ff' : C.BLOCKS[baseFor(c, r)].color), t === 'relic' ? 30 : 10);
   if (B.value) {
     if (cargoCount() < cargoMax()) {
-      cargoAdd(t, Math.round(B.value * (1 + (r - BASE_ROWS) / C.ORE_DEPTH_BONUS)));
+      cargoAdd(t, oreValue(t, r));
       floatText(c + 0.5, r + 0.7, '+' + B.label, B.ore);
     } else floatText(c + 0.5, r + 0.7, 'Cargo full', '#e2705a');
   }
@@ -104,19 +112,44 @@ function breakBlock(c, r) {
     toast('A fossil!', C.PET.name + ' the ' + C.PET.species + ' hatched and moved into your burrow.');
   }
   if (t === 'relic') {
-    S.relicHeld = true;
-    toast('You found the ' + C.RELIC.name + '!', 'Carry it back to base or any outpost to claim it. It won\'t take up cargo space.');
+    S.relicHeld = S.cave + 1;
+    toast('You found the ' + cave().relic.name + '!', 'Carry it back to base or the outpost to claim it. It won\'t take up cargo space.');
     save();
   }
+  if (t === 'cache') openCache(c, r);
+}
+// Treasure cache: coins plus a few pieces of this cave's best ore
+function openCache(c, r) {
+  const coins = Math.round((C.CACHE.coins[0] + Math.random() * (C.CACHE.coins[1] - C.CACHE.coins[0])) * cave().valueMult);
+  S.coins += coins;
+  const ores = Object.keys(cave().ores), best = ores[ores.length - 1];
+  let got = 0;
+  for (let k = 0; k < C.CACHE.ores && cargoCount() < cargoMax(); k++) { cargoAdd(best, oreValue(best, r)); got++; }
+  burst(c + 0.5, r + 0.5, '#F2C94C', 24);
+  floatText(c + 0.5, r + 0.9, '+' + fmt(coins), '#F2C94C');
+  toast('Treasure cache!', '+' + fmt(coins) + ' coins' + (got ? ' and ' + got + ' ' + C.BLOCKS[best].label : '') + (got < C.CACHE.ores ? '. Your cargo was too full for the rest.' : '.'));
+}
+// Hard rock the current arms can't break
+const HARD_HINT = {
+  granite: 'Granite is too hard for Rock Claws. Drill Arms (tier 2) can break it.',
+  obsidian: 'Obsidian needs Plasma Cutters (tier 3). Go around it, or upgrade your arms.',
+};
+let tooHardT = 0;
+function tooHard(c, r, t) {
+  if (time - tooHardT > 0.6) { tooHardT = time; floatText(c + 0.5, r + 0.6, 'Too hard', '#e2705a'); burst(c + 0.5, r + 0.5, '#D9D2C5', 3); P.shake = Math.max(P.shake, 0.08); }
+  hintOnce('hard-' + t, C.BLOCKS[t].label, HARD_HINT[t]);
 }
 function dig(c, r, dt) {
   const t = at(c, r);
   if (!t) return;
   if (C.BLOCKS[t].hp === Infinity) {
     if (t === 'bedrock') hintOnce('bedrock', null, 'Bedrock. You can\'t dig through the cave walls.');
-    else hintOnce('build', null, 'Buildings can\'t be dug.');
+    else if (t === 'chasm') hintOnce('chasm', 'Chasm', 'Too wide to cross. Find the old bridge, or stand on a bridge pad to deploy one.');
+    else if (t === 'found' || t === 'post') hintOnce('build', null, 'Buildings can\'t be dug.');
     return;
   }
+  const needs = C.BLOCKS[t].needs || 0;
+  if (S.tiers.arms < needs) { tooHard(c, r, t); return; }
   const i = idx(c, r);
   DMG[i] += digPower() * C.DIG_RATE * dt;
   P.digging.push({ c, r });
@@ -192,7 +225,7 @@ function updatePlayer(dt) {
   finishMove();
 }
 
-let lastBiome = null, lastCell = -1;
+let lastCell = -1;
 function finishMove() {
   if (lowBattery() && !P.warned) { P.warned = true; toast('Low battery', 'Head back to the conveyor or an outpost. The mark on the battery bar is roughly what the trip needs.'); }
   const cell = idx(pCol(), pRow());
@@ -200,15 +233,29 @@ function finishMove() {
   lastCell = cell;
   markSeen();
   S.best = Math.max(S.best, depthOf(pRow()));
-  if (pRow() >= BASE_ROWS) {
-    const b = biomeAt(pRow());
-    if (b.id !== lastBiome && !S.biomesSeen.includes(b.id)) { S.biomesSeen.push(b.id); toast(b.name, b.note); }
-    lastBiome = b.id;
-  }
+  if (padReady(pCol(), pRow())) hintOnce('pad', 'Bridge pad', 'Deploy a bridge across the chasm for ' + fmt(bridgeCost()) + ' coins. Press E or tap Deploy.');
 }
 function markSeen() {
   const R = lightRadius();
   for (let r = Math.max(0, Math.floor(P.y - R - 1)); r <= Math.min(ROWS - 1, Math.ceil(P.y + R)); r++)
     for (let c = Math.max(0, Math.floor(P.x - R - 1)); c <= Math.min(COLS - 1, Math.ceil(P.x + R)); c++)
-      if (Math.hypot(c + 0.5 - P.x, r + 0.5 - P.y) <= R) SEEN[idx(c, r)] = 1;
+      if (Math.hypot(c + 0.5 - P.x, r + 0.5 - P.y) <= R && SEEN[idx(c, r)] === 0) SEEN[idx(c, r)] = 1;
+  // a canopy with a scanner reveals treasure caches within its scan range
+  const scan = rockScan();
+  if (!scan) return;
+  for (let r = Math.max(0, Math.floor(P.y - scan - 1)); r <= Math.min(ROWS - 1, Math.ceil(P.y + scan)); r++)
+    for (let c = Math.max(0, Math.floor(P.x - scan - 1)); c <= Math.min(COLS - 1, Math.ceil(P.x + scan)); c++)
+      if (T[idx(c, r)] === 'cache' && SEEN[idx(c, r)] !== 2 && Math.hypot(c + 0.5 - P.x, r + 0.5 - P.y) <= scan + 0.5) {
+        SEEN[idx(c, r)] = 2; hintOnce('cache', 'Cache detected', 'Your scanner found a treasure cache. Dig it out for coins and rare ore.');
+      }
+}
+// The action button: deploy a bridge when standing on a ready bridge pad
+function actionHere() {
+  if (padReady(pCol(), pRow())) return { label: 'Deploy bridge · ' + fmt(bridgeCost()), run: () => {
+    if (S.coins < bridgeCost()) return toast(null, 'You need ' + fmt(bridgeCost()) + ' coins to deploy this bridge.');
+    S.coins -= bridgeCost(); deployBridge(pCol(), pRow());
+    burst(pCol() + 0.5, pRow() + 1.5, '#a77d48', 16);
+    toast('Bridge deployed', 'The way across is open.'); save();
+  } };
+  return null;
 }

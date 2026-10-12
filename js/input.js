@@ -9,7 +9,11 @@ const lastOf = (a, b) => { for (let i = held.length - 1; i >= 0; i--) if (held[i
 const horizDir = () => joyH || lastOf('left', 'right');
 const vertDir = () => joyV || lastOf('up', 'down');
 
-addEventListener('keydown', e => { const d = KEYMAP[e.code]; if (d) { e.preventDefault(); if (!held.includes(d)) held.push(d); } });
+addEventListener('keydown', e => {
+  const d = KEYMAP[e.code];
+  if (d) { e.preventDefault(); if (!held.includes(d)) held.push(d); }
+  if ((e.code === 'KeyE' || e.code === 'Enter') && !e.repeat && !(e.target.closest && e.target.closest('button'))) { e.preventDefault(); runAction(); }
+});
 addEventListener('keyup', e => { const d = KEYMAP[e.code]; if (d) { const i = held.indexOf(d); if (i >= 0) held.splice(i, 1); } });
 addEventListener('blur', () => { held.length = 0; joyH = joyV = null; });
 

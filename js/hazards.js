@@ -7,7 +7,7 @@ const wobble = new Map();   // cell index → seconds it has been shaking
 
 function exposed(c, r) {
   let n = 0;
-  for (const [a, b] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (!at(c + a, r + b)) n++;
+  for (const [a, b] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const t = at(c + a, r + b); if (isFloor(t) || t === 'chasm') n++; }
   return n;
 }
 function updateRocks(dt) {

@@ -59,17 +59,78 @@ function rr2(ctx, x, y, w, h, r) { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.ar
 
 // ---------- Floor, belt, walls ----------
 function drawFloor(c, r, x, y, s) {
-  const yard = r < BASE_ROWS, deep = !yard && biomeAt(r).id === 'basalt';
-  g.fillStyle = yard ? '#3c4a2c' : deep ? '#1b1820' : '#2a1e15';
+  const t = at(c, r);
+  if (t === 'chasm') return drawChasm(c, r, x, y, s);
+  if (t === 'bridge' || t === 'oldbridge') { drawChasm(c, r, x, y, s); return drawBridge(c, r, x, y, s, t === 'oldbridge'); }
+  const yard = r < BASE_ROWS;
+  g.fillStyle = yard ? '#3c4a2c' : cave().floor;
   g.fillRect(x, y, s, s);
   g.fillStyle = yard ? 'rgba(120,150,80,.25)' : 'rgba(255,230,200,.04)';
   g.fillRect(x + s * (0.2 + hash(c, r, 3) * 0.5), y + s * (0.2 + hash(c, r, 4) * 0.5), s * 0.1, s * 0.1);
+  if (DECO[idx(c, r)] && hash(c, r, 11) < 0.35) drawStalagmite(c, r, x, y, s);
+  if (t === 'pad') drawPad(c, r, x, y, s);
   if (outpostAt(c, r)) { // outpost landing pad
     g.fillStyle = 'rgba(217,129,59,.16)'; g.fillRect(x, y, s, s);
     g.strokeStyle = 'rgba(217,129,59,.35)'; g.lineWidth = 1; g.strokeRect(x + 0.5, y + 0.5, s - 1, s - 1);
   }
   if (onBelt(c, r)) drawBelt(x, y, s);
 }
+// A chasm: a dark drop. Where solid ground lies beyond it (up the screen) you see the far wall.
+function drawChasm(c, r, x, y, s) {
+  const isGap = t => t === 'chasm' || t === 'bridge' || t === 'oldbridge';
+  const depth = g.createLinearGradient(0, y, 0, y + s);
+  depth.addColorStop(0, '#0a0809'); depth.addColorStop(1, '#030203');
+  g.fillStyle = depth; g.fillRect(x, y, s, s);
+  // far wall: where solid ground lies beyond the chasm (up the screen), you see its rock face
+  if (!isGap(at(c, r + 1))) {
+    const wall = g.createLinearGradient(0, y, 0, y + s * 0.75);
+    wall.addColorStop(0, shade(C.BLOCKS[baseFor(c, r)].color, 0.7)); wall.addColorStop(1, 'rgba(3,2,3,0)');
+    g.fillStyle = wall; g.fillRect(x, y, s, s * 0.75);
+    g.fillStyle = 'rgba(0,0,0,.35)'; for (let k = 0; k < 3; k++) g.fillRect(x + s * (0.15 + hash(c, r, k + 40) * 0.7), y + s * 0.1, 2, s * (0.2 + hash(r, c, k + 40) * 0.3));
+  }
+  // near edge: a lit rim of ground where the drop begins
+  if (!isGap(at(c, r - 1))) {
+    g.fillStyle = shade(cave().floor, 1.9); g.fillRect(x, y + s - Math.max(3, s * 0.08), s, Math.max(3, s * 0.08));
+    g.fillStyle = 'rgba(0,0,0,.5)'; g.fillRect(x, y + s - Math.max(3, s * 0.08) - 2, s, 2);
+  }
+  // side edges
+  g.fillStyle = 'rgba(255,230,200,.08)';
+  if (!isGap(at(c - 1, r))) g.fillRect(x, y, 2, s);
+  if (!isGap(at(c + 1, r))) g.fillRect(x + s - 2, y, 2, s);
+}
+// Bridges run up the screen, across the chasm. Old ones are weathered wood; deployed ones are steel.
+function drawBridge(c, r, x, y, s, old) {
+  const bx = x + s * 0.18, bw = s * 0.64;
+  g.fillStyle = old ? '#4a3a2a' : '#3b3f46'; g.fillRect(bx, y, bw, s);
+  g.fillStyle = old ? '#7a5f42' : '#5d646e';
+  const n = 4;
+  for (let k = 0; k < n; k++) {
+    if (old && hash(c, r, k + 20) < 0.15) continue; // a missing plank
+    g.fillRect(bx + 2, y + k * s / n + 2, bw - 4, s / n - 4);
+  }
+  g.fillStyle = old ? '#a28565' : '#d9813b';
+  g.fillRect(x + s * 0.14, y, Math.max(2, s * 0.05), s); g.fillRect(x + s * 0.81, y, Math.max(2, s * 0.05), s);
+}
+// A bridge pad: steel plate with a lamp. Amber = ready to deploy, green = bridge deployed.
+function drawPad(c, r, x, y, s) {
+  const ready = padReady(c, r);
+  g.fillStyle = '#3b3f46'; rr2(g, x + s * 0.1, y + s * 0.1, s * 0.8, s * 0.8, s * 0.1); g.fill();
+  g.strokeStyle = '#e8b33a'; g.lineWidth = Math.max(2, s * 0.05); g.setLineDash([s * 0.1, s * 0.08]);
+  g.strokeRect(x + s * 0.16, y + s * 0.16, s * 0.68, s * 0.68); g.setLineDash([]);
+  g.fillStyle = '#5d646e';
+  g.beginPath(); g.moveTo(x + s * 0.5, y + s * 0.28); g.lineTo(x + s * 0.68, y + s * 0.5); g.lineTo(x + s * 0.32, y + s * 0.5); g.closePath(); g.fill();
+  const on = ready ? (Math.sin(time * 5) > 0 ? '#f2b84b' : '#8a6420') : '#7fd17a';
+  g.fillStyle = on; g.beginPath(); g.arc(x + s * 0.5, y + s * 0.66, s * 0.08, 0, 7); g.fill();
+}
+// Cavern floors get stalagmites (and crystals in the Basalt Deeps). Decoration only.
+function drawStalagmite(c, r, x, y, s) {
+  const cx = x + s * (0.2 + hash(c, r, 12) * 0.6), by = y + s * (0.55 + hash(c, r, 13) * 0.35), h = s * (0.25 + hash(c, r, 14) * 0.25);
+  const crystal = cave().id === 'deeps' && hash(c, r, 15) < 0.5;
+  g.fillStyle = crystal ? 'rgba(159,227,240,.75)' : shade(C.BLOCKS[cave().rock[0]].color, 1.05);
+  g.beginPath(); g.moveTo(cx - s * 0.08, by); g.lineTo(cx, by - h); g.lineTo(cx + s * 0.08, by); g.closePath(); g.fill();
+  g.fillStyle = 'rgba(0,0,0,.25)'; g.beginPath(); g.moveTo(cx, by - h); g.lineTo(cx + s * 0.08, by); g.lineTo(cx, by); g.closePath(); g.fill();
+}
+
 // Chevrons run toward the base (down the screen): the belt carries ore home.
 function drawBelt(x, y, s) {
   g.fillStyle = '#2b2622'; g.fillRect(x + s * 0.18, y, s * 0.64, s);
@@ -85,11 +146,12 @@ function drawBelt(x, y, s) {
 
 function drawWall(t, c, r, x, y, s, W) {
   const i = idx(c, r), seen = SEEN[i];
-  const hidden = (ORES.has(t) || t === 'fossil' || t === 'relic') && !seen;
+  const hidden = t === 'cache' ? seen !== 2 : (ORES.has(t) || t === 'fossil' || t === 'relic') && !seen;
   const look = hidden ? baseFor(c, r) : t;
   const base = C.BLOCKS[look].color || C.BLOCKS[baseFor(c, r)].color;
   const ty = y - W; // top face
-  if (!at(c, r - 1)) { // front face, where open floor lies in front (below on screen)
+  const front = at(c, r - 1);
+  if (isFloor(front) || front === 'chasm') { // front face, where open floor lies in front (below on screen)
     g.fillStyle = shade(base, 0.62); g.fillRect(x, y + s - W, s, W);
     g.fillStyle = 'rgba(0,0,0,.25)'; g.fillRect(x, y + s - W, s, Math.max(1, W * 0.18));
   }
@@ -115,6 +177,21 @@ function drawWall(t, c, r, x, y, s, W) {
     g.fillStyle = 'rgba(0,0,0,.18)'; g.fillRect(x + s - bev, ty, bev, s);
     if (look === 'basalt') { g.fillStyle = 'rgba(255,255,255,.05)'; g.fillRect(x + s * (0.15 + hash(c, r, 1) * 0.4), ty + s * (0.25 + hash(c, r, 2) * 0.4), s * 0.3, s * 0.07); }
     if (look === 'bedrock') { g.fillStyle = '#211b20'; for (let k = 0; k < 3; k++) g.fillRect(x + s * 0.1, ty + s * (0.2 + k * 0.28), s * 0.8, s * 0.06); }
+    if (look === 'stone') { g.fillStyle = 'rgba(0,0,0,.12)'; g.fillRect(x + s * (0.15 + hash(c, r, 1) * 0.5), ty + s * (0.3 + hash(c, r, 2) * 0.4), s * 0.25, s * 0.06); }
+    if (look === 'granite') { // speckled, chunky: needs Drill Arms
+      for (let k = 0; k < 7; k++) { g.fillStyle = k % 2 ? 'rgba(255,255,255,.55)' : 'rgba(40,30,36,.55)'; g.fillRect(x + s * (0.12 + hash(c, r, k + 30) * 0.72), ty + s * (0.12 + hash(r, c, k + 30) * 0.72), Math.max(2, s * 0.06), Math.max(2, s * 0.06)); }
+      g.strokeStyle = 'rgba(40,30,36,.45)'; g.lineWidth = Math.max(1, s * 0.03); g.strokeRect(x + s * 0.06, ty + s * 0.06, s * 0.88, s * 0.88);
+    }
+    if (look === 'obsidian') { // glossy black glass with a purple sheen: needs Plasma Cutters
+      g.fillStyle = 'rgba(160,120,220,.22)';
+      g.beginPath(); g.moveTo(x + s * 0.15, ty + s * 0.85); g.lineTo(x + s * 0.55, ty + s * 0.15); g.lineTo(x + s * 0.7, ty + s * 0.15); g.lineTo(x + s * 0.3, ty + s * 0.85); g.closePath(); g.fill();
+      g.fillStyle = 'rgba(220,200,255,.35)'; g.fillRect(x + s * 0.62, ty + s * 0.2, s * 0.06, s * 0.06);
+    }
+  }
+  if (!hidden && t === 'cache') { // a treasure cache the scanner has found
+    g.fillStyle = '#5a3a1e'; rr2(g, x + s * 0.2, ty + s * 0.32, s * 0.6, s * 0.42, s * 0.05); g.fill();
+    g.fillStyle = '#7a5230'; rr2(g, x + s * 0.2, ty + s * 0.24, s * 0.6, s * 0.16, s * 0.06); g.fill();
+    g.fillStyle = '#f2c94c'; g.fillRect(x + s * 0.2, ty + s * 0.38, s * 0.6, s * 0.05); g.fillRect(x + s * 0.46, ty + s * 0.36, s * 0.08, s * 0.14);
   }
   if (!hidden && ORES.has(t)) {
     g.fillStyle = C.BLOCKS[t].ore;
@@ -182,7 +259,7 @@ function render(dt) {
   const blocked = new Set(beltBlocked());
 
   // Pass 1: all floor tiles first, so floor never paints over the walker's feet
-  for (let r = rTop; r >= rBot; r--) for (let c = c0; c <= c1; c++) if (!at(c, r)) drawFloor(c, r, X(c), Y(r + 1), s);
+  for (let r = rTop; r >= rBot; r--) for (let c = c0; c <= c1; c++) { const t = at(c, r); if (isFloor(t) || t === 'chasm') drawFloor(c, r, X(c), Y(r + 1), s); }
   // Pass 2: walls, buildings and the walker, top of screen to bottom.
   // The walker is drawn with the row its feet stand in, so only walls in front of it overlap it.
   const walkerRow = Math.floor(P.y - HB + 0.01);
@@ -190,7 +267,7 @@ function render(dt) {
     const y = Y(r + 1); // top edge of this row's cells
     for (let c = c0; c <= c1; c++) {
       const t = at(c, r);
-      if (!t || t === 'found' || t === 'post') continue;
+      if (isFloor(t) || t === 'chasm' || t === 'found' || t === 'post') continue;
       const w = wobble.get(idx(c, r));
       drawWall(t, c, r, X(c) + (w ? Math.sin(time * 60) * s * 0.06 : 0), y, s, W);
       if (c === BELT && blocked.has(r)) { // conveyor path still to dig
@@ -201,11 +278,15 @@ function render(dt) {
     // the block(s) you're digging get a thin outline
     P.digging.forEach(d => { if (d.r === r) { g.strokeStyle = 'rgba(239,227,211,.55)'; g.lineWidth = 1.5; g.strokeRect(X(d.c) + 1.5, y - W + 1.5, s - 3, s - 3); } });
     if (r === C.BASE_BUILDING.rows[0]) drawBaseBuilding(X, Y, s, W);
-    for (let k2 = 1; k2 <= S.outposts; k2++) if (r === outpostRow(k2) - 1) drawOutpost(k2, X, Y, s, W);
+    if (r === BASE_ROWS - 1) drawCaveSign(X, Y, s);
+    for (let k2 = 1; k2 <= CS().outposts; k2++) if (r === outpostRow(k2) - 1) drawOutpost(k2, X, Y, s, W);
     if (r === walkerRow) {
       // The Canopy Walker: feet sit near the bottom of its block; it faces the way it last moved
       const view = P.dir === 'up' ? 'back' : P.dir === 'down' ? 'front' : 'side';
-      drawWalker(g, X(P.x), Y(P.y) + s * 0.4, s * 1.15 / 64, view, P.face, time, ids, { moving, digging: P.digging.length > 0 });
+      // arms swing up over the shoulders while digging deeper into the cave
+      const raiseTarget = view === 'back' && P.digging.length > 0 ? 1 : 0;
+      P.armRaise = (P.armRaise || 0) + (raiseTarget - (P.armRaise || 0)) * Math.min(1, dt * 14);
+      drawWalker(g, X(P.x), Y(P.y) + s * 0.4, s * 1.15 / 64, view, P.face, time, ids, { moving, digging: P.digging.length > 0, raise: P.armRaise });
     }
   }
 
@@ -221,7 +302,7 @@ function render(dt) {
     const fog = g.createRadialGradient(px, py, R * 0.5, px, py, R * 1.1);
     fog.addColorStop(0, 'rgba(8,5,3,0)'); fog.addColorStop(1, 'rgba(8,5,3,.94)');
     g.fillStyle = fog; g.fillRect(0, 0, VW, VH);
-    for (let k2 = 1; k2 <= S.outposts; k2++) { // outposts keep a lamp lit
+    for (let k2 = 1; k2 <= CS().outposts; k2++) { // outposts keep a lamp lit
       const oy = Y(outpostRow(k2) + 0.5), ox2 = X(BELT + 1);
       if (oy < -s * 3 || oy > VH + s * 3) continue;
       const glow = g.createRadialGradient(ox2, oy, 0, ox2, oy, s * 2.2);
@@ -237,6 +318,10 @@ function render(dt) {
       if (t === 'fossil' && !SEEN[idx(c, r)] && dist <= lightRadius() + 2.5) { // an unseen fossil glows faintly when close
         g.fillStyle = 'rgba(234,223,196,' + (0.12 + Math.sin(time * 3) * 0.08) + ')'; g.beginPath(); g.arc(cx, cy, s * 0.45, 0, 7); g.fill();
       }
+      if (t === 'cache' && SEEN[idx(c, r)] === 2) { // scanned caches ping through the dark
+        g.strokeStyle = 'rgba(242,201,76,' + (0.35 + Math.sin(time * 4) * 0.2) + ')'; g.lineWidth = 1.5;
+        g.beginPath(); g.arc(cx, cy, s * (0.42 + (time % 1.2) * 0.15), 0, 7); g.stroke();
+      }
       if (t === 'relic') { // the relic is a beacon you can always see
         const pulse = 0.5 + Math.sin(time * 2.5) * 0.25;
         const glow = g.createRadialGradient(cx, cy, 0, cx, cy, s * 2.5);
@@ -250,6 +335,46 @@ function render(dt) {
   g.textAlign = 'center'; g.font = '600 ' + Math.max(11, Math.round(s * 0.28)) + 'px "IBM Plex Mono", monospace';
   floats.forEach(f => { g.globalAlpha = Math.min(1, f.life * 1.5); g.fillStyle = f.col; g.fillText(f.text, X(f.x), Y(f.y) - W); });
   g.globalAlpha = 1;
+}
+
+// The cave's name, on a sign at the mouth of the cave
+function drawCaveSign(X, Y, s) {
+  const x = X(BELT - 3.5), y = Y(BASE_ROWS) + s * 0.12, w = s * 3, h = s * 0.62;
+  g.fillStyle = '#3a2b20'; rr2(g, x, y, w, h, 3); g.fill();
+  g.fillStyle = '#6a5038'; g.fillRect(x + w * 0.2, y + h, 3, s * 0.3); g.fillRect(x + w * 0.8 - 3, y + h, 3, s * 0.3);
+  g.fillStyle = '#efe3d3'; g.textAlign = 'center'; g.font = '700 ' + Math.round(s * 0.24) + 'px "Pixelify Sans", monospace';
+  g.fillText('CAVE ' + (S.cave + 1), x + w / 2, y + h * 0.42);
+  g.font = '500 ' + Math.round(s * 0.18) + 'px "IBM Plex Mono", monospace'; g.fillStyle = '#d9813b';
+  g.fillText(cave().name.toUpperCase(), x + w / 2, y + h * 0.82);
+}
+
+// ---------- Minimap: everything you've seen in this cave ----------
+const mcv = $('minimap'), mg = mcv.getContext('2d');
+const MM = 3; // pixels per block
+mcv.width = COLS * MM; mcv.height = (ROWS - 1) * MM;
+let mmT = 0;
+function renderMinimap(dt) {
+  mmT += dt; if (mmT < 0.2) return; mmT = 0;
+  mg.clearRect(0, 0, mcv.width, mcv.height);
+  for (let r = 0; r < ROWS - 1; r++) for (let c = 0; c < COLS; c++) {
+    const i = idx(c, r); if (!SEEN[i] && r >= BASE_ROWS) continue;
+    const t = T[i], y = (ROWS - 2 - r) * MM, x = c * MM;
+    let col = '#4a3a2c';
+    if (r < BASE_ROWS) col = isFloor(t) ? '#3c4a2c' : '#4b4038';
+    else if (t === 'chasm') col = '#000';
+    else if (t === 'bridge' || t === 'oldbridge') col = '#a77d48';
+    else if (isFloor(t)) col = '#9a7a58';
+    else if (t === 'granite') col = '#8c8286';
+    else if (t === 'obsidian') col = '#3a2d48';
+    else if (t === 'relic') col = '#c9a2ff';
+    else if (t === 'cache' && SEEN[i] === 2) col = '#f2c94c';
+    else if (ORES.has(t)) col = C.BLOCKS[t].ore;
+    mg.fillStyle = col; mg.fillRect(x, y, MM, MM);
+  }
+  mg.fillStyle = '#d9813b';
+  for (let r = BASE_ROWS; r <= beltEnd(); r++) mg.fillRect(BELT * MM + 1, (ROWS - 2 - r) * MM, 1, MM);
+  for (let k = 1; k <= CS().outposts; k++) mg.fillRect((BELT - 1) * MM, (ROWS - 2 - outpostRow(k)) * MM - 1, MM * 3, MM + 1);
+  if (Math.sin(time * 8) > -0.4) { mg.fillStyle = '#9fe3f0'; mg.fillRect(P.x * MM - 2, (ROWS - 1 - P.y) * MM - 2, 4, 4); }
 }
 
 // ---------- Pet burrow (side view, in its own panel) ----------

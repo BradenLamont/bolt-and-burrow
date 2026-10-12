@@ -14,6 +14,7 @@
   <section class="stage" id="stage" aria-label="Cave">
     <canvas id="world" aria-label="The cave, seen from above. Your base is at the bottom. Use the arrow keys or the touch joystick to move and dig."></canvas>
     <div class="joy" id="joy" hidden><i id="joyKnob"></i></div>
+    <canvas class="minimap" id="minimap" aria-label="Map of what you've explored in this cave"></canvas>
     <div class="hud">
       <div class="readout">
         <small>Depth</small>
@@ -31,9 +32,10 @@
       </div>
     </div>
     <div class="controls">
-      <p class="keys">Arrows or WASD: move · push into blocks to dig · Up goes deeper · ride the conveyor by holding Up or Down on it</p>
+      <p class="keys">Arrows or WASD: move · push into blocks to dig · Up goes deeper · E: use bridge pads · ride the conveyor by holding Up or Down on it</p>
       <p class="touch">Touch and drag anywhere for the joystick · push into blocks to dig</p>
       <div class="btns">
+        <button id="action" type="button" hidden>Action</button>
         <button id="recall" type="button">Recall</button>
       </div>
     </div>
@@ -48,11 +50,18 @@
       <div class="rows" id="parts"></div>
       <div class="row lift">
         <div>
-          <small>Conveyor · outposts every 25 m</small>
-          <strong id="liftDepth">No outposts yet</strong>
+          <small>Conveyor · one outpost, halfway in</small>
+          <strong id="liftDepth">No outpost in this cave yet</strong>
           <span id="liftNote">Outposts sell ore, recharge you and open the shop.</span>
         </div>
         <button id="extend" type="button">Build outpost</button>
+      </div>
+      <div class="row travel" id="caveRow" hidden>
+        <div>
+          <small>Caves</small>
+          <span>Bring a cave's relic home to open the next one.</span>
+        </div>
+        <div class="travel-btns" id="caves"></div>
       </div>
       <div class="row travel" id="travelRow" hidden>
         <div>

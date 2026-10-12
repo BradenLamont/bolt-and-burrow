@@ -71,6 +71,22 @@ button:focus-visible { outline: 2px solid var(--crystal); outline-offset: 2px; }
 }
 #recall.armed { border-color: var(--danger); color: var(--danger); }
 
+/* Minimap: top right, under the coins */
+.minimap {
+  position: absolute; right: 12px; top: 70px; width: 75px; height: auto; max-height: 190px;
+  image-rendering: pixelated; background: rgba(11, 8, 6, .75); border: 1px solid var(--line); border-radius: 4px;
+  pointer-events: none;
+}
+@media (max-width: 720px) { .minimap { width: 50px; top: 92px; } }
+
+/* Context action (bridge pads) */
+#action {
+  padding: 8px 14px; border-radius: 4px; border: 2px solid var(--copper);
+  background: rgba(33, 25, 19, .92); color: var(--fg);
+  font-family: var(--display); font-size: 1rem; letter-spacing: .03em;
+}
+.travel-btns button.here { border-color: var(--crystal); color: var(--crystal); }
+
 /* Touch joystick: appears under your thumb */
 .joy {
   position: absolute; width: 104px; height: 104px; transform: translate(-50%, -50%);
