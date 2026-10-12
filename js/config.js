@@ -38,28 +38,29 @@ const CONFIG = {
   },
   ORE_DEPTH_BONUS: 60, // ore is worth +100% for every 60 blocks of depth
 
-  // ----- Robot parts (tier 0 is what you start with) -----
+  // ----- Canopy Walker parts (tier 0 is what you start with) -----
+  // Part ids stay the same across versions so saves keep working; names match the art.
   PARTS: {
     // light = how far you can see; scan = how far past your light unstable rock shows in the dark (0 = not at all)
-    head: { label: 'Head', stat: 'Light · rock scan', fmt: v => v.light + ' blocks · ' + (v.scan ? 'spots unstable rock ' + v.scan + ' blocks into the dark' : 'no rock scan'), tiers: [
-      { id: 'bulb',    name: 'Optic Bulb',   cost: 0,    val: { light: 2.5, scan: 0 } },
-      { id: 'dome',    name: 'Scanner Dome', cost: 120,  val: { light: 4,   scan: 3 } },
-      { id: 'quantum', name: 'Quantum Eye',  cost: 1000, val: { light: 6,   scan: 6 } },
+    head: { label: 'Canopy', stat: 'Light · rock scan', fmt: v => v.light + ' blocks · ' + (v.scan ? 'spots unstable rock ' + v.scan + ' blocks into the dark' : 'no rock scan'), tiers: [
+      { id: 'bulb',    name: 'Glass Bubble',   cost: 0,    val: { light: 2.5, scan: 0 } },
+      { id: 'dome',    name: 'Armored Visor', cost: 120,  val: { light: 4,   scan: 3 } },
+      { id: 'quantum', name: 'Sensor Dome',  cost: 1000, val: { light: 6,   scan: 6 } },
     ]},
     arms: { label: 'Arms', stat: 'Dig power', fmt: v => '×' + v, tiers: [
-      { id: 'pincers', name: 'Pincers',        cost: 0,   val: 1 },
+      { id: 'pincers', name: 'Rock Claws',        cost: 0,   val: 1 },
       { id: 'drills',  name: 'Drill Arms',     cost: 60,  val: 3 },
       { id: 'plasma',  name: 'Plasma Cutters', cost: 900, val: 8 },
     ]},
-    body: { label: 'Body', stat: 'Battery · cargo', fmt: v => v.battery + ' power · ' + v.cargo + ' ore', tiers: [
-      { id: 'tin',     name: 'Tin Can',   cost: 0,    val: { battery: 80,  cargo: 8 } },
-      { id: 'iron',    name: 'Iron Core', cost: 150,  val: { battery: 140, cargo: 16 } },
-      { id: 'reactor', name: 'Reactor',   cost: 1400, val: { battery: 240, cargo: 30 } },
+    body: { label: 'Tank', stat: 'Battery · cargo', fmt: v => v.battery + ' power · ' + v.cargo + ' ore', tiers: [
+      { id: 'tin',     name: 'Small Tank',   cost: 0,    val: { battery: 80,  cargo: 8 } },
+      { id: 'iron',    name: 'Twin Tanks', cost: 150,  val: { battery: 140, cargo: 16 } },
+      { id: 'reactor', name: 'Reactor Tank',   cost: 1400, val: { battery: 240, cargo: 30 } },
     ]},
     // speed in blocks per second; eff = share of the normal battery cost of moving
     legs: { label: 'Legs', stat: 'Speed · efficiency', fmt: v => v.speed + ' blocks/s · ' + Math.round(v.eff * 100) + '% move cost', tiers: [
-      { id: 'treads',  name: 'Rusty Treads', cost: 0,    val: { speed: 4,   eff: 1 } },
-      { id: 'springs', name: 'Spring Legs',  cost: 90,   val: { speed: 5.5, eff: 0.8 } },
+      { id: 'treads',  name: 'Piston Legs', cost: 0,    val: { speed: 4,   eff: 1 } },
+      { id: 'springs', name: 'Spring Struts',  cost: 90,   val: { speed: 5.5, eff: 0.8 } },
       { id: 'jets',    name: 'Hover Jets',   cost: 1200, val: { speed: 7,   eff: 0.55 } },
     ]},
   },

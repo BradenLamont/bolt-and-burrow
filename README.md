@@ -18,7 +18,8 @@ A browser mining game: steer a robot with swappable parts down through the earth
 - `js/player.js` – robot movement, digging, battery, recall, fast travel
 - `js/hazards.js` – unstable rock cave-ins
 - `js/pet.js` – Pip the Mole
-- `js/render.js` – all drawing
+- `js/walker.js` – the Canopy Walker mech (every part, every facing, walk and dig animation)
+- `js/render.js` – drawing the cave, buildings and effects
 - `js/ui.js` – HUD, workshop, inventory
 - `js/input.js` – keyboard and touch joystick
 - `js/main.js` – start-up and the main loop
@@ -61,6 +62,12 @@ A browser mining game: steer a robot with swappable parts down through the earth
 - Split the game code into separate files by job
 - Removed the leftover platform button
 
+## v0.5.1 – art update
+- The robot is now the Canopy Walker: an orange mining mech with a glass canopy, piloted by the mono-eye robot
+- Front, back and side views (the walker faces the way it last moved), a walk cycle and dig animations
+- Every part tier has its own look: Glass Bubble / Armored Visor / Sensor Dome canopies, Rock Claws / Drill Arms / Plasma Cutters, Small Tank / Twin Tanks / Reactor Tank, Piston Legs / Spring Struts / Hover Jets
+- Part names updated to match the art (saves still work; stats unchanged)
+
 ## Ideas for later
 - Nano-Bots: rework pets into nano-bots that live inside the robot, still giving bonuses and passive coins
 - Ways for pets / nano-bots to interact with the player
@@ -79,3 +86,7 @@ A browser mining game: steer a robot with swappable parts down through the earth
 - Tutorial for new players
 - More upgrade tiers per part
 - Redesign the pet view if pets start helping in the player's cave
+- Art direction chosen: the Canopy Walker (orange mech with a glass canopy, piloted by the mono-eye robot). Concept board is a Claude artifact
+- Interchangeable parts system: parts become items you collect and swap, each with its own stats and abilities
+- Possibly a gacha-style system later: summon parts with different rarities, stats and abilities
+- Pilot customization (the pilot robot is separate from the mech)

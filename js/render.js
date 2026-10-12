@@ -1,7 +1,8 @@
 // Bolt & Burrow — drawing. The cave is shown from above in 2.5D: every solid block is a
 // raised wall with a top face and a shaded front face. Your base is at the bottom of the
 // screen and deeper rows are drawn further up.
-// Rows are drawn top of screen to bottom, so nearer walls overlap the robot and walls behind them.
+// Rows are drawn top of screen to bottom, so nearer walls overlap the walker and walls behind them.
+// The walker itself is drawn by walker.js.
 'use strict';
 
 // ---------- Effects ----------
@@ -159,59 +160,10 @@ function drawOutpost(k, X, Y, s, W) {
   g.fillText('OP' + k, x + s * 0.5, y + s * 1.3);
 }
 
-// ---------- The robot, built from its four equipped parts (about 36 units tall) ----------
-function drawBot(ctx, x, y, s, face, t, ids) {
-  ctx.save(); ctx.translate(x, y); ctx.scale(s * face, s);
-  const L = ids.legs, B = ids.body, A = ids.arms, H = ids.head;
-  ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.ellipse(0, 14, 11, 3, 0, 0, 7); ctx.fill(); // shadow
-  if (L === 'treads') {
-    ctx.fillStyle = '#4a3f36'; rr2(ctx, -10, 6, 20, 7, 3); ctx.fill();
-    ctx.fillStyle = '#8a7a6a'; [-6, 0, 6].forEach((wx, k) => { ctx.beginPath(); ctx.arc(wx, 9.5, 2 + (Math.sin(t * 18 + k) > 0 ? 0.3 : 0), 0, 7); ctx.fill(); });
-  } else if (L === 'springs') {
-    const b = Math.sin(t * 22) * 1.2;
-    ctx.strokeStyle = '#c99a52'; ctx.lineWidth = 1.6; ctx.beginPath();
-    [-5, 5].forEach(lx => { ctx.moveTo(lx, 6); ctx.lineTo(lx - 2, 8 + b / 2); ctx.lineTo(lx + 2, 10 + b / 2); ctx.lineTo(lx, 12 + b); });
-    ctx.stroke(); ctx.fillStyle = '#7a5f36'; ctx.fillRect(-8, 12 + b, 6, 2); ctx.fillRect(2, 12 + b, 6, 2);
-  } else {
-    ctx.fillStyle = '#5e7c86'; rr2(ctx, -8, 6, 16, 4, 2); ctx.fill();
-    ctx.fillStyle = '#9fe3f0'; ctx.beginPath(); ctx.moveTo(-5, 10); ctx.lineTo(5, 10); ctx.lineTo(0, 14 + Math.sin(t * 40) * 1.5); ctx.closePath(); ctx.fill();
-  }
-  ctx.fillStyle = '#6e665e'; ctx.fillRect(-12, -1, 3, 5);
-  ctx.fillStyle = B === 'tin' ? '#8f8b85' : B === 'iron' ? '#56616b' : '#3a3f4b';
-  rr2(ctx, -9, -4, 18, 11, 2); ctx.fill();
-  if (B === 'iron') { ctx.fillStyle = '#9aa5ad'; [[-7, -2], [7, -2], [-7, 5], [7, 5]].forEach(([a, b]) => ctx.fillRect(a - 0.6, b - 0.6, 1.2, 1.2)); }
-  if (B === 'reactor') { ctx.fillStyle = 'rgba(224,138,66,' + (0.7 + Math.sin(t * 6) * 0.3) + ')'; ctx.beginPath(); ctx.arc(0, 1.5, 3, 0, 7); ctx.fill(); }
-  if (B === 'tin') { ctx.fillStyle = 'rgba(0,0,0,.2)'; ctx.fillRect(-9, 1, 18, 1); }
-  if (A === 'pincers') {
-    ctx.strokeStyle = '#aaa39a'; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(8, 1); ctx.lineTo(13, 1); ctx.lineTo(16, -1); ctx.moveTo(13, 1); ctx.lineTo(16, 3); ctx.stroke();
-  } else if (A === 'drills') {
-    ctx.fillStyle = '#6e665e'; ctx.fillRect(8, -1, 4, 4);
-    ctx.fillStyle = '#d9a54a'; ctx.beginPath(); ctx.moveTo(12, -3); ctx.lineTo(19, 1); ctx.lineTo(12, 5); ctx.closePath(); ctx.fill();
-    ctx.strokeStyle = 'rgba(0,0,0,.35)'; ctx.lineWidth = 0.8; const ph = (t * 30) % 2;
-    ctx.beginPath(); ctx.moveTo(13 + ph, -2); ctx.lineTo(14 + ph, 4); ctx.moveTo(15.5 + ph, -0.5); ctx.lineTo(16 + ph, 2.5); ctx.stroke();
-  } else {
-    ctx.fillStyle = '#4a5560'; ctx.fillRect(8, -1, 7, 4);
-    ctx.fillStyle = '#9fe3f0'; ctx.shadowColor = '#9fe3f0'; ctx.shadowBlur = 6; ctx.fillRect(15, -0.5, 4 + Math.sin(t * 30), 3); ctx.shadowBlur = 0;
-  }
-  ctx.strokeStyle = '#8a7a6a'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(-2, -12); ctx.lineTo(-3, -16); ctx.stroke();
-  ctx.fillStyle = '#e08a42'; ctx.fillRect(-4, -17, 2, 2);
-  if (H === 'bulb') {
-    ctx.fillStyle = '#9a948c'; rr2(ctx, -6, -12, 12, 8, 2); ctx.fill();
-    ctx.fillStyle = '#f2d27a'; ctx.beginPath(); ctx.arc(3, -8, 2, 0, 7); ctx.fill();
-  } else if (H === 'dome') {
-    ctx.fillStyle = '#6b8f9c'; ctx.beginPath(); ctx.arc(0, -4, 7, Math.PI, 0); ctx.fill();
-    ctx.fillStyle = '#1a2a30'; ctx.fillRect(0, -8, 6, 2.5);
-    ctx.fillStyle = '#9fe3f0'; ctx.fillRect(2 + Math.sin(t * 3) * 1.5, -8, 2, 2.5);
-  } else {
-    ctx.fillStyle = '#2d333d'; rr2(ctx, -7, -13, 14, 9, 3); ctx.fill();
-    ctx.fillStyle = '#9fe3f0'; ctx.shadowColor = '#9fe3f0'; ctx.shadowBlur = 8; ctx.beginPath(); ctx.arc(2, -8.5, 3, 0, 7); ctx.fill(); ctx.shadowBlur = 0;
-    ctx.fillStyle = '#0e1418'; ctx.beginPath(); ctx.arc(2.6, -8.5, 1.2, 0, 7); ctx.fill();
-  }
-  ctx.restore();
-}
 const partIds = () => ({ head: part('head').id, arms: part('arms').id, body: part('body').id, legs: part('legs').id });
 
 // ---------- The cave ----------
+let lastDrawX = 0, lastDrawY = 0;
 function render(dt) {
   const s = CELL, W = Math.round(s * 0.32);
   const [tx, ty] = cameraTarget(), k = Math.min(1, dt * 8);
@@ -225,6 +177,8 @@ function render(dt) {
   const rBot = Math.max(0, Math.floor(ROWS - (camY + VH) / s) - 2);
   const c0 = Math.max(0, Math.floor(camX / s)), c1 = Math.min(COLS - 1, Math.ceil((camX + VW) / s));
   const ids = partIds();
+  const moving = !P.riding && Math.hypot(P.x - lastDrawX, P.y - lastDrawY) > 0.0005;
+  lastDrawX = P.x; lastDrawY = P.y;
   const blocked = new Set(beltBlocked());
 
   for (let r = rTop; r >= rBot; r--) {
@@ -245,8 +199,9 @@ function render(dt) {
     if (r === C.BASE_BUILDING.rows[0]) drawBaseBuilding(X, Y, s, W);
     for (let k2 = 1; k2 <= S.outposts; k2++) if (r === outpostRow(k2) - 1) drawOutpost(k2, X, Y, s, W);
     if (r === pRow()) {
-      const nudge = P.digging.length ? Math.sin(time * 40) * s * 0.04 : 0;
-      drawBot(g, X(P.x) + nudge, Y(P.y) - s * 0.12, s / 40, P.face, time, ids);
+      // The Canopy Walker: feet sit near the bottom of its block; it faces the way it last moved
+      const view = P.dir === 'up' ? 'back' : P.dir === 'down' ? 'front' : 'side';
+      drawWalker(g, X(P.x), Y(P.y) + s * 0.4, s * 1.15 / 64, view, P.face, time, ids, { moving, digging: P.digging.length > 0 });
     }
   }
 
