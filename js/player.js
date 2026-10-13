@@ -24,14 +24,13 @@ function placePlayerFromSave() {
 }
 
 // ---------- Stations: the base yard and outpost pads ----------
-// Where can you sell, recharge and shop? Anywhere in town, a cave's entrance hall, or the halfway outpost.
+// Where you recharge and send ore home: anywhere in town, a cave's entrance hall, or the halfway outpost.
 function station() {
   if (inTown()) return 'town';
   if (pRow() < BASE_ROWS) return 'entrance';
   if (outpostAt(pCol(), pRow())) return 'outpost';
   return null;
 }
-const STATION_NAME = { town: 'in town', entrance: 'at the entrance outpost', outpost: 'at the halfway outpost' };
 // Fast travel inside a cave: 0 = entrance outpost, 1 = halfway outpost
 function travelTo(k) {
   if (!station() || inTown()) return;
@@ -54,8 +53,9 @@ function returnCost() {
   if (station()) return 0;
   const end = beltEnd() + 0.5;
   const walk = Math.abs(P.x - (BELT + 0.5)) + Math.max(0, P.y - end);
-  return walk * C.BATTERY.move * legs().eff * C.LOW_BATTERY.safety;
+  return walk * moveCost() * C.LOW_BATTERY.safety;
 }
+const moveCost = () => C.BATTERY.move * legs().eff * (1 - modVal('saver')) * drainMult();   // battery per block walked
 const lowBattery = () => !station() && P.battery < returnCost() + C.LOW_BATTERY.buffer;
 
 function recall(kind) {
@@ -73,18 +73,12 @@ function recall(kind) {
   toast(kind === 'dead' ? 'Battery dead' : 'Recalled', msg);
 }
 
-// At a station: sell ore, claim the relic, recharge
-function sellAndCharge(dt) {
+// At a station: send ore home to train storage, claim the relic, recharge
+function depositAndCharge(dt) {
   const here = station();
   if (!here) return;
   P.warned = false;
-  const n = cargoCount();
-  if (n > 0) {
-    const value = Math.floor(cargoValue());
-    S.coins += value; S.cargo.items = {};
-    floatText(P.x, P.y + 0.6, '+' + fmt(value), '#e8a160');
-    toast(null, 'Sold ' + n + ' ore for ' + fmt(value) + ' coins ' + STATION_NAME[here] + '.');
-  }
+  depositCargo();
   if (S.relicHeld) claimRelic();
   P.battery = Math.min(batteryMax(), P.battery + C.CHARGE_RATE * dt);
 }
@@ -96,8 +90,10 @@ function claimRelic() {
   S.caves[k].relicDone = true;
   const next = C.CAVES[k + 1];
   if (next && S.unlocked < k + 2) S.unlocked = k + 2;
+  let extra = '';
+  if (k === 0 && !S.bots) { S.bots = 1; extra = ' A nano-bot was sealed inside it! It now makes Flux for your computer, even while you\'re away.'; }
   toast(cv.relic.name + ' recovered!', 'You claimed ' + fmt(cv.relic.reward) + ' coins. ' +
-    (next ? 'Its pedestal in town now glows, and the gate to Cave ' + (k + 2) + ', ' + next.name + ', is open.' : 'You\'ve cleared every cave in this version. More are coming.'));
+    (next ? 'Its pedestal in town now glows, and the gate to Cave ' + (k + 2) + ', ' + next.name + ', is open.' : 'You\'ve cleared every cave in this version. More are coming.') + extra);
   if (inTown()) genTown();
   save();
 }
@@ -108,15 +104,18 @@ function breakBlock(c, r) {
   T[i] = null; DMG[i] = 0;
   const B = C.BLOCKS[t];
   burst(c + 0.5, r + 0.5, B.ore || B.color || (t === 'relic' ? '#c9a2ff' : C.BLOCKS[baseFor(c, r)].color), t === 'relic' ? 30 : 10);
-  if (B.value) {
-    if (cargoCount() < cargoMax()) {
-      cargoAdd(t, oreValue(t, r));
-      floatText(c + 0.5, r + 0.7, '+' + B.label, B.ore);
-    } else floatText(c + 0.5, r + 0.7, 'Cargo full', '#e2705a');
+  // every block pays a few coins (more for hard rock and deeper caves)
+  if (B.coin) {
+    const coins = Math.max(1, Math.round(B.coin * cave().coinMult * (1 + modVal('prospector'))));
+    S.coins += coins;
+    if (!B.value) floatText(c + 0.5, r + 0.5, '+' + coins, '#c9a074');
   }
-  if (t === 'fossil') {
-    S.pet = 1; regenPet();
-    toast('A fossil!', C.PET.name + ' the ' + C.PET.species + ' hatched and moved into your burrow.');
+  if (B.value) {
+    const n = Math.random() < modVal('sorter') ? 2 : 1;   // the Sorter mod sometimes gives two
+    let got = 0;
+    for (let k = 0; k < n && cargoCount() < cargoMax(); k++) { cargoAdd(t); got++; }
+    if (got) floatText(c + 0.5, r + 0.7, '+' + (got > 1 ? got + ' ' : '') + B.label, B.ore);
+    else floatText(c + 0.5, r + 0.7, 'Cargo full', '#e2705a');
   }
   if (t === 'relic') {
     S.relicHeld = S.cave + 1;
@@ -139,7 +138,7 @@ function openCache(c, r) {
   S.coins += coins;
   const ores = Object.keys(cave().ores), best = ores[ores.length - 1];
   let got = 0;
-  for (let k = 0; k < C.CACHE.ores && cargoCount() < cargoMax(); k++) { cargoAdd(best, oreValue(best, r)); got++; }
+  for (let k = 0; k < C.CACHE.ores && cargoCount() < cargoMax(); k++) { cargoAdd(best); got++; }
   burst(c + 0.5, r + 0.5, '#F2C94C', 24);
   floatText(c + 0.5, r + 0.9, '+' + fmt(coins), '#F2C94C');
   toast('Treasure cache!', '+' + fmt(coins) + ' coins' + (got ? ' and ' + got + ' ' + C.BLOCKS[best].label : '') + (got < C.CACHE.ores ? '. Your cargo was too full for the rest.' : '.'));
@@ -170,10 +169,11 @@ function dig(c, r, dt) {
   const needs = C.BLOCKS[t].needs || 0;
   if (S.tiers.arms < needs) { tooHard(c, r, t); return; }
   const i = idx(c, r);
-  DMG[i] += digPower() * C.DIG_RATE * dt;
+  const hard = t === 'granite' || t === 'obsidian' ? 1 + modVal('hardrock') : 1;
+  DMG[i] += digPower() * hard * C.DIG_RATE * dt;
   P.digging.push({ c, r });
   if (Math.random() < dt * 18) burst(c + 0.5, r + 0.5, C.BLOCKS[t].color || C.BLOCKS[baseFor(c, r)].color, 1);
-  if (DMG[i] >= C.BLOCKS[t].hp) { breakBlock(c, r); drain(C.BATTERY.dig); }
+  if (DMG[i] >= C.BLOCKS[t].hp) { breakBlock(c, r); drain(C.BATTERY.dig * drainMult()); }
 }
 // Dig every block along the robot's leading edge. Standing between two blocks digs both.
 function digEdge(axis, dir, dt) {
@@ -237,7 +237,7 @@ function updatePlayer(dt) {
     if (vy) hitY = moveAxis(0, vy * dt / steps) || hitY;
   }
   const moved = Math.hypot(P.x - x0, P.y - y0);
-  if (moved && drain(moved * C.BATTERY.move * legs().eff)) return;
+  if (moved && drain(moved * moveCost())) return;
 
   if (hitX) digEdge('x', dx, dt);
   if (hitY) digEdge('y', dy, dt);
@@ -262,6 +262,11 @@ function markSeen() {
   for (let r = Math.max(0, Math.floor(P.y - R - 1)); r <= Math.min(ROWS - 1, Math.ceil(P.y + R)); r++)
     for (let c = Math.max(0, Math.floor(P.x - R - 1)); c <= Math.min(COLS - 1, Math.ceil(P.x + R)); c++)
       if (Math.hypot(c + 0.5 - P.x, r + 0.5 - P.y) <= R && SEEN[idx(c, r)] === 0) SEEN[idx(c, r)] = 1;
+  // the Ore Sense mod shows ore through the rock nearby
+  const sense = modVal('oresense');
+  if (sense) for (let r = Math.max(0, Math.floor(P.y - sense)); r <= Math.min(ROWS - 1, Math.ceil(P.y + sense)); r++)
+    for (let c = Math.max(0, Math.floor(P.x - sense)); c <= Math.min(COLS - 1, Math.ceil(P.x + sense)); c++)
+      if (ORES.has(T[idx(c, r)]) && !SEEN[idx(c, r)] && Math.hypot(c + 0.5 - P.x, r + 0.5 - P.y) <= sense) SEEN[idx(c, r)] = 1;
   // a canopy with a scanner reveals treasure caches within its scan range
   const scan = rockScan();
   if (!scan) return;
@@ -273,9 +278,8 @@ function markSeen() {
 }
 // The action button: deploy a bridge when standing on a ready bridge pad
 function actionHere() {
-  const ST = C.TOWN.station;
-  if (inTown() && pRow() === ST.platformRow && Math.abs(P.x - (ST.door + 0.5)) < 1.6) return { label: 'Board train', run: () => {
-    toast('Train station', 'The line to the next town opens in a future update. For now, every track leads home.');
+  if (townSpot() === 'engine') return { label: 'Board train', run: () => {
+    toast('Engine car', 'The line to the next town opens in a future update. For now, the train is your base.');
   } };
   if (padReady(pCol(), pRow())) return { label: 'Deploy bridge · ' + S.keys[S.cave] + ' key' + (S.keys[S.cave] === 1 ? '' : 's'), run: () => {
     if (!S.keys[S.cave]) return toast(null, 'You need a ' + keyName(S.cave) + '. Marked caches before the chasm hold them.');

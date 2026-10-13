@@ -139,15 +139,10 @@ function genCave() {
     if (c === BELT || T[idx(c, r)] !== baseFor(c, r)) continue;
     T[idx(c, r)] = 'cache'; n++;
   }
-  // 6. The entrance outpost and exit door, the fossil (first cave only), outposts and the relic
+  // 6. The entrance outpost and exit door, outposts and the relic
   const B = C.BASE_BUILDING;
   for (let r = B.rows[0]; r <= B.rows[1]; r++) for (let c = B.cols[0]; c <= B.cols[1]; c++) T[idx(c, r)] = 'found';
   T[idx(C.EXIT.col, C.EXIT.row)] = 'exit';
-  if (cv.fossil && !S.pet) {
-    const [a, b] = C.PET.fossilRows;
-    let c; do { c = 1 + Math.floor(Math.random() * (COLS - 2)); } while (c === BELT);
-    T[idx(c, a + Math.floor(Math.random() * (b - a)))] = 'fossil';
-  }
   for (let k = 1; k <= cs.outposts; k++) buildOutpost(k);
   if (!cs.relicDone && S.relicHeld !== S.cave + 1) placeRelic();
 }
@@ -164,7 +159,7 @@ function genTown() {
     if (c === 0 || c === COLS - 1 || r >= TW.gateRow) T[idx(c, r)] = 'cliff';
   }
   TW.gates.forEach((g, k) => { T[idx(g, TW.gateRow)] = k < S.unlocked ? 'gate' : 'gatelocked'; });
-  for (const b of [TW.shop, TW.burrow])
+  for (const b of [TW.shop])
     for (let r = b.rows[0]; r <= b.rows[1]; r++) for (let c = b.cols[0]; c <= b.cols[1]; c++) T[idx(c, r)] = 'found';
   TW.trees.forEach(([c, r]) => { T[idx(c, r)] = 'tree'; });
   TW.pedestals.forEach(c => { T[idx(c, TW.pedestalRow)] = 'pedestal'; });
@@ -197,7 +192,6 @@ function arrive(x, y, dir) {
   wobble.clear(); lastCell = -1; markSeen();
   resizeMinimap(); resize();
   [camX, camY] = cameraTarget();
-  travelSig = '';
   save(); updateUI();
 }
 // Walk through an open gate in town

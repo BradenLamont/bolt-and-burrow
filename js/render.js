@@ -20,13 +20,12 @@ function updateEffects(dt) {
   particles.forEach(p => { p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 0.92; p.vy *= 0.92; p.life -= dt; });
   particles = particles.filter(p => p.life > 0);
   floats.forEach(f => { f.y += 0.8 * dt; f.life -= dt; }); floats = floats.filter(f => f.life > 0);
-  for (let i = petFloats.length - 1; i >= 0; i--) { petFloats[i].life -= dt; if (petFloats[i].life <= 0) petFloats.splice(i, 1); }
   if (P.shake > 0) P.shake -= dt;
 }
 
 // ---------- Canvas setup ----------
 const stage = $('stage'), cv = $('world'), g = cv.getContext('2d');
-const pcv = $('pet'), pg = pcv.getContext('2d');
+const pcv = $('bots'), pg = pcv.getContext('2d');
 let padTop = 0, padBot = 0, VW = 1, VH = 1, PW = 1, PH = 1, CELL = 40, camX = 0, camY = 0, time = 0;
 function fit(canvas, ctx) {
   const r = canvas.getBoundingClientRect(), dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -44,7 +43,7 @@ function resize() {
   CELL = Math.max(22, Math.floor(Math.min(VW / 15, inTown() ? (VH - padTop - padBot) / (C.TOWN.rows + 0.4) : VH / 9.5)));
 }
 new ResizeObserver(resize).observe(stage);
-new ResizeObserver(resize).observe($('burrowView'));
+new ResizeObserver(resize).observe($('botView'));
 
 // Camera targets: keep the robot centred, but don't scroll past the yard at the bottom
 function cameraTarget() {
@@ -270,8 +269,10 @@ function drawPlatform(c, r, x, y, s) {
   g.fillStyle = 'rgba(0,0,0,.18)'; g.fillRect(x, y, 1, s); g.fillRect(x, y + s * 0.5, s, 1);   // paving joints
   g.fillStyle = '#d9b23b'; g.fillRect(x, y + s * 0.8, s, s * 0.06);                          // safety line by the edge
   g.fillStyle = '#4a4642'; g.fillRect(x, y + s * 0.9, s, s * 0.1);                           // platform edge
-  if (c === C.TOWN.station.door) { // where you board
-    g.strokeStyle = 'rgba(217,129,59,.55)'; g.lineWidth = Math.max(1, s * 0.04);
+  const car = C.TOWN.station.cars.find(k => carDoor(k.id) === c);
+  if (car) { // a car's door: stand here to use it
+    const here = townSpot() === car.id;
+    g.strokeStyle = here ? 'rgba(239,227,211,.8)' : 'rgba(217,129,59,.55)'; g.lineWidth = Math.max(1, s * 0.04);
     g.strokeRect(x + s * 0.15, y + s * 0.15, s * 0.7, s * 0.55);
   }
 }
@@ -282,42 +283,76 @@ function drawRail(c, r, x, y, s) {
   g.fillStyle = '#5a3f2a'; for (let k = 0; k < 3; k++) g.fillRect(x + s * (0.08 + k * 0.33), y + s * 0.18, s * 0.14, s * 0.64); // sleepers
   g.fillStyle = '#9a948c'; g.fillRect(x, y + s * 0.28, s, s * 0.07); g.fillRect(x, y + s * 0.65, s, s * 0.07); // rails
 }
+// The train: your home base. Engine, forge, lab and storage cars, side by side on the tracks.
+const CAR_LOOK = {
+  engine:  { roof: '#5b3a24', side: '#c9692a', label: '' },
+  forge:   { roof: '#463630', side: '#6e3b29', label: 'FORGE' },
+  lab:     { roof: '#2d3d48', side: '#2f4d5c', label: 'LAB' },
+  storage: { roof: '#4a4636', side: '#5d5438', label: 'STORAGE' },
+};
 function drawTrain(X, Y, s, W) {
-  const ST = C.TOWN.station, [c0, c1] = ST.train, row = ST.railRow;
+  const ST = C.TOWN.station, row = ST.railRow;
   const top = Y(row + 1) + s * 0.12 - W * 1.6, roofH = s * 0.5, bottom = Y(row + 1) + s * 0.85;
-  const cars = [[c0, c0 + 2, true], [c0 + 3, c0 + 5, false], [c0 + 6, c1, false]];   // locomotive, then two coaches
-  cars.forEach(([a, b, loco]) => {
-    const x = X(a) + s * 0.06, w = (b - a + 1) * s - s * 0.12;
+  const sideTop = top + roofH, sideH = bottom - sideTop;
+  const busy = S.forge.queue.length > 0;
+  ST.cars.forEach((car, i) => {
+    const [a, b] = car.cols, look = CAR_LOOK[car.id];
+    const x = X(a) + s * 0.06, w = (b - a + 1) * s - s * 0.12, door = carDoor(car.id);
+    if (i) { g.fillStyle = '#2a1f17'; g.fillRect(X(a) - s * 1.02, bottom - s * 0.3, s * 1.1, s * 0.08); }   // coupling
     g.fillStyle = 'rgba(0,0,0,.3)'; g.fillRect(x + s * 0.05, bottom - s * 0.02, w, s * 0.08);   // shadow
-    g.fillStyle = loco ? '#5b3a24' : '#3f4a52'; rr2(g, x, top, w, roofH, s * 0.12); g.fill();    // roof
-    g.fillStyle = 'rgba(255,255,255,.08)'; g.fillRect(x + s * 0.1, top + roofH * 0.35, w - s * 0.2, roofH * 0.12);
-    g.fillStyle = loco ? '#c9692a' : '#2f3940'; g.fillRect(x, top + roofH, w, bottom - top - roofH); // side
-    g.fillStyle = '#d9813b'; g.fillRect(x, bottom - s * 0.16, w, s * 0.05);                     // stripe
-    const winY = top + roofH + s * 0.08, winH = Math.max(3, (bottom - top - roofH) * 0.35);
-    if (loco) {
-      g.fillStyle = '#16110d'; g.fillRect(x + w - s * 0.9, winY, s * 0.6, winH);                // cab window
-      g.fillStyle = '#ffd98a'; g.beginPath(); g.arc(x + s * 0.12, top + roofH + s * 0.12, s * 0.07, 0, 7); g.fill(); // headlight
-      g.fillStyle = '#3a2b20'; g.fillRect(x + s * 0.4, top - s * 0.12, s * 0.22, s * 0.2);      // stack
-    } else {
-      for (let k = 0; k < b - a + 1; k++) {
-        const wx = x + k * s + s * 0.2;
-        const door = a + k === ST.door;
-        g.fillStyle = door ? '#1b1410' : 'rgba(255,217,138,.75)';
-        g.fillRect(wx, door ? winY - s * 0.02 : winY, s * 0.5, door ? bottom - winY - s * 0.17 : winH);
+    g.fillStyle = look.roof; rr2(g, x, top, w, roofH, s * 0.12); g.fill();
+    g.fillStyle = 'rgba(255,255,255,.08)'; g.fillRect(x + s * 0.1, top + roofH * 0.62, w - s * 0.2, roofH * 0.1);
+    g.fillStyle = look.side; g.fillRect(x, sideTop, w, sideH);
+    g.fillStyle = '#d9813b'; g.fillRect(x, bottom - s * 0.16, w, s * 0.05);                    // stripe
+    const winY = sideTop + s * 0.08, winH = Math.max(3, sideH * 0.35);
+    if (look.label) {
+      g.fillStyle = 'rgba(239,227,211,.85)'; g.textAlign = 'center';
+      g.font = '700 ' + Math.round(s * 0.2) + 'px "Pixelify Sans", monospace';
+      g.fillText(look.label, x + w / 2, top + roofH * 0.48);
+    }
+    if (car.id === 'engine') {
+      g.fillStyle = '#16110d'; g.fillRect(x + w - s * 0.9, winY, s * 0.6, winH);                  // cab window
+      g.fillStyle = '#ffd98a'; g.beginPath(); g.arc(x + s * 0.12, sideTop + s * 0.12, s * 0.07, 0, 7); g.fill(); // headlight
+      g.fillStyle = '#3a2b20'; g.fillRect(x + s * 0.4, top - s * 0.12, s * 0.22, s * 0.2);        // stack
+    }
+    if (car.id === 'forge') {
+      // chimney, with smoke and a glowing furnace while a job is running
+      const cx = x + s * 0.35;
+      g.fillStyle = '#2a1f17'; g.fillRect(cx, top - s * 0.22, s * 0.24, s * 0.3);
+      if (busy) for (let k = 0; k < 3; k++) {
+        const ph = (time * 0.6 + k / 3) % 1;
+        g.fillStyle = 'rgba(160,150,140,' + (0.35 * (1 - ph)) + ')';
+        g.beginPath(); g.arc(cx + s * 0.12 + Math.sin(ph * 6 + k) * s * 0.08, top - s * 0.25 - ph * s * 0.6, s * (0.08 + ph * 0.1), 0, 7); g.fill();
+      }
+      const glow = busy ? 0.75 + Math.sin(time * 9) * 0.2 : 0.25;
+      g.fillStyle = 'rgba(255,140,60,' + glow + ')'; g.fillRect(x + s * 0.2, winY, s * 0.55, winH);
+      g.fillRect(x + w - s * 0.75, winY, s * 0.55, winH);
+    }
+    if (car.id === 'lab') {
+      for (const wx of [x + s * 0.2, x + w - s * 0.75]) {
+        g.fillStyle = '#0d2a33'; g.fillRect(wx, winY, s * 0.55, winH);
+        g.fillStyle = 'rgba(134,207,220,' + (0.5 + Math.sin(time * 3 + wx) * 0.2) + ')';
+        for (let k = 0; k < 3; k++) g.fillRect(wx + s * 0.06, winY + 2 + k * winH / 3.2, s * (0.15 + hash(k, wx | 0, 9) * 0.3), 2);
       }
     }
+    if (car.id === 'storage') {
+      g.strokeStyle = 'rgba(0,0,0,.3)'; g.lineWidth = 1;
+      for (let k = 1; k < 9; k++) { g.beginPath(); g.moveTo(x + k * w / 9, sideTop + 2); g.lineTo(x + k * w / 9, bottom - s * 0.18); g.stroke(); }
+    }
+    if (car.id !== 'engine') { // the door you stand in front of
+      const dx = X(door) + s * 0.2;
+      g.fillStyle = '#1b1410'; g.fillRect(dx, winY - s * 0.02, s * 0.6, bottom - winY - s * 0.17);
+      if (townSpot() === car.id) { g.strokeStyle = '#efe3d3'; g.lineWidth = 1.5; g.strokeRect(dx - 1, winY - s * 0.02 - 1, s * 0.6 + 2, bottom - winY - s * 0.17 + 2); }
+    }
   });
-  // couplings
-  g.fillStyle = '#2a1f17';
-  for (const c of [c0 + 3, c0 + 6]) g.fillRect(X(c) - s * 0.08, bottom - s * 0.3, s * 0.16, s * 0.08);
-  // station sign on the platform's left end
-  const sx = X(2), sy = Y(ST.platformRow + 1) - s * 0.15;
+  // station sign on the platform's right end
+  const sx = X(20), sy = Y(ST.platformRow + 1) - s * 0.15;
   g.fillStyle = '#2a1f17'; g.fillRect(sx + s * 0.45, sy + s * 0.3, s * 0.1, s * 0.55);
   g.fillStyle = '#3a2b20'; rr2(g, sx - s * 0.6, sy - s * 0.1, s * 2.2, s * 0.48, 3); g.fill();
   g.textAlign = 'center'; g.fillStyle = '#efe3d3'; g.font = '700 ' + Math.round(s * 0.2) + 'px "Pixelify Sans", monospace';
-  g.fillText('STATION', sx + s * 0.5, sy + s * 0.12);
+  g.fillText('HOME BASE', sx + s * 0.5, sy + s * 0.12);
   g.fillStyle = '#d9813b'; g.font = '500 ' + Math.round(s * 0.13) + 'px "IBM Plex Mono", monospace';
-  g.fillText('NEXT TOWN SOON', sx + s * 0.5, sy + s * 0.3);
+  g.fillText('STAND AT A DOOR', sx + s * 0.5, sy + s * 0.3);
 }
 // A sealed cave gate: a heavy door with a relic-shaped slot
 function drawLockedGate(c, r, x, ty, s) {
@@ -405,7 +440,7 @@ function render(dt) {
     // the block(s) you're digging get a thin outline
     P.digging.forEach(d => { if (d.r === r) { g.strokeStyle = 'rgba(239,227,211,.55)'; g.lineWidth = 1.5; g.strokeRect(X(d.c) + 1.5, y - W + 1.5, s - 3, s - 3); } });
     if (inTown()) {
-      if (r === C.TOWN.shop.rows[0]) { drawBaseBuilding(X, Y, s, W, C.TOWN.shop, 'SHOP'); drawBaseBuilding(X, Y, s, W, C.TOWN.burrow, 'BURROW'); }
+      if (r === C.TOWN.shop.rows[0]) { drawBaseBuilding(X, Y, s, W, C.TOWN.shop, 'SHOP'); }
       if (r === C.TOWN.gateRow) drawGates(X, Y, s, W);
       if (r === C.TOWN.station.railRow) drawTrain(X, Y, s, W);
     } else {
@@ -513,43 +548,46 @@ function renderMinimap(dt) {
   if (Math.sin(time * 8) > -0.4) { mg.fillStyle = '#9fe3f0'; mg.fillRect(P.x * MM - 2, (ROWS - 1 - P.y) * MM - 2, 4, 4); }
 }
 
-// ---------- Pet burrow (side view, in its own panel) ----------
-function renderPet() {
-  const cols = C.PET.cols, rows = C.PET.rows;
-  const s = Math.max(6, Math.floor(Math.min(PW / cols, PH / (rows + 1))));
-  const ox = Math.round((PW - cols * s) / 2), oy = Math.round((PH - (rows + 1) * s) / 2);
-  pg.fillStyle = '#0b0806'; pg.fillRect(0, 0, PW, PH);
-  const sky = pg.createLinearGradient(0, oy, 0, oy + s); sky.addColorStop(0, '#1f2638'); sky.addColorStop(1, '#6a4330');
-  pg.fillStyle = sky; pg.fillRect(ox, oy, cols * s, s);
-  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
-    const x = ox + c * s, y = oy + (r + 1) * s, t = PET.grid[r * cols + c];
-    if (!t) { pg.fillStyle = '#1c140e'; pg.fillRect(x, y, s, s); continue; }
-    pg.fillStyle = r > 2 ? '#86563a' : '#6b4a32'; pg.fillRect(x, y, s, s);
-    pg.fillStyle = 'rgba(0,0,0,.25)'; pg.fillRect(x, y + s - 2, s, 2); pg.fillRect(x + s - 2, y, 2, s);
-    if (t === 'ore') { pg.fillStyle = '#e08a42'; const q = Math.max(2, s * 0.14); for (let k = 0; k < 3; k++) pg.fillRect(x + s * 0.2 + hash(c, r, k) * s * 0.5, y + s * 0.2 + hash(r, c, k) * s * 0.5, q, q); }
-    if (r === 0) { pg.fillStyle = '#5f7a3c'; pg.fillRect(x, y, s, Math.max(2, s * 0.12)); }
+// ---------- Nano-bot window (its own panel) ----------
+// A circuit board with the nano-bot zipping between chips, making Flux.
+const CHIPS = [[0.18, 0.35], [0.45, 0.7], [0.72, 0.3], [0.86, 0.72]];
+function renderBots() {
+  const w = PW, h = PH;
+  pg.fillStyle = '#0d1714'; pg.fillRect(0, 0, w, h);
+  pg.strokeStyle = '#1d3a31'; pg.lineWidth = 2;
+  for (let k = 0; k < CHIPS.length; k++) {   // traces between the chips
+    const [ax, ay] = CHIPS[k], [bx, by] = CHIPS[(k + 1) % CHIPS.length];
+    pg.beginPath(); pg.moveTo(ax * w, ay * h); pg.lineTo(bx * w, ay * h); pg.lineTo(bx * w, by * h); pg.stroke();
   }
-  if (!S.pet) {
-    pg.fillStyle = 'rgba(11,8,6,.72)'; pg.fillRect(0, 0, PW, PH);
+  pg.fillStyle = '#16302a'; for (let x = 8; x < w; x += 16) for (let y = 8; y < h; y += 16) pg.fillRect(x, y, 1, 1);
+  const cs = Math.max(14, Math.min(w, h) * 0.16);
+  CHIPS.forEach(([cx, cy], k) => {
+    pg.fillStyle = '#22262b'; pg.fillRect(cx * w - cs / 2, cy * h - cs / 2, cs, cs);
+    pg.fillStyle = '#8d9499'; for (let p = 0; p < 4; p++) { pg.fillRect(cx * w - cs / 2 - 3, cy * h - cs / 2 + 2 + p * cs / 4, 3, 2); pg.fillRect(cx * w + cs / 2, cy * h - cs / 2 + 2 + p * cs / 4, 3, 2); }
+    pg.fillStyle = 'rgba(134,207,220,' + (S.bots ? 0.35 + Math.sin(time * 2 + k) * 0.2 : 0.1) + ')'; pg.fillRect(cx * w - cs / 4, cy * h - cs / 4, cs / 2, cs / 2);
+  });
+  if (S.bots) {
+    // the bot follows the traces: along x, then along y, chip to chip
+    const t = (time * 0.35) % CHIPS.length, k = Math.floor(t), f = t - k;
+    const [ax, ay] = CHIPS[k], [bx, by] = CHIPS[(k + 1) % CHIPS.length];
+    const half = Math.abs(bx - ax) * w / (Math.abs(bx - ax) * w + Math.abs(by - ay) * h + 1e-6);
+    const x = f < half ? ax + (bx - ax) * (f / half) : bx, y = f < half ? ay : ay + (by - ay) * ((f - half) / (1 - half));
+    const bx2 = x * w, by2 = y * h - 4 + Math.sin(time * 8) * 1.5, r = Math.max(6, cs * 0.38);
+    pg.fillStyle = 'rgba(134,207,220,.18)'; pg.beginPath(); pg.arc(bx2, by2, r * 1.8, 0, 7); pg.fill();
+    pg.fillStyle = '#c9d3d6'; pg.beginPath(); pg.arc(bx2, by2, r, 0, 7); pg.fill();
+    pg.strokeStyle = '#d9813b'; pg.lineWidth = 2; pg.beginPath(); pg.arc(bx2, by2, r * 0.75, Math.PI * 0.15, Math.PI * 0.85); pg.stroke();
+    pg.fillStyle = '#16110d'; pg.beginPath(); pg.arc(bx2, by2 - r * 0.1, r * 0.42, 0, 7); pg.fill();
+    pg.fillStyle = '#86cfdc'; pg.beginPath(); pg.arc(bx2 + Math.sign(Math.cos(time)) * r * 0.08, by2 - r * 0.1, r * 0.2, 0, 7); pg.fill();
+    // a spark of Flux each time it reaches a chip
+    if (f < 0.25) { pg.globalAlpha = 1 - f * 4; pg.fillStyle = '#86cfdc'; pg.font = '600 11px "IBM Plex Mono", monospace'; pg.textAlign = 'center'; pg.fillText('+flux', ax * w, ay * h - cs * 0.7 - f * 30); pg.globalAlpha = 1; }
+  }
+  pg.textAlign = 'left'; pg.fillStyle = '#86cfdc'; pg.font = '500 16px "Pixelify Sans", monospace';
+  pg.fillText('FLUX ' + fmt(S.flux), 10, 22);
+  if (!S.bots) {
+    pg.fillStyle = 'rgba(11,8,6,.7)'; pg.fillRect(0, 0, w, h);
     pg.fillStyle = '#a8937c'; pg.textAlign = 'center'; pg.font = '500 16px "Pixelify Sans", monospace';
-    pg.fillText('Empty burrow', PW / 2, PH / 2 - 4);
+    pg.fillText('No nano-bot yet', w / 2, h / 2 - 4);
     pg.font = '400 11px "IBM Plex Mono", monospace';
-    pg.fillText('Find the fossil hidden ' + depthOf(C.PET.fossilRows[0]) + '–' + depthOf(C.PET.fossilRows[1]) + ' m into the cave', PW / 2, PH / 2 + 14);
-    return;
+    pg.fillText('One is sealed inside the Ember Idol, deep in Cave 1', w / 2, h / 2 + 14);
   }
-  const k = Math.min(1, PET.prog / petDigTime());
-  const mx = ox + (PET.c + 0.5) * s, my = oy + (PET.r + 0.5) * s + Math.sin(time * 14) * s * 0.04;
-  pg.save(); pg.translate(mx, my);
-  pg.fillStyle = '#5a463a'; pg.beginPath(); pg.ellipse(0, 0, s * 0.34, s * 0.4, 0, 0, 7); pg.fill();
-  pg.fillStyle = '#e9a0a0'; pg.beginPath(); pg.arc(0, s * 0.38, s * 0.08, 0, 7); pg.fill();
-  pg.fillStyle = '#d9c7b0'; const claw = Math.sin(time * 24) * s * 0.06;
-  pg.fillRect(-s * 0.32, s * 0.24 + claw, s * 0.14, s * 0.1); pg.fillRect(s * 0.18, s * 0.24 - claw, s * 0.14, s * 0.1);
-  pg.fillStyle = '#16110d'; pg.fillRect(-s * 0.12, s * 0.12, s * 0.05, s * 0.05); pg.fillRect(s * 0.07, s * 0.12, s * 0.05, s * 0.05);
-  pg.restore();
-  const tx = ox + PET.c * s, ty = oy + (PET.r + 1) * s;
-  pg.strokeStyle = 'rgba(10,6,3,' + (0.2 + k * 0.7) + ')'; pg.lineWidth = 1.5; pg.beginPath();
-  pg.moveTo(tx + s * 0.5, ty + s * 0.1); pg.lineTo(tx + s * 0.38, ty + s * 0.5 * (0.4 + k)); pg.stroke();
-  pg.textAlign = 'center'; pg.font = '600 11px "IBM Plex Mono", monospace';
-  petFloats.forEach(f => { pg.globalAlpha = Math.min(1, f.life * 1.5); pg.fillStyle = f.ore ? '#e8a160' : '#efe3d3'; pg.fillText(f.text, ox + f.c * s, oy + (f.r + 1 - (1 - f.life) * 0.8) * s); });
-  pg.globalAlpha = 1;
 }

@@ -29,10 +29,11 @@
       <div class="readout end">
         <small>Coins</small>
         <b id="coins">0</b>
+        <span id="flux" hidden>0 Flux</span>
       </div>
     </div>
     <div class="controls">
-      <p class="keys">Arrows or WASD: move · push into blocks to dig · Up goes deeper · E: use bridge pads · walk into a gate to enter a cave · ride the conveyor by holding Up or Down on it</p>
+      <p class="keys">Arrows or WASD: move · push into blocks to dig · Up goes deeper · E: use bridge pads and the train · walk into a gate to enter a cave · ride the conveyor by holding Up or Down on it</p>
       <p class="touch">Touch and drag anywhere for the joystick · push into blocks to dig</p>
       <div class="btns">
         <button id="action" type="button" hidden>Action</button>
@@ -41,48 +42,26 @@
     </div>
   </section>
 
-  <section class="panel workshop" aria-label="Workshop and inventory">
+  <section class="panel workshop" aria-label="Base, shop and cargo">
     <header>
-      <h2 id="panelTitle">Workshop</h2>
-      <span class="chip" id="shopState">At base</span>
+      <h2 id="panelTitle">Town</h2>
+      <span class="chip" id="shopState">Home base</span>
     </header>
-    <div class="view" id="shopView">
-      <div class="rows" id="parts"></div>
-      <div class="row lift" id="liftRow">
-        <div>
-          <small>Conveyor · halfway outpost</small>
-          <strong id="liftDepth">No outpost in this cave yet</strong>
-          <span id="liftNote">Outposts sell ore, recharge you and open the shop.</span>
-        </div>
-        <button id="extend" type="button">Build outpost</button>
-      </div>
-      <div class="row travel" id="travelRow" hidden>
-        <div>
-          <small>Fast travel</small>
-          <span>Jump between this cave's outposts.</span>
-        </div>
-        <div class="travel-btns" id="travel"></div>
-      </div>
-    </div>
-    <div class="view" id="invView" hidden>
-      <ul class="inv" id="invList"></ul>
-      <p class="inv-total" id="invTotal"></p>
-    </div>
+    <div class="view" id="panelBody"></div>
     <footer>
       <span>Progress saves in this browser.</span>
       <button id="reset" type="button">Reset progress</button>
     </footer>
   </section>
 
-  <section class="panel burrow" aria-label="Pet burrow">
+  <section class="panel bots" aria-label="Nano-bots">
     <header>
-      <h2>Burrow</h2>
-      <span class="chip" id="petTag">No pet yet</span>
+      <h2>Nano-bots</h2>
+      <span class="chip" id="botTag">None yet</span>
     </header>
-    <div class="burrow-view" id="burrowView"><canvas id="pet" aria-label="Your pet's tunnel"></canvas></div>
+    <div class="bot-view" id="botView"><canvas id="bots" aria-label="Your nano-bot at work on the computer's circuit board"></canvas></div>
     <div class="pet-info">
-      <p id="petInfo">Dig up the fossil hidden in the Topsoil to hatch your first pet.</p>
-      <button id="train" type="button" hidden>Train</button>
+      <p id="botInfo">The first nano-bot is sealed inside the Ember Idol, Cave 1's relic.</p>
     </div>
   </section>
 </main>
@@ -92,9 +71,9 @@
 <script src="js/config.js"></script>  <!-- balance numbers -->
 <script src="js/state.js"></script>   <!-- shared state, saving, helpers -->
 <script src="js/world.js"></script>   <!-- cave generation, conveyor, outposts, relic -->
+<script src="js/base.js"></script>    <!-- train base: storage, shop, forge, computer, nano-bots -->
 <script src="js/player.js"></script>  <!-- robot movement, digging, battery -->
 <script src="js/hazards.js"></script> <!-- unstable rock -->
-<script src="js/pet.js"></script>     <!-- Pip the Mole -->
 <script src="js/walker.js"></script>  <!-- the Canopy Walker mech -->
 <script src="js/render.js"></script>  <!-- drawing -->
 <script src="js/ui.js"></script>      <!-- HUD, workshop, inventory -->

@@ -5,24 +5,26 @@ A browser mining game: steer a robot with swappable parts down through the earth
 **Play:** open `index.html`, or publish the repo with GitHub Pages.
 
 ## Controls
-- Desktop: arrow keys or WASD to move. Push into blocks to dig them (standing between two blocks digs both). Up goes deeper into the cave. Stand on the conveyor and hold Up or Down to ride it. E (or the Deploy button) uses a bridge pad. Walk into an open gate in town to enter a cave; walk out the TOWN door to leave.
+- Desktop: arrow keys or WASD to move. Push into blocks to dig them (standing between two blocks digs both). Up goes deeper into the cave. Stand on the conveyor and hold Up or Down to ride it. E (or the action button) uses a bridge pad or boards the train. Walk into an open gate in town to enter a cave; walk out the TOWN door to leave. In town, stand in front of the SHOP or at a train car's door to use it.
+- Computer (Lab car): tap a mod, then tap a cell. With a mouse you can also drag mods onto the grid.
 - Phone: touch and drag anywhere on the cave for a joystick.
-- Recall button: emergency trip back to base, keeping half your ore.
+- Recall button: emergency trip back to the cave entrance, keeping half your ore.
 
 ## Files
 - `index.html` – page layout and script load order
 - `css/style.css` – look and layout
-- `js/config.js` – every balance number (part stats, costs, blocks, conveyor, relic, pet)
+- `js/config.js` – every balance number (part stats, costs, blocks, conveyor, relic, materials, mods, nano-bots)
 - `js/state.js` – shared game state, saving, helpers
 - `js/world.js` – the town and the three caves: generation, conveyor and outposts, chasms and bridges, caches, relic chambers, moving between town and caves
 - `js/player.js` – walker movement, digging and hard rock, battery, caches, bridge pads, recall, fast travel
 - `js/hazards.js` – unstable rock cave-ins
-- `js/pet.js` – Pip the Mole
+- `js/base.js` – the train base: storage, shop, forge, computer and mods, nano-bots
 - `js/walker.js` – the Canopy Walker mech (every part, every facing, walk and dig animation)
-- `js/render.js` – drawing the cave, buildings, effects and the minimap
-- `js/ui.js` – HUD, workshop, inventory
+- `js/render.js` – drawing the cave, town, train, effects, the minimap and the nano-bot window
+- `js/ui.js` – HUD and the base panel (shop, forge, lab, storage, outposts, cargo)
 - `js/input.js` – keyboard and touch joystick
 - `js/main.js` – start-up and the main loop
+- `docs/balancing.xlsx` – planning copy of the numbers (doesn't change the game)
 
 ## v0.2
 - Player-controlled robot; dig left, right and down (never up)
@@ -83,8 +85,7 @@ A browser mining game: steer a robot with swappable parts down through the earth
 
 ## v0.7 – the town
 - You now start in a town with three cave gates. Walk into an open gate to enter that cave; walk out a cave's TOWN door to return
-- Gates are sealed until you bring home the previous cave's relic, which then sits on the pedestal beside that cave's gate
-- A train station along the bottom of town (the line to other towns isn't open yet)
+- Gates are sealed until you bring home the previous cave's relic, which then sits on its pedestal in town
 - Each cave has a free outpost at its entrance, plus the halfway outpost you build with the conveyor. Fast travel works between them
 - Relic rewards are smaller (300 / 800 / 2,000 coins) now that relics are keys
 - Bridge pads use cave-specific bridge keys instead of coins. Each cave hides one marked key cache per bridge pad before the chasm (visible once your light reaches it)
@@ -92,7 +93,63 @@ A browser mining game: steer a robot with swappable parts down through the earth
 - Unstable rock is harsher: it collapses faster, starts falling as you pass by, and sets off nearby unstable rock in a chain reaction
 - Recall and a dead battery now bring you back to the cave's entrance outpost
 
-## Ideas for later
+## v0.7.1 – town touch-ups
+- Relic pedestals now stand beside each cave's gate, with grass underneath trees and pedestals
+- A train station along the bottom of town (the line to other towns isn't open yet)
+- The town is fitted between the HUD and the controls so nothing hides under them
+
+## v0.8 – the train base, materials and the computer
+- The train in town is your home base: Engine, Forge, Lab and Storage cars. Stand at a car's door to use it
+- Ore isn't sold automatically any more. Outposts send it home on the conveyor to the storage car
+- Every block you dig pays coins (more for hard rock and deeper caves)
+- The SHOP sells parts and buys ore and materials from storage. Parts are only sold in town now
+- The Forge refines ore into wire, circuits, conductors and lenses on short timers that keep running while you're away
+- The Lab's computer: a 2×2 grid of fixed-shape mods (9 mods). Build them with materials and coins, upgrade them with Flux
+- Pip is retired. The first nano-bot comes with the Ember Idol and makes Flux, shown working in the nano-bot window
+- Saves start fresh in this version
+- Balancing sheet updated: block coins, materials and mods tabs
+
+## The plan (agreed October 2026)
+
+### v0.8 – the train base, materials and the computer (done)
+- **The train is your home base** and travels with you to every town. Cars:
+  - Engine car – travels between towns (later: upgrades to reach new biomes)
+  - Forge car – refines ore into materials on a timer (short timers while testing)
+  - Lab car – the Computer menu: place mods and assign the nano-bot
+  - Storage car – holds ore and materials. Unlimited for now (later: a size limit you upgrade)
+- **Ore is no longer sold automatically.** Outposts send your cargo home along the conveyor into train storage
+- **Coins per block dug**, more for harder rock, so you earn while digging
+- **Town shop** buys ore and materials, so selling is a choice
+- **Materials**: copper → wire, silver → circuits, gold → conductors, crystal → lenses
+- **Computer slots**: a grid where every mod is a fixed-shape block (no rotation), like Tetris
+  - Starts 2×2: 2 passive cells, plus 2 active cells that open after the first town
+  - Lesser mods are 1 cell; stronger mods are bigger shapes
+  - Mods are built with materials and coins, and upgraded with Flux
+  - Placing: drag and drop or tap-tap on desktop, tap-tap on phones
+- **Nano-bots replace Pip** (Pip's design is saved for a future shopkeeper)
+  - The first nano-bot comes with the Ember Idol (Cave 1's relic), so it can't be missed
+  - Nano-bots make Flux; a small window shows them working
+  - Flux upgrades mods, buys nano-bot slots, powers the computer, and installs expansion slots
+- Old saves are not carried over for this update
+
+### v0.9 – tools, reactive blocks and active skills
+- Reactive blocks: falling sand, rolling boulders, flooding water, gas pockets
+- Tools you buy and carry: blast charges, support beams, flares, grapple
+- Fragile and special ore (crystal that shatters with strong tools, "hot" ore, heavy cargo)
+- Cave events: tremors, gas leaks
+- Active skills (1 at a time): dash, drill burst, scan pulse, shield, charged attack. The nano-bots recharge them; some also cost battery
+
+### v0.10 – blueprints and better parts
+- Blueprints drop from caches, contracts and relic rooms and unlock upgraded mech parts
+- Parts as loot with rarities and perks
+
+### After that
+- Contracts board, repairing the train, Town 2
+- End of each town: a computer expansion (+2 cells) that costs Flux to install
+- Combat with split dig and combat arms; creatures
+- Hand-built rooms and small puzzles inside caves
+- More nano-bots and nano-bot jobs (Refine, Repair, Scout), with an offline cap
+- First-time hints for each new system, and sounds
 - Nano-Bots: rework pets into nano-bots that live inside the robot, still giving bonuses and passive coins
 - Ways for pets / nano-bots to interact with the player
 - More pets with their own movement patterns (bat, worm, drone)
@@ -120,3 +177,5 @@ A browser mining game: steer a robot with swappable parts down through the earth
 - Contracts from the town (e.g. bring back 10 silver)
 - Pilot XP: the pilot levels up separately from the mech, with small perks
 - More towns, each with its own caves, linked by the train
+- Train upgrades per car: engine reaches new biomes, storage size limit, faster forge, bigger lab
+- A nano-bot widget outside the game (much later)

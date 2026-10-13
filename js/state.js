@@ -7,8 +7,7 @@ const C = CONFIG;
 const { COLS, BASE_ROWS } = C;
 let ROWS = C.ROWS;                       // rows in the current area (the town is shorter than a cave)
 const BELT = C.CONVEYOR.col;
-const SAVE_KEY = 'bolt-burrow-v7';
-const OLD_SAVE_KEYS = ['bolt-burrow-v6', 'bolt-burrow-v4'];   // v0.6 (caves picked at base) and v0.4–v0.5.1 (one long cave)
+const SAVE_KEY = 'bolt-burrow-v8';   // v0.8 starts fresh: older saves aren't carried over
 const $ = id => document.getElementById(id);
 
 // World cells are saved as one character each ('.' = open floor)
@@ -21,11 +20,19 @@ const ORES = new Set(['copper', 'silver', 'gold', 'crystal']);
 const WALKABLE = new Set(['bridge', 'oldbridge', 'pad', 'exit', 'gate']);
 
 const freshCave = () => ({ world: null, seen: null, deco: null, outposts: 0, relicDone: false });
+const ORE_LIST = ['copper', 'silver', 'gold', 'crystal'];
+const MAT_LIST = Object.keys(C.MATERIALS);
 const freshState = () => ({
   coins: 0,
   tiers: { head: 0, arms: 0, body: 0, legs: 0 },
-  pet: 0,                       // pet level (0 = not hatched)
-  cargo: { items: {} },         // ore carried, by type: { copper: { n, value } }
+  cargo: { items: {} },         // ore carried, by type: { copper: 3 }
+  storage: Object.fromEntries(ORE_LIST.map(o => [o, 0])),   // ore in the train's storage car
+  mats: Object.fromEntries(MAT_LIST.map(m => [m, 0])),      // refined materials
+  forge: { queue: [], start: 0 },                           // recipe ids waiting; start = when the first began (ms)
+  mods: {},                     // mods you've built: { drill: level }
+  grid: [],                     // mods placed in the computer: [{ id, x, y }]
+  flux: 0,
+  bots: 0,                      // nano-bots (the first comes with the Ember Idol)
   cave: -1,                     // where you are: -1 = town, 0–2 = a cave
   unlocked: 1,                  // how many cave gates are open
   keys: C.CAVES.map(() => 0),   // bridge keys held for each cave (they only work in their own cave)
@@ -45,18 +52,6 @@ let isNewGame = true, migrated = false;
 try {
   const raw = localStorage.getItem(SAVE_KEY);
   if (raw) { S = Object.assign(freshState(), JSON.parse(raw)); isNewGame = false; }
-  else {
-    // Carry progress over from older versions (cave layouts start fresh)
-    for (const key of OLD_SAVE_KEYS) {
-      const old = localStorage.getItem(key);
-      if (!old) continue;
-      const o = JSON.parse(old);
-      Object.assign(S, { coins: o.coins || 0, tiers: o.tiers || S.tiers, pet: o.pet || 0, unlocked: o.unlocked || 1, relics: o.relics || 0 });
-      if (Array.isArray(o.caves)) o.caves.forEach((c, k) => { if (S.caves[k] && c.relicDone) S.caves[k].relicDone = true; });
-      isNewGame = false; migrated = true;
-      break;
-    }
-  }
 } catch (e) { /* storage unavailable: play without saving */ }
 while (S.caves.length < C.CAVES.length) S.caves.push(freshCave());
 while (S.keys.length < C.CAVES.length) S.keys.push(0);
@@ -90,33 +85,28 @@ function hash(a, b, c) { let h = (a * 374761393 + b * 668265263 + c * 1442695041
 
 // ---------- Walker stats from equipped parts ----------
 const part = slot => C.PARTS[slot].tiers[S.tiers[slot]];
-const lightRadius = () => part('head').val.light;
+// modVal(id) is a mod's effect if it's placed in the computer, otherwise 0 (see base.js)
+const lightRadius = () => part('head').val.light + modVal('lamp');
 const rockScan = () => part('head').val.scan;
-const digPower = () => part('arms').val * (1 + C.PET.digBonusPerLevel * S.pet);
-const batteryMax = () => part('body').val.battery;
+const digPower = () => part('arms').val * (1 + modVal('drill') + modVal('overclock'));
+const batteryMax = () => Math.round(part('body').val.battery * (1 + modVal('coolant')));
+const drainMult = () => (modVal('overclock') ? 1.1 : 1);   // Overclock costs 10% more battery
 const cargoMax = () => part('body').val.cargo;
 const legs = () => part('legs').val;
 const keyName = k => C.CAVES[k].keyName;
-const oreValue = (t, r) => Math.round(C.BLOCKS[t].value * cave().valueMult * (1 + (r - BASE_ROWS) / C.ORE_DEPTH_BONUS));
 
 // ---------- Cargo ----------
-const cargoCount = () => Object.values(S.cargo.items).reduce((a, i) => a + i.n, 0);
-const cargoValue = () => Object.values(S.cargo.items).reduce((a, i) => a + i.value, 0);
-function cargoAdd(type, value) {
-  const it = S.cargo.items[type] || (S.cargo.items[type] = { n: 0, value: 0 });
-  it.n++; it.value += value;
-}
+const cargoCount = () => Object.values(S.cargo.items).reduce((a, n) => a + n, 0);
+function cargoAdd(type) { S.cargo.items[type] = (S.cargo.items[type] || 0) + 1; }
 // Remove k random pieces of ore. Returns how many were removed.
 function cargoRemove(k) {
   let removed = 0;
   while (removed < k) {
-    const types = Object.keys(S.cargo.items).filter(t => S.cargo.items[t].n > 0);
+    const types = Object.keys(S.cargo.items).filter(t => S.cargo.items[t] > 0);
     if (!types.length) break;
-    const it = S.cargo.items[types[Math.floor(Math.random() * types.length)]];
-    const each = it.value / it.n;
-    it.n--; it.value -= each; removed++;
+    S.cargo.items[types[Math.floor(Math.random() * types.length)]]--; removed++;
   }
-  for (const t of Object.keys(S.cargo.items)) if (S.cargo.items[t].n <= 0) delete S.cargo.items[t];
+  for (const t of Object.keys(S.cargo.items)) if (S.cargo.items[t] <= 0) delete S.cargo.items[t];
   return removed;
 }
 
