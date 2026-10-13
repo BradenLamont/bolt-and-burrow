@@ -71,9 +71,10 @@ function drawFloor(c, r, x, y, s) {
   if (inShop()) return drawShopFloor(c, r, x, y, s);
   const town = inTown(), hall = !town && r < BASE_ROWS, path = town && DECO[idx(c, r)] === 2;
   if (town && DECO[idx(c, r)] === 3) return drawPlatform(c, r, x, y, s);
-  g.fillStyle = town ? (path ? '#7a6248' : '#3c4a2c') : hall ? '#3a3128' : cave().floor;
+  const TL = town ? TOWN().look : null;
+  g.fillStyle = town ? (path ? TL.path : TL.grass) : hall ? '#3a3128' : cave().floor;
   g.fillRect(x, y, s, s);
-  g.fillStyle = town && !path ? 'rgba(120,150,80,.25)' : 'rgba(255,230,200,.05)';
+  g.fillStyle = town && !path ? TL.grassDot : 'rgba(255,230,200,.05)';
   g.fillRect(x + s * (0.2 + hash(c, r, 3) * 0.5), y + s * (0.2 + hash(c, r, 4) * 0.5), s * 0.1, s * 0.1);
   if (t === 'exit') drawExit(x, y, s);
   if (t === 'water') drawWater(c, r, x, y, s);
@@ -203,7 +204,7 @@ function drawWall(t, c, r, x, y, s, W) {
   if (t === 'boulder') return drawBoulder(c, r, x, y, s, W);
   const hidden = t === 'cache' ? seen !== 2 : (ORES.has(t) || t === 'fossil' || t === 'relic' || t === 'keycache' || t === 'gas' || t === 'aquifer') && !seen;
   const look = hidden ? baseFor(c, r) : t;
-  const base = C.BLOCKS[look].color || C.BLOCKS[baseFor(c, r)].color;
+  const base = look === 'cliff' && inTown() ? TOWN().look.cliff : C.BLOCKS[look].color || C.BLOCKS[baseFor(c, r)].color;
   const ty = y - W; // top face
   const front = at(c, r - 1);
   if (isFloor(front) || front === 'chasm') { // front face, where open floor lies in front (below on screen)
@@ -334,59 +335,137 @@ function drawRail(c, r, x, y, s) {
   g.fillStyle = '#5a3f2a'; for (let k = 0; k < 3; k++) g.fillRect(x + s * (0.08 + k * 0.33), y + s * 0.18, s * 0.14, s * 0.64); // sleepers
   g.fillStyle = '#9a948c'; g.fillRect(x, y + s * 0.28, s, s * 0.07); g.fillRect(x, y + s * 0.65, s, s * 0.07); // rails
 }
-// The train: your home base. Engine, forge, lab and storage cars, side by side on the tracks.
+// The train: your home base, the Drill Liner. From left to right: the engine (drill head, cab, mech hold
+// with roof doors and a side window, and a small rear deck with the crane), then the forge, lab and storage cars.
 const CAR_LOOK = {
-  engine:  { roof: '#5b3a24', side: '#c9692a', label: '' },
-  forge:   { roof: '#463630', side: '#6e3b29', label: 'FORGE' },
+  engine:  { roof: '#3B3F46', side: '#2f3238' },
+  forge:   { roof: '#463630', side: '#4a3a32', label: 'FORGE' },
   lab:     { roof: '#2d3d48', side: '#2f4d5c', label: 'LAB' },
   storage: { roof: '#4a4636', side: '#5d5438', label: 'STORAGE' },
 };
+// A small side view of the mech, for the hold window (pilot shown only while it's inside)
+function drawMechSide(cx, by, u, pilot) {
+  g.fillStyle = '#4A5059'; g.fillRect(cx - u * 0.35, by - u * 0.55, u * 0.22, u * 0.5); g.fillRect(cx + u * 0.1, by - u * 0.55, u * 0.22, u * 0.5);
+  g.fillStyle = '#D9813B'; rr2(g, cx - u * 0.6, by - u * 1.15, u * 1.2, u * 0.65, u * 0.15); g.fill();
+  g.fillStyle = 'rgba(159,201,214,.55)'; g.beginPath(); g.arc(cx, by - u * 1.1, u * 0.4, Math.PI, 0); g.fill();
+  if (pilot) { g.fillStyle = '#5D646E'; g.beginPath(); g.arc(cx, by - u * 1.25, u * 0.16, 0, 7); g.fill(); g.fillStyle = '#9FE3F0'; g.fillRect(cx, by - u * 1.28, u * 0.07, u * 0.07); }
+}
 function drawTrain(X, Y, s, W) {
   const ST = C.TOWN.station, row = ST.railRow;
   const top = Y(row + 1) + s * 0.12 - W * 1.6, roofH = s * 0.5, bottom = Y(row + 1) + s * 0.85;
   const sideTop = top + roofH, sideH = bottom - sideTop;
   const busy = S.forge.queue.length > 0;
+  const winY = sideTop + s * 0.08, winH = Math.max(3, sideH * 0.42);
   ST.cars.forEach((car, i) => {
     const [a, b] = car.cols, look = CAR_LOOK[car.id];
     const x = X(a) + s * 0.06, w = (b - a + 1) * s - s * 0.12, door = carDoor(car.id);
-    if (i) { g.fillStyle = '#2a1f17'; g.fillRect(X(a) - s * 1.02, bottom - s * 0.3, s * 1.1, s * 0.08); }   // coupling
-    g.fillStyle = 'rgba(0,0,0,.3)'; g.fillRect(x + s * 0.05, bottom - s * 0.02, w, s * 0.08);   // shadow
-    g.fillStyle = look.roof; rr2(g, x, top, w, roofH, s * 0.12); g.fill();
-    g.fillStyle = 'rgba(255,255,255,.08)'; g.fillRect(x + s * 0.1, top + roofH * 0.62, w - s * 0.2, roofH * 0.1);
+    if (i) { g.fillStyle = '#17130F'; g.fillRect(X(a) - s * 1.02, bottom - s * 0.3, s * 1.1, s * 0.08); }   // coupling
+    g.fillStyle = 'rgba(134,207,220,.35)'; g.fillRect(x + s * 0.1, bottom - s * 0.01, w - s * 0.2, s * 0.05);   // maglev glow
+    g.fillStyle = look.roof; rr2(g, x, top, w, roofH, s * 0.1); g.fill();
+    g.fillStyle = 'rgba(255,255,255,.07)'; g.fillRect(x + s * 0.1, top + roofH * 0.7, w - s * 0.2, roofH * 0.08);
     g.fillStyle = look.side; g.fillRect(x, sideTop, w, sideH);
-    g.fillStyle = '#d9813b'; g.fillRect(x, bottom - s * 0.16, w, s * 0.05);                    // stripe
-    const winY = sideTop + s * 0.08, winH = Math.max(3, sideH * 0.35);
+    g.fillStyle = '#d9813b'; g.fillRect(x, bottom - s * 0.16, w, s * 0.05);                      // stripe
     if (look.label) {
-      g.fillStyle = 'rgba(239,227,211,.85)'; g.textAlign = 'center';
-      g.font = '700 ' + Math.round(s * 0.2) + 'px "Pixelify Sans", monospace';
-      g.fillText(look.label, x + w / 2, top + roofH * 0.48);
+      g.fillStyle = 'rgba(239,227,211,.8)'; g.textAlign = 'center';
+      g.font = '700 ' + Math.round(s * 0.17) + 'px "Pixelify Sans", monospace';
+      g.fillText(look.label, x + w / 2, sideTop + sideH - s * 0.2);
     }
     if (car.id === 'engine') {
-      g.fillStyle = '#16110d'; g.fillRect(x + w - s * 0.9, winY, s * 0.6, winH);                  // cab window
-      g.fillStyle = '#ffd98a'; g.beginPath(); g.arc(x + s * 0.12, sideTop + s * 0.12, s * 0.07, 0, 7); g.fill(); // headlight
-      g.fillStyle = '#3a2b20'; g.fillRect(x + s * 0.4, top - s * 0.12, s * 0.22, s * 0.2);        // stack
+      // drill head on the nose, spinning (faster while travelling)
+      const tipX = x - s * 0.62, midY = (top + bottom) / 2;
+      g.fillStyle = '#8E96A0'; g.strokeStyle = '#17130F'; g.lineWidth = 1.5;
+      g.beginPath(); g.moveTo(x + 1, top + 2); g.lineTo(x + 1, bottom - 2); g.lineTo(tipX, midY); g.closePath(); g.fill(); g.stroke();
+      g.strokeStyle = '#5D646E'; g.lineWidth = Math.max(1.5, s * 0.04);
+      const spin = (time * (trip ? 3 : 0.4)) % 1;
+      for (let k = 0; k < 4; k++) {
+        const f = (k + spin) / 4, yy = top + (bottom - top) * f;
+        g.beginPath(); g.moveTo(x, yy); g.lineTo(x + (tipX - x) * 0.7, midY + (yy - midY) * 0.3); g.stroke();
+      }
+      g.fillStyle = '#D9813B'; g.beginPath(); g.arc(tipX + s * 0.04, midY, s * 0.06, 0, 7); g.fill();
+      g.fillStyle = '#5D646E'; g.fillRect(x - s * 0.02, top, s * 0.08, bottom - top);
+      // cab window, lit with the pilot inside while you ride
+      const p = pilotState(), cabX = x + s * 0.2;
+      g.fillStyle = '#0d2a33'; g.fillRect(cabX, winY, s * 0.48, winH);
+      if (p.where === 'cab') { g.fillStyle = 'rgba(255,217,138,.35)'; g.fillRect(cabX, winY, s * 0.48, winH); g.fillStyle = '#5D646E'; g.beginPath(); g.arc(cabX + s * 0.24, winY + winH * 0.6, s * 0.1, 0, 7); g.fill(); g.fillStyle = '#9FE3F0'; g.fillRect(cabX + s * 0.22, winY + winH * 0.55, s * 0.05, s * 0.05); }
+      // mech hold: side window
+      const hx = x + s * 0.85, hw = s * 1.45;
+      g.fillStyle = '#0f0b08'; g.fillRect(hx, winY - s * 0.02, hw, winH + s * 0.06);
+      g.fillStyle = 'rgba(134,207,220,.35)'; g.fillRect(hx, winY - s * 0.02, hw, 2);
+      if (mechState().where === 'hold') { g.save(); g.beginPath(); g.rect(hx, winY - s * 0.02, hw, winH + s * 0.06); g.clip(); drawMechSide(hx + hw / 2, winY + winH + s * 0.04, s * 0.42, p.where === 'mech'); g.restore(); }
+      if (p.where === 'walk') { // the pilot walking through to the cab: a little light moving along
+        const px = hx + hw * 0.4 + (cabX + s * 0.24 - (hx + hw * 0.4)) * p.k;
+        g.fillStyle = '#9FE3F0'; g.beginPath(); g.arc(px, winY - s * 0.06, s * 0.05, 0, 7); g.fill();
+      }
+      g.fillStyle = 'rgba(134,207,220,.08)'; g.fillRect(hx, winY - s * 0.02, hw, winH + s * 0.06);
+      g.strokeStyle = '#8E96A0'; g.lineWidth = 2; g.strokeRect(hx, winY - s * 0.02, hw, winH + s * 0.06);
+      // roof doors over the hold: they slide apart to open
+      const o = doorsOpen(), half = hw / 2;
+      g.fillStyle = '#0f0b08'; g.fillRect(hx, top + roofH * 0.15, hw, roofH * 0.7);
+      g.fillStyle = '#4A5059'; g.strokeStyle = '#17130F'; g.lineWidth = 1;
+      g.fillRect(hx - half * o * 0.9, top + roofH * 0.12, half, roofH * 0.76); g.strokeRect(hx - half * o * 0.9, top + roofH * 0.12, half, roofH * 0.76);
+      g.fillRect(hx + half + half * o * 0.9, top + roofH * 0.12, half, roofH * 0.76); g.strokeRect(hx + half + half * o * 0.9, top + roofH * 0.12, half, roofH * 0.76);
+      // small rear deck with the crane
+      const dx = x + w - s * 0.5;
+      g.fillStyle = '#4A5059'; g.fillRect(dx, top + roofH * 0.1, s * 0.48, roofH * 0.8);
+      g.strokeStyle = '#E8B33A'; g.lineWidth = 2; g.setLineDash([4, 3]); g.strokeRect(dx + 2, top + roofH * 0.1 + 2, s * 0.44, roofH * 0.8 - 4); g.setLineDash([]);
+      const mx = dx + s * 0.24, my = top + roofH * 0.45, mastTop = my - s * 0.5;
+      g.fillStyle = '#E8B33A'; g.fillRect(mx - s * 0.05, mastTop, s * 0.1, my - mastTop);
+      const hook = craneTarget();
+      let bx, by;
+      if (hook) { bx = X(hook.x); by = Y(hook.y) - hook.h * s - s * 1.1; }
+      else { bx = hx + hw * 0.55; by = top - s * 0.05; }   // folded along the roof
+      g.strokeStyle = '#E8B33A'; g.lineWidth = Math.max(3, s * 0.1); g.lineCap = 'round';
+      g.beginPath(); g.moveTo(mx, mastTop); g.lineTo(bx, by); g.stroke(); g.lineCap = 'butt';
+      g.strokeStyle = 'rgba(23,19,15,.5)'; g.setLineDash([3, 6]); g.beginPath(); g.moveTo(mx, mastTop); g.lineTo(bx, by); g.stroke(); g.setLineDash([]);
+      g.fillStyle = '#2B2A2E'; g.beginPath(); g.arc(mx, mastTop, s * 0.07, 0, 7); g.fill();
+      if (hook) { g.strokeStyle = '#2B2A2E'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(bx, by); g.lineTo(bx, by + s * 0.3); g.stroke(); }
     }
     if (car.id === 'forge') {
-      // chimney, with smoke and a glowing furnace while a job is running
-      const cx = x + s * 0.35;
-      g.fillStyle = '#2a1f17'; g.fillRect(cx, top - s * 0.22, s * 0.24, s * 0.3);
-      if (busy) for (let k = 0; k < 3; k++) {
-        const ph = (time * 0.6 + k / 3) % 1;
-        g.fillStyle = 'rgba(160,150,140,' + (0.35 * (1 - ph)) + ')';
-        g.beginPath(); g.arc(cx + s * 0.12 + Math.sin(ph * 6 + k) * s * 0.08, top - s * 0.25 - ph * s * 0.6, s * (0.08 + ph * 0.1), 0, 7); g.fill();
+      // two chimneys (smoking while a job runs), a roof hopper of ore, and a grated furnace window
+      for (const [cxk, r] of [[0.35, 0.13], [0.7, 0.1]]) {
+        const cx = x + s * cxk, cy = top + roofH * 0.45;
+        g.fillStyle = '#2a1f17'; g.beginPath(); g.arc(cx, cy, s * r, 0, 7); g.fill();
+        if (busy) for (let k = 0; k < 3; k++) {
+          const ph = (time * 0.6 + k / 3 + cxk) % 1;
+          g.fillStyle = 'rgba(160,150,140,' + (0.35 * (1 - ph)) + ')';
+          g.beginPath(); g.arc(cx + Math.sin(ph * 6 + k) * s * 0.08, cy - ph * s * 0.7, s * (0.08 + ph * 0.1), 0, 7); g.fill();
+        }
       }
-      const glow = busy ? 0.75 + Math.sin(time * 9) * 0.2 : 0.25;
-      g.fillStyle = 'rgba(255,140,60,' + glow + ')'; g.fillRect(x + s * 0.2, winY, s * 0.55, winH);
-      g.fillRect(x + w - s * 0.75, winY, s * 0.55, winH);
+      g.fillStyle = '#5D646E'; g.fillRect(x + w - s * 1.4, top + roofH * 0.15, s * 1.2, roofH * 0.7);
+      for (let k = 0; k < 5; k++) { g.fillStyle = ['#e08a42', '#e2e6ea', '#f2c94c'][k % 3]; g.beginPath(); g.arc(x + w - s * 1.25 + k * s * 0.22, top + roofH * (0.4 + (k % 2) * 0.2), s * 0.06, 0, 7); g.fill(); }
+      const glow = busy ? 0.8 + Math.sin(time * 9) * 0.2 : 0.3;
+      g.fillStyle = 'rgba(255,140,60,' + glow + ')'; g.fillRect(x + s * 0.15, winY, s * 0.6, winH);
+      g.strokeStyle = 'rgba(138,59,26,.9)'; g.lineWidth = 1.5;
+      for (let k = 1; k < 5; k++) { g.beginPath(); g.moveTo(x + s * 0.15 + k * s * 0.12, winY); g.lineTo(x + s * 0.15 + k * s * 0.12, winY + winH); g.stroke(); }
+      g.fillStyle = '#2a1f17'; g.beginPath(); g.arc(x + w - s * 0.45, winY + winH / 2, s * 0.17, 0, 7); g.fill();
+      g.fillStyle = busy ? '#FFB347' : '#7a4a2a'; g.beginPath(); g.arc(x + w - s * 0.45, winY + winH / 2, s * 0.1, 0, 7); g.fill();
     }
     if (car.id === 'lab') {
-      for (const wx of [x + s * 0.2, x + w - s * 0.75]) {
-        g.fillStyle = '#0d2a33'; g.fillRect(wx, winY, s * 0.55, winH);
+      // glass dome on the roof with a hologram of your computer grid; the nano-bot buzzes around inside
+      const cx = x + w / 2, cy = top + roofH * 0.5, rx = w * 0.42, ry = roofH * 0.62;
+      g.fillStyle = 'rgba(134,207,220,.16)'; g.strokeStyle = 'rgba(134,207,220,.8)'; g.lineWidth = 1.5;
+      g.beginPath(); g.ellipse(cx, cy, rx, ry, 0, 0, 7); g.fill(); g.stroke();
+      const CPc = C.COMPUTER, cw = s * 0.2, ch = roofH * 0.26;
+      for (let yy = 0; yy < CPc.rows; yy++) for (let xx = 0; xx < CPc.cols; xx++) {
+        const m = modAt(xx, yy), gx = cx - CPc.cols * cw / 2 + xx * cw, gy = cy - CPc.rows * ch / 2 + yy * ch;
+        g.fillStyle = m ? modColor(m.id) : 'rgba(134,207,220,.12)'; g.fillRect(gx + 1, gy + 1, cw - 2, ch - 2);
+      }
+      if (S.bots) { const a = time * 1.6; g.fillStyle = '#c9d3d6'; g.beginPath(); g.arc(cx + Math.cos(a) * rx * 0.75, cy + Math.sin(a) * ry * 0.7, s * 0.05, 0, 7); g.fill(); }
+      for (const wx of [x + s * 0.15, x + w - s * 0.75]) {
+        g.fillStyle = '#0d2a33'; g.fillRect(wx, winY, s * 0.6, winH);
         g.fillStyle = 'rgba(134,207,220,' + (0.5 + Math.sin(time * 3 + wx) * 0.2) + ')';
         for (let k = 0; k < 3; k++) g.fillRect(wx + s * 0.06, winY + 2 + k * winH / 3.2, s * (0.15 + hash(k, wx | 0, 9) * 0.3), 2);
       }
     }
     if (car.id === 'storage') {
+      // open hopper: the ore pile grows with what you've stored
+      const total = ORE_LIST.reduce((n, o) => n + S.storage[o], 0), n = Math.min(40, Math.ceil(total / 2));
+      g.fillStyle = '#6b5a44'; g.fillRect(x + s * 0.1, top + roofH * 0.15, w - s * 0.2, roofH * 0.7);
+      const cols = ORE_LIST.filter(o => S.storage[o] > 0).map(o => C.BLOCKS[o].ore);
+      for (let k = 0; k < n && cols.length; k++) {
+        g.fillStyle = cols[k % cols.length];
+        g.beginPath(); g.arc(x + s * 0.2 + hash(k, 3, 77) * (w - s * 0.4), top + roofH * (0.25 + hash(k, 4, 78) * 0.5), s * 0.05, 0, 7); g.fill();
+      }
       g.strokeStyle = 'rgba(0,0,0,.3)'; g.lineWidth = 1;
       for (let k = 1; k < 9; k++) { g.beginPath(); g.moveTo(x + k * w / 9, sideTop + 2); g.lineTo(x + k * w / 9, bottom - s * 0.18); g.stroke(); }
     }
@@ -396,14 +475,79 @@ function drawTrain(X, Y, s, W) {
       if (townSpot() === car.id) { g.strokeStyle = '#efe3d3'; g.lineWidth = 1.5; g.strokeRect(dx - 1, winY - s * 0.02 - 1, s * 0.6 + 2, bottom - winY - s * 0.17 + 2); }
     }
   });
-  // station sign on the platform's right end
+  // the town's name sign on the platform's right end
   const sx = X(20), sy = Y(ST.platformRow + 1) - s * 0.15;
   g.fillStyle = '#2a1f17'; g.fillRect(sx + s * 0.45, sy + s * 0.3, s * 0.1, s * 0.55);
-  g.fillStyle = '#3a2b20'; rr2(g, sx - s * 0.6, sy - s * 0.1, s * 2.2, s * 0.48, 3); g.fill();
-  g.textAlign = 'center'; g.fillStyle = '#efe3d3'; g.font = '700 ' + Math.round(s * 0.2) + 'px "Pixelify Sans", monospace';
-  g.fillText('HOME BASE', sx + s * 0.5, sy + s * 0.12);
+  g.fillStyle = '#3a2b20'; rr2(g, sx - s * 0.9, sy - s * 0.16, s * 2.8, s * 0.56, 3); g.fill();
+  g.strokeStyle = '#d9813b'; g.lineWidth = 1; rr2(g, sx - s * 0.9, sy - s * 0.16, s * 2.8, s * 0.56, 3); g.stroke();
+  g.textAlign = 'center'; g.fillStyle = '#efe3d3'; g.font = '700 ' + Math.round(s * 0.24) + 'px "Pixelify Sans", monospace';
+  g.fillText(TOWN().name.toUpperCase(), sx + s * 0.5, sy + s * 0.1);
   g.fillStyle = '#d9813b'; g.font = '500 ' + Math.round(s * 0.13) + 'px "IBM Plex Mono", monospace';
-  g.fillText('STAND AT A DOOR', sx + s * 0.5, sy + s * 0.3);
+  g.fillText('TOWN ' + (S.town + 1) + ' · TRAIN HOME BASE', sx + s * 0.5, sy + s * 0.3);
+}
+// The mech on the crane hook, drawn above the train while it's lifted in or out
+function drawTripMech(X, Y, s) {
+  const m = mechState();
+  if (m.where !== 'hook') return;
+  const sx = X(m.x), groundY = Y(m.y) + s * 0.2;
+  g.fillStyle = 'rgba(0,0,0,' + (0.3 - m.h * 0.1) + ')'; g.beginPath(); g.ellipse(sx, groundY, s * 0.35, s * 0.12, 0, 0, 7); g.fill();
+  drawWalker(g, sx, Y(m.y) + s * 0.4 - m.h * s, s * 1.15 / 64 * (1 + m.h * 0.12), 'front', 1, time, partIds(), { moving: false });
+}
+// The drilling scene between towns (fills the whole cave view)
+function drawTravel() {
+  const k = tripK(), u = Math.min(VW / 15, VH / 7.5), cy = VH * 0.56;
+  const sky = g.createLinearGradient(0, 0, 0, VH); sky.addColorStop(0, '#2a1f17'); sky.addColorStop(1, '#0b0806');
+  g.fillStyle = sky; g.fillRect(0, 0, VW, VH);
+  // rock layers scrolling past (the train drills to the left)
+  [[0.6, '#3a2d22', 0.2], [1, '#4a3a2c', 0.35], [1.6, '#5a4634', 0.5]].forEach(([sp, col, hh], li) => {
+    const off = (time * u * 3 * sp) % (u * 2);
+    g.fillStyle = col;
+    for (let x = -u * 2; x < VW + u * 2; x += u * 2) {
+      const xx = x + off, j = Math.floor((x - off) / (u * 2));
+      g.fillRect(xx, VH * (0.08 + li * 0.05) + hash(j, li, 5) * u * 0.4, u * 2.02, VH * hh * 0.5);
+      g.fillRect(xx, cy + u * 1.4 - hash(j, li, 6) * u * 0.3, u * 2.02, VH);
+    }
+    for (let n = 0; n < 6; n++) {   // ore specks in the rock
+      const ox = ((hash(n, li, 9) * VW + time * u * 3 * sp) % (VW + u)) - u * 0.5;
+      g.fillStyle = ['#e08a42', '#e2e6ea', '#f2c94c', '#9fe3f0'][n % 4];
+      g.fillRect(ox, VH * (0.12 + hash(li, n, 3) * 0.2), 4, 4);
+    }
+  });
+  // the bored tunnel
+  g.fillStyle = '#120d0a'; g.fillRect(0, cy - u * 1.4, VW, u * 2.8);
+  g.fillStyle = 'rgba(134,207,220,.25)'; g.fillRect(0, cy + u * 1.12, VW, 3);
+  // the train, side view
+  const x0 = VW / 2 - u * 6.2, top = cy - u * 0.9, h = u * 1.7;
+  const car = (x, w, col) => { g.fillStyle = col; rr2(g, x, top, w, h, u * 0.15); g.fill(); g.fillStyle = '#d9813b'; g.fillRect(x, top + h * 0.75, w, u * 0.12); g.fillStyle = 'rgba(134,207,220,.6)'; g.fillRect(x + u * 0.1, top + h + u * 0.08, w - u * 0.2, u * 0.06); };
+  car(x0, u * 3.6, '#3B3F46'); car(x0 + u * 3.8, u * 2.6, '#4a3a32'); car(x0 + u * 6.6, u * 2.6, '#2f4d5c'); car(x0 + u * 9.4, u * 2.6, '#5d5438');
+  // drill head, spinning, with sparks
+  const tipX = x0 - u * 1.3;
+  g.fillStyle = '#8E96A0'; g.beginPath(); g.moveTo(x0 + 2, top); g.lineTo(x0 + 2, top + h); g.lineTo(tipX, top + h / 2); g.closePath(); g.fill();
+  g.strokeStyle = '#5D646E'; g.lineWidth = 3;
+  for (let n = 0; n < 5; n++) { const f = (n + (time * 4) % 1) / 5, yy = top + h * f; g.beginPath(); g.moveTo(x0, yy); g.lineTo(x0 + (tipX - x0) * 0.75, top + h / 2 + (yy - top - h / 2) * 0.25); g.stroke(); }
+  for (let n = 0; n < 14; n++) {
+    const ph = (time * 2 + hash(n, 1, 2)) % 1, a = Math.PI * (0.6 + hash(n, 2, 3) * 0.8);
+    g.fillStyle = 'rgba(255,' + (160 + n * 6) + ',80,' + (1 - ph) + ')';
+    g.fillRect(tipX + Math.cos(a) * ph * u * 1.4, top + h / 2 - Math.sin(a) * ph * u * 1.2 * (n % 2 ? 1 : -1), 3, 3);
+  }
+  // cab with the pilot, hold window with the mech, forge glow, lab dome, ore pile
+  g.fillStyle = 'rgba(255,217,138,.4)'; g.fillRect(x0 + u * 0.3, top + h * 0.15, u * 0.7, h * 0.4);
+  g.fillStyle = '#5D646E'; g.beginPath(); g.arc(x0 + u * 0.65, top + h * 0.4, u * 0.14, 0, 7); g.fill();
+  g.fillStyle = '#0f0b08'; g.fillRect(x0 + u * 1.3, top + h * 0.1, u * 2, h * 0.58);
+  g.save(); g.beginPath(); g.rect(x0 + u * 1.3, top + h * 0.1, u * 2, h * 0.58); g.clip(); drawMechSide(x0 + u * 2.3, top + h * 0.68, u * 0.75, false); g.restore();
+  g.strokeStyle = '#8E96A0'; g.lineWidth = 2; g.strokeRect(x0 + u * 1.3, top + h * 0.1, u * 2, h * 0.58);
+  g.fillStyle = 'rgba(255,140,60,' + (0.7 + Math.sin(time * 9) * 0.2) + ')'; g.fillRect(x0 + u * 4.1, top + h * 0.2, u * 1.1, h * 0.4);
+  g.fillStyle = 'rgba(134,207,220,.25)'; g.beginPath(); g.ellipse(x0 + u * 7.9, top, u * 1.1, u * 0.5, 0, Math.PI, 0); g.fill();
+  g.fillStyle = '#6b5a44'; g.beginPath(); g.ellipse(x0 + u * 10.7, top, u * 1.2, u * 0.3, 0, Math.PI, 0); g.fill();
+  // captions
+  g.textAlign = 'center'; g.fillStyle = '#efe3d3'; g.font = '700 ' + Math.round(u * 0.42) + 'px "Pixelify Sans", monospace';
+  g.fillText(TOWN().name + '  →  ' + C.TOWNS[trip.dest].name, VW / 2, VH * 0.2);
+  g.fillStyle = '#a8937c'; g.font = '500 ' + Math.round(Math.max(11, u * 0.2)) + 'px "IBM Plex Mono", monospace';
+  g.fillText('Press any key or tap to skip', VW / 2, VH * 0.2 + u * 0.45);
+  g.fillStyle = '#3a2b20'; g.fillRect(VW * 0.3, VH * 0.2 + u * 0.7, VW * 0.4, 4);
+  g.fillStyle = '#d9813b'; g.fillRect(VW * 0.3, VH * 0.2 + u * 0.7, VW * 0.4 * k, 4);
+  const fade = k < 0.1 ? 1 - k / 0.1 : k > 0.9 ? (k - 0.9) / 0.1 : 0;
+  if (fade > 0) { g.fillStyle = 'rgba(0,0,0,' + fade + ')'; g.fillRect(0, 0, VW, VH); }
 }
 const fogCv = document.createElement('canvas');
 // ---------- Pip's shop ----------
@@ -472,16 +616,16 @@ function drawLockedGate(c, r, x, ty, s) {
 function drawGates(X, Y, s, W) {
   const TW = C.TOWN, r = TW.gateRow;
   TW.gates.forEach((gc, k) => {
-    const x = X(gc), y = Y(r + 1) - W, open = k < S.unlocked;
+    const x = X(gc), y = Y(r + 1) - W, open = gateOpen(k), cv = gateCave(k);
     g.strokeStyle = '#6a5038'; g.lineWidth = Math.max(3, s * 0.1);
     g.beginPath(); g.moveTo(x + s * 0.08, y + s + W); g.lineTo(x + s * 0.08, y + s * 0.2); g.arc(x + s * 0.5, y + s * 0.2, s * 0.42, Math.PI, 0); g.lineTo(x + s * 0.92, y + s + W); g.stroke();
     const sx = x - s * 0.9, sy = y - s * 0.8, w = s * 2.8, h = s * 0.62;
     g.fillStyle = '#3a2b20'; rr2(g, sx, sy, w, h, 3); g.fill();
     g.textAlign = 'center';
     g.fillStyle = open ? '#efe3d3' : '#a8937c'; g.font = '700 ' + Math.round(s * 0.22) + 'px "Pixelify Sans", monospace';
-    g.fillText('CAVE ' + (k + 1) + (S.caves[k].relicDone ? ' · CLEARED' : ''), sx + w / 2, sy + h * 0.42);
+    g.fillText(cv == null ? 'CAVE ?' : caveLabel(cv).toUpperCase() + (S.caves[cv].relicDone ? ' · CLEARED' : ''), sx + w / 2, sy + h * 0.42);
     g.fillStyle = open ? '#d9813b' : '#a8937c'; g.font = '500 ' + Math.round(s * 0.16) + 'px "IBM Plex Mono", monospace';
-    g.fillText(open ? C.CAVES[k].name.toUpperCase() : 'SEALED', sx + w / 2, sy + h * 0.82);
+    g.fillText(cv == null ? 'COMING SOON' : open ? C.CAVES[cv].name.toUpperCase() : 'SEALED', sx + w / 2, sy + h * 0.82);
   });
 }
 function drawBaseBuilding(X, Y, s, W, B = C.BASE_BUILDING, label = 'OUTPOST') {
@@ -555,15 +699,15 @@ function render(dt) {
     if (inShop()) {
       if (r === C.SHOP.pipRow) drawPip(X(C.SHOP.door), Y(r + 1), s, W);
     } else if (inTown()) {
-      if (r === C.TOWN.shop.rows[0]) { drawBaseBuilding(X, Y, s, W, C.TOWN.shop, 'SHOP'); }
+      if (r === C.TOWN.shop.rows[0]) { TOWN().shop ? drawBaseBuilding(X, Y, s, W, C.TOWN.shop, 'SHOP') : drawBaseBuilding(X, Y, s, W, Object.assign({}, C.TOWN.shop, { door: null }), 'CLOSED'); }
       if (r === C.TOWN.gateRow) drawGates(X, Y, s, W);
-      if (r === C.TOWN.station.railRow) drawTrain(X, Y, s, W);
+      if (r === C.TOWN.station.railRow) { drawTrain(X, Y, s, W); drawTripMech(X, Y, s); }
     } else {
       if (r === C.BASE_BUILDING.rows[0]) drawBaseBuilding(X, Y, s, W);
       if (r === BASE_ROWS - 1) drawCaveSign(X, Y, s);
     }
     for (let k2 = 1; k2 <= outpostCount(); k2++) if (r === outpostRow(k2) - 1) drawOutpost(k2, X, Y, s, W);
-    if (r === walkerRow) {
+    if (r === walkerRow && !walkerHidden()) {
       // The Canopy Walker: feet sit near the bottom of its block; it faces the way it last moved
       const view = P.dir === 'up' ? 'back' : P.dir === 'down' ? 'front' : 'side';
       // arms swing up over the shoulders while digging deeper into the cave
@@ -644,6 +788,7 @@ function render(dt) {
   g.textAlign = 'center'; g.font = '600 ' + Math.max(11, Math.round(s * 0.28)) + 'px "IBM Plex Mono", monospace';
   floats.forEach(f => { g.globalAlpha = Math.min(1, f.life * 1.5); g.fillStyle = f.col; g.fillText(f.text, X(f.x), Y(f.y) - W); });
   g.globalAlpha = 1;
+  if (tripStage() === 'travel') drawTravel();
 }
 
 // The cave's name, on a sign at the mouth of the cave
@@ -652,7 +797,7 @@ function drawCaveSign(X, Y, s) {
   g.fillStyle = '#3a2b20'; rr2(g, x, y, w, h, 3); g.fill();
   g.fillStyle = '#6a5038'; g.fillRect(x + w * 0.2, y + h, 3, s * 0.3); g.fillRect(x + w * 0.8 - 3, y + h, 3, s * 0.3);
   g.fillStyle = '#efe3d3'; g.textAlign = 'center'; g.font = '700 ' + Math.round(s * 0.24) + 'px "Pixelify Sans", monospace';
-  g.fillText('CAVE ' + (S.cave + 1), x + w / 2, y + h * 0.42);
+  g.fillText(caveLabel(S.cave).toUpperCase(), x + w / 2, y + h * 0.42);
   g.font = '500 ' + Math.round(s * 0.18) + 'px "IBM Plex Mono", monospace'; g.fillStyle = '#d9813b';
   g.fillText(cave().name.toUpperCase(), x + w / 2, y + h * 0.82);
 }

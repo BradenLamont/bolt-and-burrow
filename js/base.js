@@ -92,7 +92,7 @@ function modVal(id) {
   const lv = modLevel(id);
   return lv && placedMod(id) ? C.MODS[id].eff[lv - 1] : 0;
 }
-const activeOpen = () => S.caves[C.CAVES.length - 1].relicDone;   // the active row opens with the Core Heart (end of Town 1)
+const activeOpen = () => S.caves[CORE].relicDone;   // the active row opens with the Core Heart (end of Town 1)
 const cellOpen = (x, y) => x >= 0 && y >= 0 && x < CP.cols && y < CP.rows && (y < CP.passiveRows || activeOpen());
 function modAt(x, y) {
   return S.grid.find(p => C.MODS[p.id].shape.some(([dx, dy]) => p.x + dx === x && p.y + dy === y));

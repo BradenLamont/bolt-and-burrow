@@ -36,6 +36,19 @@ const CONFIG = {
     ] },
   },
 
+  // ----- Towns on the train line -----
+  // Every town uses the TOWN layout above; each has its own name, colours and caves behind its gates
+  // (gates: a cave number, or null for a sealed "coming soon" gate). Town 2 is a placeholder for testing travel.
+  TOWNS: [
+    { name: 'Hollowmouth', gates: [0, 1, 2], shop: true, pedestals: true,
+      look: { grass: '#3c4a2c', grassDot: 'rgba(120,150,80,.25)', path: '#7a6248', cliff: '#4a4038' } },
+    { name: 'Rustvale', gates: [3, null, null], shop: false, pedestals: false, placeholder: true,
+      look: { grass: '#4d4230', grassDot: 'rgba(190,150,90,.22)', path: '#86684a', cliff: '#5a4334' } },
+  ],
+  // The train trip: seconds for each part of boarding, the drilling scene and unloading
+  TRIP: { doors: 0.6, lift: 1.4, walk: 0.9, travel: 4 },
+  LINE_TEST_KEY: 'KeyT',   // press it 5 times in town to open the line early (for testing)
+
   // ----- Pip's shop (inside the SHOP building) -----
   // A small room: walk up to a display stand to buy that part, or to Pip at the counter to sell.
   // Rows count up from the door (row 0). cols: the room's inside, between its side walls.
@@ -67,6 +80,12 @@ const CONFIG = {
       ores: { gold: 0.05, crystal: 0.025 }, granite: 0.06, obsidian: 0.07, chasms: [{ row: 36, oldBridge: false, pads: 2 }], pits: 3, unstable: 0.08, caverns: 3,
       valueMult: 3.5, relic: { name: 'Core Heart', reward: 2000, wall: 'obsidian' }, keyName: 'Deeps bridge key', coinMult: 2, gas: 8,
       note: 'No old bridge here: find this cave\'s bridge keys before the chasm. Unstable rock collapses as you pass, and green gas pockets explode if you dig next to them.' },
+    // Rustvale's test cave: a mix of everything, to try the town-to-town loop
+    { id: 'test', name: 'Test Cavern', town: 1, label: 'Test cave', rock: ['stone'], floor: '#1d2129',
+      ores: { copper: 0.05, silver: 0.04, gold: 0.02 }, granite: 0.05, obsidian: 0, chasms: [], pits: 1, unstable: 0.03, caverns: 3,
+      valueMult: 1.5, relic: { name: 'Test Shard', reward: 100, wall: null }, keyName: 'Test bridge key', coinMult: 1.5,
+      sand: 3, boulders: 0.008, aquifers: 2, gas: 3,
+      note: 'A placeholder cave for testing: a little of everything from Hollowmouth\'s three caves.' },
   ],
 
   // hp = how much digging a block takes; coin = coins for digging it (× the cave's coinMult);

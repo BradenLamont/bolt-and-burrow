@@ -55,6 +55,10 @@ const SFX = {
   door:   () => { noise(0.12, 0.15, 600, 1); tone(180, 0.1, 'triangle', 0.12, 140); },
   click:  () => tone(1000, 0.03, 'square', 0.06),
   ding:   () => { tone(1568, 0.25, 'sine', 0.12); },
+  doors:  () => { noise(0.25, 0.25, 300, 1.2); tone(90, 0.2, 'square', 0.1, 70, 0.15); },
+  crane:  () => { tone(140, 1.2, 'sawtooth', 0.06, 260); noise(1.2, 0.05, 900, 3); },
+  drill:  () => { noise(0.35, 0.18, 220 + Math.random() * 120, 1); tone(70, 0.3, 'square', 0.05, 60); },
+  arrive: () => { [784, 659, 988].forEach((f, k) => tone(f, 0.2, 'triangle', 0.12, f, k * 0.1)); },
   relic:  () => { [523, 659, 784, 1047].forEach((f, k) => tone(f, 0.25, 'triangle', 0.15, f, k * 0.12)); },
 };
 let lastDig = 0;

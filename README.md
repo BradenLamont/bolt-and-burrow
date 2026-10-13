@@ -22,6 +22,7 @@ A browser mining game: steer a robot with swappable parts down through the earth
 - `js/player.js` – walker movement, digging and hard rock, battery, caches, bridge pads, recall, fast travel
 - `js/hazards.js` – unstable rock, sand, boulders, flood water and gas pockets
 - `js/gear.js` – the tool belt and active skills
+- `js/trip.js` – riding the train between towns (boarding, the drilling scene, unloading)
 - `js/base.js` – the train base: storage, shop, forge, computer and mods, nano-bots
 - `js/walker.js` – the Canopy Walker mech (every part, every facing, walk and dig animation)
 - `js/render.js` – drawing the cave, town, train, effects, the minimap and the nano-bot window
@@ -127,6 +128,14 @@ A browser mining game: steer a robot with swappable parts down through the earth
 - First-time hints for every new place and system, remembered with your save
 - Save backup: make a code or download a file, and load either one back
 - Cave layouts rebuild once so the new blocks appear (your progress is kept)
+
+## v0.10 – the Drill Liner and Rustvale
+- The train is now the Drill Liner: a drill-nosed engine with a mech hold (roof doors and a side window), a small crane deck, a forge car with chimneys and a grated furnace, a lab car with a glass dome showing your computer grid, and a storage car whose ore pile grows with what you've stored
+- Board at the Engine car: the hold doors open, the crane lifts your mech in, your pilot walks through to the cab, the crane folds and the doors close. Then a short drilling scene, and the same steps in reverse at the other end. Any key or tap skips it
+- The line opens when you bring home the Core Heart (or press T five times in town to test it early)
+- Rustvale, a placeholder Town 2: its own colours and name sign, a closed shop, and a test cave behind its first gate (a mix of every hazard). The other two gates say "coming soon"
+- Your whole train comes with you, so the forge, lab and storage work in both towns
+- New sounds for the doors, the crane, the drill and arriving; town names on the platform sign and in the HUD
 
 ## The plan (agreed October 2026)
 

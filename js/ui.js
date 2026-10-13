@@ -160,7 +160,7 @@ function loadSaveText(text) {
 }
 
 const PANEL = {
-  town: () => ['Town', 'Home base', `<p class="note">Walk through the <b>SHOP</b> door to buy parts and sell. Stand at a train car's door (the marked platform tiles) to use the <b>Forge</b>, <b>Lab</b> or <b>Storage</b>.</p>` +
+  town: () => [TOWN().name, 'Town ' + (S.town + 1), `<p class="note">${TOWN().shop ? 'Walk through the <b>SHOP</b> door to buy parts and sell.' : 'Pip hasn\'t opened a shop here yet: buy and sell back in Hollowmouth.'} Stand at a train car's door (the marked platform tiles) to use the <b>Forge</b>, <b>Lab</b> or <b>Storage</b>.</p>` +
     '<small class="sub">In storage</small>' + itemList([...ORE_LIST, ...MAT_LIST], { empty: 'Storage is empty. Ore you bring to any outpost ends up here.' })],
   shopfloor: () => ['Pip\'s shop', 'Inside', '<p class="note">Walk up to a <b>display stand</b> to look at a part, or to <b>Pip</b> at the counter to sell. The door at the bottom leads back to town.</p>' + partsSummary()],
   stand: () => { const slot = shopSpot().slice(6); return [C.PARTS[slot].label + ' stand', C.PARTS[slot].stat, standRows(slot)]; },
@@ -169,7 +169,9 @@ const PANEL = {
     '<small class="sub">Sell from storage</small>' +
     itemList([...ORE_LIST, ...MAT_LIST], { sell: true, empty: 'Nothing to sell. Ore you bring home is kept in the storage car until you sell or refine it.' })],
   backup: () => ['Save backup', 'Copy or load', backupView()],
-  engine: () => ['Engine car', 'Coming later', '<p class="note">The engine will take the whole train, forge and lab included, to the next town once that line opens. Press E or tap Board train to have a look.</p>'],
+  engine: () => ['Engine car', lineIsOpen() ? 'Line open' : 'Line closed', lineIsOpen()
+    ? '<p class="note">The Drill Liner takes the whole train, forge, lab and storage included, to <b>' + C.TOWNS[(S.town + 1) % C.TOWNS.length].name + '</b>. The crane loads your mech into the hold and your pilot drives from the cab. Press E or tap Board train.</p>'
+    : '<p class="note">The line to <b>' + C.TOWNS[1].name + '</b> opens when you bring home the Core Heart from Cave 3.</p>'],
   forge: () => ['Forge car', 'Queue ' + S.forge.queue.length + '/' + C.FORGE.queueMax, forgeRows()],
   lab: () => ['Lab car', '<span data-live="flux"></span>', computerGrid() + modRows()],
   storage: () => ['Storage car', 'Unlimited for now', '<small class="sub">Ore</small>' + itemList(ORE_LIST, { empty: 'No ore stored.' }) +
@@ -276,7 +278,7 @@ confirmButton('reset', 'Reset progress', () => 'Click again to reset', () => {
 function updateUI() {
   const st = station();
   $('depth').textContent = (inTown() ? 0 : depthOf(pRow())) + ' m';
-  $('biome').textContent = inShop() ? 'Pip\'s shop' : inTown() ? 'Town' : 'Cave ' + (S.cave + 1) + ' · ' + (st === 'entrance' ? 'entrance' : st === 'outpost' ? 'halfway outpost' : cave().name);
+  $('biome').textContent = inShop() ? 'Pip\'s shop' : inTown() ? 'Town ' + (S.town + 1) + ' · ' + TOWN().name : caveLabel(S.cave) + ' · ' + (st === 'entrance' ? 'entrance' : st === 'outpost' ? 'halfway outpost' : cave().name);
   $('coins').textContent = fmt(S.coins);
   $('flux').hidden = !S.bots && S.flux < 1;
   $('flux').textContent = fmt(S.flux) + ' Flux';
@@ -294,6 +296,7 @@ function updateUI() {
   $('cargoBar').style.width = (cn / cargoMax() * 100) + '%';
   $('cargoTxt').textContent = cn + '/' + cargoMax();
   $('recall').hidden = st === 'town' || st === 'entrance';
+  stage.classList.toggle('tripping', !!trip);   // hide the control hints during the train ride
 
   if (panelMode() !== 'lab') selMod = null;
   renderPanel();
@@ -303,7 +306,7 @@ function updateUI() {
     forge: ['Forge car', 'Refine ore from storage into materials. Mixed recipes need more than one kind of ore.'],
     lab: ['Lab car', 'Build mods with materials and coins, then place them in the computer. Each mod has a fixed shape.'],
     storage: ['Storage car', 'Everything you send home ends up here. Sell it at Pip\'s counter or refine it in the Forge car.'],
-    engine: ['Engine car', 'The line to the next town opens in a future update.'],
+    engine: ['Engine car', 'Board here to ride the train to another town. The line opens with the Core Heart.'],
     stand: ['Display stand', 'Each stand shows every tier of one part. Buy the next tier with the button or press E.'],
     counter: ['Pip\'s counter', 'Buy tools for your belt and sell ore and materials from storage.'],
   };

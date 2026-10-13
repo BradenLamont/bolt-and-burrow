@@ -11,6 +11,8 @@ const vertDir = () => joyV || lastOf('up', 'down');
 
 addEventListener('keydown', e => {
   if (e.target.closest && e.target.closest('textarea, input')) return;   // typing a backup code
+  if (trip) { if (!e.repeat) skipTrip(); return; }                      // any key skips the train trip
+  if (e.code === C.LINE_TEST_KEY && onTownMap()) lineTestPress();
   const d = KEYMAP[e.code];
   if (d) { e.preventDefault(); if (!held.includes(d)) held.push(d); }
   if ((e.code === 'Space' || e.code === 'KeyQ') && !e.repeat) { e.preventDefault(); useSkill(); updateUI(); }
@@ -27,6 +29,7 @@ const JOY_RADIUS = 46, JOY_DEADZONE = 12;
 const joy = $('joy'), knob = $('joyKnob');
 let touch = null;
 cv.addEventListener('pointerdown', e => {
+  if (trip) { skipTrip(); return; }
   const r = stage.getBoundingClientRect();
   touch = { id: e.pointerId, ox: e.clientX, oy: e.clientY };
   cv.setPointerCapture(e.pointerId);
@@ -48,3 +51,11 @@ cv.addEventListener('pointermove', e => {
 const endTouch = e => { if (!touch || e.pointerId !== touch.id) return; touch = null; joyH = joyV = null; joy.hidden = true; };
 cv.addEventListener('pointerup', endTouch);
 cv.addEventListener('pointercancel', endTouch);
+
+// Test unlock for the train line: press T five times quickly in town
+let lineTaps = [];
+function lineTestPress() {
+  const now = performance.now();
+  lineTaps = lineTaps.filter(t => now - t < 3000); lineTaps.push(now);
+  if (lineTaps.length >= 5 && !lineIsOpen()) { S.lineOpen = true; lineTaps = []; save(); toast('Test mode', 'The train line to ' + C.TOWNS[1].name + ' is open. Board at the Engine car.'); }
+}

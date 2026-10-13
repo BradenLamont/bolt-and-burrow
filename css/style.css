@@ -62,6 +62,7 @@ body { margin: 0; font-family: var(--body); font-size: 14px; line-height: 1.45; 
 .controls { flex-wrap: wrap; }
 .controls p { margin: 0; color: var(--muted); font-size: .72rem; background: rgba(11, 8, 6, .7); padding: 3px 8px; border-radius: 3px; }
 @media (pointer: coarse) { .keys { display: none; } }
+.tripping .controls p { visibility: hidden; }
 @media (pointer: fine) { .touch { display: none; } }
 
 button { font: inherit; color: inherit; cursor: pointer; }

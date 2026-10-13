@@ -167,20 +167,27 @@ function genCave() {
 // ---------- The town ----------
 // Built fresh every time from the config: grass, a path, cliffs with three gates, buildings,
 // trees and relic pedestals. Gates open once the previous cave's relic is home.
+// Which cave is behind gate k of the current town (null = a sealed "coming soon" gate), and is it open?
+const gateCave = k => TOWN().gates[k];
+function gateOpen(k) {
+  const cv = gateCave(k);
+  if (cv == null) return false;
+  return caveTown(cv) === 0 ? cv < S.unlocked : true;   // Hollowmouth's caves open one relic at a time
+}
 function genTown() {
-  const TW = C.TOWN;
+  const TW = C.TOWN, TN = TOWN();
   T = new Array(COLS * ROWS).fill(null);
   DECO = new Uint8Array(COLS * ROWS);
   SEEN = new Uint8Array(COLS * ROWS).fill(1);
   for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
     if (c === 0 || c === COLS - 1 || r >= TW.gateRow) T[idx(c, r)] = 'cliff';
   }
-  TW.gates.forEach((g, k) => { T[idx(g, TW.gateRow)] = k < S.unlocked ? 'gate' : 'gatelocked'; });
+  TW.gates.forEach((g, k) => { T[idx(g, TW.gateRow)] = gateOpen(k) ? 'gate' : 'gatelocked'; });
   const b = TW.shop;
   for (let r = b.rows[0]; r <= b.rows[1]; r++) for (let c = b.cols[0]; c <= b.cols[1]; c++) T[idx(c, r)] = 'found';
-  T[idx(b.door, b.rows[0])] = 'shopdoor';
+  if (TN.shop) T[idx(b.door, b.rows[0])] = 'shopdoor';   // Rustvale's building is still closed
   TW.trees.forEach(([c, r]) => { T[idx(c, r)] = 'tree'; });
-  TW.pedestals.forEach(c => { T[idx(c, TW.pedestalRow)] = 'pedestal'; });
+  if (TN.pedestals) TW.pedestals.forEach(c => { T[idx(c, TW.pedestalRow)] = 'pedestal'; });
   // train station: tracks across the bottom row, a stone platform above them (DECO 3)
   const ST = TW.station;
   for (let c = 0; c < COLS; c++) T[idx(c, ST.railRow)] = 'rail';
@@ -231,14 +238,14 @@ function arrive(x, y, dir) {
 }
 // Walk through an open gate in town
 function enterCave(k) {
-  if (k >= S.unlocked) return;
+  if (k == null) return;
   sfx('door');
   S.cave = k;
   loadArea();
   arrive(C.SPAWN.col + 0.5, C.SPAWN.row + 0.5, 'up');
   const cv = cave();
-  if (!S.seenNotes.includes(cv.id)) { S.seenNotes.push(cv.id); toast('Cave ' + (k + 1) + ': ' + cv.name, cv.note); }
-  else toast(null, 'Cave ' + (k + 1) + ': ' + cv.name);
+  if (!S.seenNotes.includes(cv.id)) { S.seenNotes.push(cv.id); toast(caveLabel(k) + ': ' + cv.name, cv.note); }
+  else toast(null, caveLabel(k) + ': ' + cv.name);
 }
 // Walk out of a cave's exit door
 function goToTown() {
@@ -247,7 +254,8 @@ function goToTown() {
   stashCave();
   S.cave = -1;
   loadArea();
-  arrive(C.TOWN.gates[Math.max(0, from)] + 0.5, C.TOWN.gateRow - 1.5, 'down');
+  const gk = Math.max(0, TOWN().gates.indexOf(from));
+  arrive(C.TOWN.gates[gk] + 0.5, C.TOWN.gateRow - 1.5, 'down');
   toast(null, 'Back in town.');
 }
 // Walk through the SHOP door in town, and back out again

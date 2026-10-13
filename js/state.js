@@ -38,7 +38,9 @@ const freshState = () => ({
   skillCharge: 0,               // 0–1: how charged your active skill is
   hints: [],                    // first-time hints already shown
   ver: 9,                       // save layout version
-  cave: -1,                     // where you are: -1 = town, -2 = inside Pip's shop, 0–2 = a cave
+  cave: -1,                     // where you are: -1 = town, -2 = inside Pip's shop, 0+ = a cave
+  town: 0,                      // which town on the train line you're in (or whose cave you're in)
+  lineOpen: false,              // the test unlock for the train line (it also opens with the Core Heart)
   unlocked: 1,                  // how many cave gates are open
   keys: C.CAVES.map(() => 0),   // bridge keys held for each cave (they only work in their own cave)
   caves: C.CAVES.map(freshCave),
@@ -68,6 +70,11 @@ while (S.keys.length < C.CAVES.length) S.keys.push(0);
 const inTown = () => S.cave < 0;            // above ground: the town or inside the shop
 const inShop = () => S.cave === -2;
 const onTownMap = () => S.cave === -1;
+const TOWN = () => C.TOWNS[S.town];           // the current town's settings
+const CORE = C.CAVES.findIndex(c => c.id === 'deeps');   // the Core Heart's cave (end of Town 1)
+const lineIsOpen = () => S.lineOpen || S.caves[CORE].relicDone;
+const caveTown = k => C.CAVES[k].town || 0;
+const caveLabel = k => C.CAVES[k].label || 'Cave ' + (k + 1);
 const cave = () => C.CAVES[S.cave];        // the current cave's settings (undefined in town)
 const CS = () => S.caves[S.cave];          // the current cave's saved progress (undefined in town)
 

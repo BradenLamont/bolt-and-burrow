@@ -88,14 +88,14 @@ function claimRelic() {
   const k = S.relicHeld - 1, cv = C.CAVES[k];
   S.relicHeld = 0; S.relics++; S.coins += cv.relic.reward;
   S.caves[k].relicDone = true;
-  const next = C.CAVES[k + 1];
+  const next = C.CAVES[k + 1] && caveTown(k + 1) === caveTown(k) ? C.CAVES[k + 1] : null;   // the next cave in the same town
   if (next && S.unlocked < k + 2) S.unlocked = k + 2;
   let extra = '';
   sfx('relic');
-  if (k === 2) extra = ' Town 1 is complete: the active row of your computer is open. Build a skill in the Lab car!';
+  if (k === CORE) extra = ' Hollowmouth is complete: the active row of your computer is open, and the train line to Rustvale is open. Board at the Engine car!';
   if (k === 0 && !S.bots) { S.bots = 1; extra = ' A nano-bot was sealed inside it! It now makes Flux for your computer, even while you\'re away.'; }
   toast(cv.relic.name + ' recovered!', 'You claimed ' + fmt(cv.relic.reward) + ' coins. ' +
-    (next ? 'Its pedestal in town now glows, and the gate to Cave ' + (k + 2) + ', ' + next.name + ', is open.' : 'You\'ve cleared every cave in this version. More are coming.') + extra);
+    (next ? 'Its pedestal in town now glows, and the gate to Cave ' + (k + 2) + ', ' + next.name + ', is open.' : k === CORE ? '' : 'Nice work. That\'s everything in this cave.') + extra);
   if (onTownMap()) genTown();
   save();
 }
@@ -164,8 +164,9 @@ function dig(c, r, dt) {
     else if (t === 'chasm') hintOnce('chasm', 'Chasm', 'Too wide to cross. Find the old bridge, stand on a bridge pad to deploy one, or use a grapple from Pip.');
     else if (t === 'found' || t === 'post' || t === 'shopwall' || t === 'stand' || t === 'counter') hintOnce('build', null, 'Buildings can\'t be dug.');
     else if (t === 'gatelocked') {
-      const k = C.TOWN.gates.indexOf(c);
-      hintOnce('gate' + k, 'Sealed gate', 'Bring home the ' + C.CAVES[k - 1].relic.name + ' from Cave ' + k + ' to open the way to ' + C.CAVES[k].name + '.');
+      const k = C.TOWN.gates.indexOf(c), cv = gateCave(k);
+      if (cv == null) hintOnce('soon' + S.town + k, 'Coming soon', 'This gate leads to a cave that isn\'t built yet.');
+      else hintOnce('gate' + k, 'Sealed gate', 'Bring home the ' + C.CAVES[cv - 1].relic.name + ' from Cave ' + cv + ' to open the way to ' + C.CAVES[cv].name + '.');
     }
     return;
   }
@@ -261,7 +262,7 @@ function finishMove() {
   markSeen();
   S.best = Math.max(S.best, depthOf(pRow()));
   const here = at(pCol(), pRow());
-  if (here === 'gate') return enterCave(C.TOWN.gates.indexOf(pCol()));
+  if (here === 'gate') return enterCave(gateCave(C.TOWN.gates.indexOf(pCol())));
   if (here === 'exit') return goToTown();
   if (here === 'shopdoor') return inShop() ? leaveShop() : enterShop();
   if (padReady(pCol(), pRow())) hintOnce('pad', 'Bridge pad', S.keys[S.cave] ? 'Press E or tap Deploy to use a ' + keyName(S.cave) + '.' : 'You need a ' + keyName(S.cave) + '. Marked caches before the chasm hold them.');
@@ -292,9 +293,7 @@ function actionHere() {
     const slot = sp.slice(6), next = C.PARTS[slot].tiers[S.tiers[slot] + 1];
     if (next) return { label: 'Buy ' + next.name + ' · ' + fmt(next.cost), run: () => buyPart(slot) };
   }
-  if (townSpot() === 'engine') return { label: 'Board train', run: () => {
-    toast('Engine car', 'The line to the next town opens in a future update. For now, the train is your base.');
-  } };
+  if (townSpot() === 'engine' && !trip) return { label: lineIsOpen() ? 'Board train · to ' + C.TOWNS[(S.town + 1) % C.TOWNS.length].name : 'Board train', run: startTrip };
   if (padReady(pCol(), pRow())) return { label: 'Deploy bridge · ' + S.keys[S.cave] + ' key' + (S.keys[S.cave] === 1 ? '' : 's'), run: () => {
     if (!S.keys[S.cave]) return toast(null, 'You need a ' + keyName(S.cave) + '. Marked caches before the chasm hold them.');
     S.keys[S.cave]--; deployBridge(pCol(), pRow());
