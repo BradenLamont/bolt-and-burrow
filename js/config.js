@@ -1,36 +1,52 @@
 // Bolt & Burrow — balance and tuning.
 // Every number that changes how the game *feels* lives here, so you can
 // rebalance without touching the game logic in game.js.
-// Top-down caves: your base is at the bottom of the screen and each cave goes up from there.
-// In the code, row 0 is the base yard and higher rows are deeper. Every cave shares the same base.
+// Top-down: the town sits at the bottom, with three cave gates along its top edge.
+// Each cave is its own area. In a cave, row 0 is the entrance and higher rows are deeper.
 
 const CONFIG = {
   // ----- World -----
   COLS: 25,          // cave width in blocks (the outer columns are bedrock walls)
   ROWS: 62,          // cave length in blocks: yard + about 55 m of cave (the last row is bedrock)
-  BASE_ROWS: 4,      // rows 0–3 are the open yard at the cave mouth (your base)
-  BASE_BUILDING: { cols: [3, 6], rows: [0, 1] }, // the base shop building
-  SPAWN: { col: 9, row: 2 },
+  BASE_ROWS: 4,      // rows 0–3 of every cave are its entrance hall (with the entrance outpost)
+  BASE_BUILDING: { cols: [3, 6], rows: [0, 1] }, // the entrance outpost building
+  SPAWN: { col: 9, row: 2 },                     // where you arrive in a cave
+  EXIT: { col: 9, row: 0 },                      // the door back to town
+
+  // ----- The town -----
+  // Walk into an open gate to enter that cave. A cave's gate opens once you bring home
+  // the previous cave's relic, which then sits on its pedestal in town.
+  TOWN: {
+    rows: 10,
+    gates: [5, 12, 19],                          // gate columns for caves 1, 2, 3 (in the cliff at gateRow)
+    gateRow: 8,
+    shop: { cols: [2, 6], rows: [1, 2], label: 'SHOP' },
+    burrow: { cols: [18, 21], rows: [1, 2], label: 'BURROW' },
+    pedestals: [3, 5, 7], pedestalRow: 4,        // a relic pedestal for each cave, beside the shop
+    trees: [[1, 6], [23, 6], [9, 5], [15, 5], [23, 3]],
+    spawn: { col: 12, row: 3 },
+  },
 
   // ----- The caves (levels) -----
-  // Each cave is its own level, about 50 m deep, with one outpost halfway and a relic at the end.
-  // Bringing a cave's relic home unlocks the next cave.
+  // Each cave is about 50 m deep, with an outpost at the entrance, a buildable one halfway in,
+  // and a relic at the end. Bringing a cave's relic home opens the next cave's gate.
   //   rock: the plain rock it's made of · ores: chance per block · granite/obsidian: hard rock chance
-  //   chasmRows: rows where a chasm crosses the cave · pits: small extra chasms · unstable: falling-rock chance
+  //   chasms: { row, oldBridge, pads } — pads need this cave's bridge keys; one key cache per pad
+  //   is hidden before the chasm · pits: small extra chasms · unstable: falling-rock chance
   //   caverns: open chambers · valueMult: ore value multiplier
   CAVES: [
     { id: 'hollow', name: 'Topsoil Hollow', rock: ['dirt', 'clay'], floor: '#2a1e15',
-      ores: { copper: 0.06, silver: 0.025 }, granite: 0.04, obsidian: 0, chasmRows: [], pits: 0, unstable: 0, caverns: 2,
-      valueMult: 1, relic: { name: 'Ember Idol', reward: 800, wall: null }, fossil: true,
+      ores: { copper: 0.06, silver: 0.025 }, granite: 0.04, obsidian: 0, chasms: [], pits: 0, unstable: 0, caverns: 2,
+      valueMult: 1, relic: { name: 'Ember Idol', reward: 300, wall: null }, keyName: 'Hollow bridge key', fossil: true,
       note: 'Soft soil and copper. Watch for granite: Rock Claws can\'t break it.' },
     { id: 'rift', name: 'Granite Rift', rock: ['stone'], floor: '#211d1f',
-      ores: { silver: 0.05, gold: 0.03 }, granite: 0.1, obsidian: 0.02, chasmRows: [38], pits: 0, unstable: 0, caverns: 3,
-      valueMult: 2, relic: { name: 'Storm Lens', reward: 2500, wall: 'granite' },
-      note: 'A chasm splits this cave. Cross on the old bridge, or power up a bridge pad.' },
+      ores: { silver: 0.05, gold: 0.03 }, granite: 0.1, obsidian: 0.02, chasms: [{ row: 38, oldBridge: true, pads: 1 }], pits: 0, unstable: 0, caverns: 3,
+      valueMult: 2, relic: { name: 'Storm Lens', reward: 800, wall: 'granite' }, keyName: 'Rift bridge key',
+      note: 'A chasm splits this cave. Cross on the old bridge, or find the bridge key hidden before the chasm and use it on a bridge pad.' },
     { id: 'deeps', name: 'Basalt Deeps', rock: ['basalt'], floor: '#1b1820',
-      ores: { gold: 0.05, crystal: 0.025 }, granite: 0.06, obsidian: 0.07, chasmRows: [36], pits: 3, unstable: 0.07, caverns: 3,
-      valueMult: 3.5, relic: { name: 'Core Heart', reward: 6000, wall: 'obsidian' },
-      note: 'Unstable rock caves in once two of its sides are dug open. Keep your distance.' },
+      ores: { gold: 0.05, crystal: 0.025 }, granite: 0.06, obsidian: 0.07, chasms: [{ row: 36, oldBridge: false, pads: 2 }], pits: 3, unstable: 0.08, caverns: 3,
+      valueMult: 3.5, relic: { name: 'Core Heart', reward: 2000, wall: 'obsidian' }, keyName: 'Deeps bridge key',
+      note: 'No old bridge here: find this cave\'s bridge keys before the chasm. Unstable rock collapses as you pass and sets off the rock around it.' },
   ],
 
   // hp = how much digging a block takes; value = coins when sold
@@ -43,10 +59,17 @@ const CONFIG = {
     granite:  { hp: 10, needs: 1, color: '#8c8286', label: 'Granite' },
     obsidian: { hp: 16, needs: 2, color: '#241d2c', label: 'Obsidian' },
     cache:   { hp: 4 },                         // a hidden treasure cache
+    keycache: { hp: 4 },                        // a marked cache holding one of this cave's bridge keys
     chasm:   { hp: Infinity },                  // a drop you can't cross or dig
     bridge:  { hp: Infinity },                  // a deployed bridge (walkable)
     oldbridge: { hp: Infinity },                // an old bridge (walkable)
     pad:     { hp: Infinity },                  // a bridge pad (walkable)
+    exit:    { hp: Infinity },                  // the door from a cave back to town (walkable)
+    gate:    { hp: Infinity },                  // an open cave gate in town (walkable)
+    gatelocked: { hp: Infinity },               // a sealed cave gate
+    cliff:   { hp: Infinity, color: '#4a4038' },// the town's cliffs
+    tree:    { hp: Infinity },                  // town decoration
+    pedestal: { hp: Infinity },                 // a relic pedestal in town
     loose:   { hp: 3,   color: '#7a6d5e' },  // unstable rock (hazard)
     rubble:  { hp: 1,   color: '#5d544b' },  // left behind by a cave-in
     copper:  { hp: 3,   value: 5,  ore: '#e08a42', label: 'copper' },
@@ -110,9 +133,8 @@ const CONFIG = {
   CONVEYOR: { col: 12, step: 25, maxOutposts: 1, baseCost: 80, costGrowth: 2.5, speed: 11 },
 
   // ----- Chasms and bridges -----
-  // Chasms block the walker. Each one has an old bridge somewhere along it, and a bridge pad
-  // you can stand on to deploy a new bridge for coins (the cost grows with each cave).
-  BRIDGE: { cost: 40, caveGrowth: 2 },
+  // Chasms block the walker. Some have an old bridge somewhere along them. Bridge pads deploy a
+  // new bridge using one of that cave's bridge keys (found in marked caches before the chasm).
 
   // ----- Treasure caches -----
   // Hidden in the rock. A canopy with a scanner reveals them within its scan range;
@@ -128,7 +150,10 @@ const CONFIG = {
   RECALL: { keepCargo: 0.5 }, // a manual recall keeps half your ore; a dead battery loses it all
 
   // ----- Unstable rock hazard (only in caves with an `unstable` chance) -----
-  ROCK: { chance: 0.07, exposedSides: 2, wobble: 0.8, rubble: 3, hitRadius: 1.3, batteryLoss: 0.25, cargoLoss: 0.3 },
+  // It starts shaking once two sides are dug open, or as soon as you pass within triggerRadius of
+  // it with one side open. A collapse sets nearby unstable rock shaking too (a chain reaction).
+  ROCK: { exposedSides: 2, wobble: 0.4, triggerRadius: 1.8, chainRadius: 2.2, chainStart: 0.5,
+          rubble: 4, hitRadius: 1.4, batteryLoss: 0.25, cargoLoss: 0.3 },
 
   // ----- Pet -----
   PET: {

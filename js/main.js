@@ -17,7 +17,8 @@ function frame(now) {
   requestAnimationFrame(frame);
 }
 
-loadCave();
+loadArea();
+resizeMinimap();
 placePlayerFromSave();
 regenPet();
 markSeen();
@@ -25,10 +26,9 @@ resize();
 [camX, camY] = cameraTarget();
 
 if (isNewGame) {
-  S.seenNotes.push(cave().id);
-  setTimeout(() => toast('Bolt & Burrow', 'Dig up into the cave for ore and bring it back to base. Clear the middle column to build the outpost at 25 m. The relic at the end opens the next cave.'), 300);
+  setTimeout(() => toast('Bolt & Burrow', 'Welcome to town. Walk up the path to the Cave 1 gate. Bring each cave\'s relic home to open the next gate.'), 300);
 } else if (migrated) {
-  setTimeout(() => toast('Three caves', 'The cave is now three caves, each with its own relic. Your coins, parts and pet came with you.'), 300);
+  setTimeout(() => toast('Welcome to town', 'Caves now open from gates in town, each with an outpost at its entrance. Your coins, parts, pet and relic progress came with you.'), 300);
 } else if (S.pet) {
   const away = Math.min((Date.now() - S.last) / 1000, C.PET.offlineCapHours * 3600);
   const gain = Math.floor(away * petRate());

@@ -17,22 +17,28 @@ function boxSolid(x, y) {
 function placePlayerFromSave() {
   const p = S.pos;
   if (p && typeof p.x === 'number' && !boxSolid(p.x, p.y)) { P.x = p.x; P.y = p.y; P.battery = Math.min(p.battery, batteryMax()); }
-  else { P.x = C.SPAWN.col + 0.5; P.y = C.SPAWN.row + 0.5; P.battery = batteryMax(); }
+  else {
+    const sp = inTown() ? C.TOWN.spawn : C.SPAWN;
+    P.x = sp.col + 0.5; P.y = sp.row + 0.5; P.battery = batteryMax();
+  }
 }
 
 // ---------- Stations: the base yard and outpost pads ----------
+// Where can you sell, recharge and shop? Anywhere in town, a cave's entrance hall, or the halfway outpost.
 function station() {
-  if (pRow() < BASE_ROWS) return 'base';
+  if (inTown()) return 'town';
+  if (pRow() < BASE_ROWS) return 'entrance';
   if (outpostAt(pCol(), pRow())) return 'outpost';
   return null;
 }
-// Fast travel: 0 = base, k = outpost k
+const STATION_NAME = { town: 'in town', entrance: 'at the entrance outpost', outpost: 'at the halfway outpost' };
+// Fast travel inside a cave: 0 = entrance outpost, 1 = halfway outpost
 function travelTo(k) {
-  if (!station()) return;
+  if (!station() || inTown()) return;
   if (k === 0) { P.x = C.SPAWN.col + 0.5; P.y = C.SPAWN.row + 0.5; }
   else { P.x = BELT - 0.5; P.y = outpostRow(k) + 0.5; }
   P.digging = []; lastCell = -1; finishMove();
-  toast(null, 'Travelled to ' + (k ? 'Outpost ' + k : 'base') + '.');
+  toast(null, 'Travelled to the ' + (k ? 'halfway' : 'entrance') + ' outpost.');
 }
 
 // ---------- Battery ----------
@@ -57,10 +63,10 @@ function recall(kind) {
   let msg;
   if (kind === 'dead') {
     S.cargo.items = {};
-    msg = n ? 'A recovery drone hauled you back to base. Your ' + n + ' ore was lost.' : 'A recovery drone hauled you back to base.';
+    msg = n ? 'A recovery drone hauled you back to the entrance. Your ' + n + ' ore was lost.' : 'A recovery drone hauled you back to the entrance.';
   } else {
     const lost = cargoRemove(n - Math.floor(n * C.RECALL.keepCargo));
-    msg = n ? 'The drone dropped ' + lost + ' ore on the way. You kept ' + (n - lost) + '.' : 'A drone carried you back to base.';
+    msg = n ? 'The drone dropped ' + lost + ' ore on the way. You kept ' + (n - lost) + '.' : 'A drone carried you back to the entrance.';
   }
   if (S.relicHeld) msg += ' The ' + C.CAVES[S.relicHeld - 1].relic.name + ' made it back safely.';
   P.x = C.SPAWN.col + 0.5; P.y = C.SPAWN.row + 0.5; P.battery = batteryMax(); P.digging = [];
@@ -77,7 +83,7 @@ function sellAndCharge(dt) {
     const value = Math.floor(cargoValue());
     S.coins += value; S.cargo.items = {};
     floatText(P.x, P.y + 0.6, '+' + fmt(value), '#e8a160');
-    toast(null, 'Sold ' + n + ' ore for ' + fmt(value) + ' coins' + (here === 'outpost' ? ' at the outpost. The conveyor carries it up.' : ' at base.'));
+    toast(null, 'Sold ' + n + ' ore for ' + fmt(value) + ' coins ' + STATION_NAME[here] + '.');
   }
   if (S.relicHeld) claimRelic();
   P.battery = Math.min(batteryMax(), P.battery + C.CHARGE_RATE * dt);
@@ -91,7 +97,8 @@ function claimRelic() {
   const next = C.CAVES[k + 1];
   if (next && S.unlocked < k + 2) S.unlocked = k + 2;
   toast(cv.relic.name + ' recovered!', 'You claimed ' + fmt(cv.relic.reward) + ' coins. ' +
-    (next ? 'Cave ' + (k + 2) + ', ' + next.name + ', is now open. Pick it at base.' : 'You\'ve cleared every cave in this version. More are coming.'));
+    (next ? 'Its pedestal in town now glows, and the gate to Cave ' + (k + 2) + ', ' + next.name + ', is open.' : 'You\'ve cleared every cave in this version. More are coming.'));
+  if (inTown()) genTown();
   save();
 }
 
@@ -117,6 +124,14 @@ function breakBlock(c, r) {
     save();
   }
   if (t === 'cache') openCache(c, r);
+  if (t === 'keycache') {
+    S.keys[S.cave]++;
+    const coins = Math.round(C.CACHE.coins[0] * cave().valueMult);
+    S.coins += coins;
+    burst(c + 0.5, r + 0.5, '#9fe3f0', 24);
+    floatText(c + 0.5, r + 0.9, '+ bridge key', '#9fe3f0');
+    toast('Bridge key found!', 'A ' + keyName(S.cave) + ' (+' + fmt(coins) + ' coins). Use it on a bridge pad at the chasm. It only works in this cave.');
+  }
 }
 // Treasure cache: coins plus a few pieces of this cave's best ore
 function openCache(c, r) {
@@ -146,6 +161,10 @@ function dig(c, r, dt) {
     if (t === 'bedrock') hintOnce('bedrock', null, 'Bedrock. You can\'t dig through the cave walls.');
     else if (t === 'chasm') hintOnce('chasm', 'Chasm', 'Too wide to cross. Find the old bridge, or stand on a bridge pad to deploy one.');
     else if (t === 'found' || t === 'post') hintOnce('build', null, 'Buildings can\'t be dug.');
+    else if (t === 'gatelocked') {
+      const k = C.TOWN.gates.indexOf(c);
+      hintOnce('gate' + k, 'Sealed gate', 'Bring home the ' + C.CAVES[k - 1].relic.name + ' from Cave ' + k + ' to open the way to ' + C.CAVES[k].name + '.');
+    }
     return;
   }
   const needs = C.BLOCKS[t].needs || 0;
@@ -233,7 +252,10 @@ function finishMove() {
   lastCell = cell;
   markSeen();
   S.best = Math.max(S.best, depthOf(pRow()));
-  if (padReady(pCol(), pRow())) hintOnce('pad', 'Bridge pad', 'Deploy a bridge across the chasm for ' + fmt(bridgeCost()) + ' coins. Press E or tap Deploy.');
+  const here = at(pCol(), pRow());
+  if (here === 'gate') return enterCave(C.TOWN.gates.indexOf(pCol()));
+  if (here === 'exit') return goToTown();
+  if (padReady(pCol(), pRow())) hintOnce('pad', 'Bridge pad', S.keys[S.cave] ? 'Press E or tap Deploy to use a ' + keyName(S.cave) + '.' : 'You need a ' + keyName(S.cave) + '. Marked caches before the chasm hold them.');
 }
 function markSeen() {
   const R = lightRadius();
@@ -251,9 +273,9 @@ function markSeen() {
 }
 // The action button: deploy a bridge when standing on a ready bridge pad
 function actionHere() {
-  if (padReady(pCol(), pRow())) return { label: 'Deploy bridge · ' + fmt(bridgeCost()), run: () => {
-    if (S.coins < bridgeCost()) return toast(null, 'You need ' + fmt(bridgeCost()) + ' coins to deploy this bridge.');
-    S.coins -= bridgeCost(); deployBridge(pCol(), pRow());
+  if (padReady(pCol(), pRow())) return { label: 'Deploy bridge · ' + S.keys[S.cave] + ' key' + (S.keys[S.cave] === 1 ? '' : 's'), run: () => {
+    if (!S.keys[S.cave]) return toast(null, 'You need a ' + keyName(S.cave) + '. Marked caches before the chasm hold them.');
+    S.keys[S.cave]--; deployBridge(pCol(), pRow());
     burst(pCol() + 0.5, pRow() + 1.5, '#a77d48', 16);
     toast('Bridge deployed', 'The way across is open.'); save();
   } };

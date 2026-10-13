@@ -5,7 +5,7 @@ A browser mining game: steer a robot with swappable parts down through the earth
 **Play:** open `index.html`, or publish the repo with GitHub Pages.
 
 ## Controls
-- Desktop: arrow keys or WASD to move. Push into blocks to dig them (standing between two blocks digs both). Up goes deeper into the cave. Stand on the conveyor and hold Up or Down to ride it. E (or the Deploy button) uses a bridge pad.
+- Desktop: arrow keys or WASD to move. Push into blocks to dig them (standing between two blocks digs both). Up goes deeper into the cave. Stand on the conveyor and hold Up or Down to ride it. E (or the Deploy button) uses a bridge pad. Walk into an open gate in town to enter a cave; walk out the TOWN door to leave.
 - Phone: touch and drag anywhere on the cave for a joystick.
 - Recall button: emergency trip back to base, keeping half your ore.
 
@@ -14,7 +14,7 @@ A browser mining game: steer a robot with swappable parts down through the earth
 - `css/style.css` – look and layout
 - `js/config.js` – every balance number (part stats, costs, blocks, conveyor, relic, pet)
 - `js/state.js` – shared game state, saving, helpers
-- `js/world.js` – the three caves: generation, conveyor and outpost, chasms and bridges, caches, relic chambers, switching caves
+- `js/world.js` – the town and the three caves: generation, conveyor and outposts, chasms and bridges, caches, relic chambers, moving between town and caves
 - `js/player.js` – walker movement, digging and hard rock, battery, caches, bridge pads, recall, fast travel
 - `js/hazards.js` – unstable rock cave-ins
 - `js/pet.js` – Pip the Mole
@@ -80,6 +80,16 @@ A browser mining game: steer a robot with swappable parts down through the earth
 - Open caverns with stalagmites (and crystals in the Basalt Deeps)
 - Minimap of everything you've explored in the current cave
 - Ore is worth more in deeper caves. Coins, parts and the pet carry over from v0.5 saves (the cave layout starts fresh)
+
+## v0.7 – the town
+- You now start in a town with three cave gates. Walk into an open gate to enter that cave; walk out a cave's TOWN door to return
+- Gates are sealed until you bring home the previous cave's relic, which then sits on its pedestal in town
+- Each cave has a free outpost at its entrance, plus the halfway outpost you build with the conveyor. Fast travel works between them
+- Relic rewards are smaller (300 / 800 / 2,000 coins) now that relics are keys
+- Bridge pads use cave-specific bridge keys instead of coins. Each cave hides one marked key cache per bridge pad before the chasm (visible once your light reaches it)
+- Cave 2 keeps its old bridge; Cave 3 has no old bridge and two bridge pads
+- Unstable rock is harsher: it collapses faster, starts falling as you pass by, and sets off nearby unstable rock in a chain reaction
+- Recall and a dead battery now bring you back to the cave's entrance outpost
 
 ## Ideas for later
 - Nano-Bots: rework pets into nano-bots that live inside the robot, still giving bonuses and passive coins

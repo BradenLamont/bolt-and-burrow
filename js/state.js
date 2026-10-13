@@ -4,19 +4,21 @@
 'use strict';
 
 const C = CONFIG;
-const { COLS, ROWS, BASE_ROWS } = C;
+const { COLS, BASE_ROWS } = C;
+let ROWS = C.ROWS;                       // rows in the current area (the town is shorter than a cave)
 const BELT = C.CONVEYOR.col;
-const SAVE_KEY = 'bolt-burrow-v6';
-const OLD_SAVE_KEY = 'bolt-burrow-v4';   // v0.4–v0.5.1 saves (one long cave)
+const SAVE_KEY = 'bolt-burrow-v7';
+const OLD_SAVE_KEYS = ['bolt-burrow-v6', 'bolt-burrow-v4'];   // v0.6 (caves picked at base) and v0.4–v0.5.1 (one long cave)
 const $ = id => document.getElementById(id);
 
 // World cells are saved as one character each ('.' = open floor)
 const CODE = { d: 'dirt', c: 'clay', e: 'stone', b: 'basalt', l: 'loose', r: 'rubble', o: 'copper', s: 'silver', g: 'gold', k: 'crystal',
-  f: 'fossil', q: 'relic', n: 'found', t: 'post', x: 'bedrock', G: 'granite', O: 'obsidian', h: 'cache', v: 'chasm', B: 'bridge', w: 'oldbridge', p: 'pad' };
+  f: 'fossil', q: 'relic', n: 'found', t: 'post', x: 'bedrock', G: 'granite', O: 'obsidian', h: 'cache', K: 'keycache', v: 'chasm', B: 'bridge', w: 'oldbridge', p: 'pad',
+  E: 'exit', A: 'gate', L: 'gatelocked', Q: 'cliff', Y: 'tree', D: 'pedestal' };
 const CHAR = Object.fromEntries(Object.entries(CODE).map(([k, v]) => [v, k]));
 const ORES = new Set(['copper', 'silver', 'gold', 'crystal']);
 // Tiles you can walk on even though they aren't empty
-const WALKABLE = new Set(['bridge', 'oldbridge', 'pad']);
+const WALKABLE = new Set(['bridge', 'oldbridge', 'pad', 'exit', 'gate']);
 
 const freshCave = () => ({ world: null, seen: null, deco: null, outposts: 0, relicDone: false });
 const freshState = () => ({
@@ -24,8 +26,9 @@ const freshState = () => ({
   tiers: { head: 0, arms: 0, body: 0, legs: 0 },
   pet: 0,                       // pet level (0 = not hatched)
   cargo: { items: {} },         // ore carried, by type: { copper: { n, value } }
-  cave: 0,                      // which cave you're in (0, 1, 2)
-  unlocked: 1,                  // how many caves are open
+  cave: -1,                     // where you are: -1 = town, 0–2 = a cave
+  unlocked: 1,                  // how many cave gates are open
+  keys: C.CAVES.map(() => 0),   // bridge keys held for each cave (they only work in their own cave)
   caves: C.CAVES.map(freshCave),
   relicHeld: 0,                 // cave number + 1 of the relic you're carrying (0 = none)
   relics: 0,
@@ -43,21 +46,27 @@ try {
   const raw = localStorage.getItem(SAVE_KEY);
   if (raw) { S = Object.assign(freshState(), JSON.parse(raw)); isNewGame = false; }
   else {
-    // Carry coins, parts and the pet over from the single-cave versions
-    const old = localStorage.getItem(OLD_SAVE_KEY);
-    if (old) {
+    // Carry progress over from older versions (cave layouts start fresh)
+    for (const key of OLD_SAVE_KEYS) {
+      const old = localStorage.getItem(key);
+      if (!old) continue;
       const o = JSON.parse(old);
-      Object.assign(S, { coins: o.coins || 0, tiers: o.tiers || S.tiers, pet: o.pet || 0 });
+      Object.assign(S, { coins: o.coins || 0, tiers: o.tiers || S.tiers, pet: o.pet || 0, unlocked: o.unlocked || 1, relics: o.relics || 0 });
+      if (Array.isArray(o.caves)) o.caves.forEach((c, k) => { if (S.caves[k] && c.relicDone) S.caves[k].relicDone = true; });
       isNewGame = false; migrated = true;
+      break;
     }
   }
 } catch (e) { /* storage unavailable: play without saving */ }
 while (S.caves.length < C.CAVES.length) S.caves.push(freshCave());
+while (S.keys.length < C.CAVES.length) S.keys.push(0);
 
-const cave = () => C.CAVES[S.cave];        // the current cave's settings
-const CS = () => S.caves[S.cave];          // the current cave's saved progress
+const inTown = () => S.cave < 0;
+const cave = () => C.CAVES[S.cave];        // the current cave's settings (undefined in town)
+const CS = () => S.caves[S.cave];          // the current cave's saved progress (undefined in town)
 
 function stashCave() {
+  if (inTown()) return;
   const cs = CS();
   cs.world = T.map(t => (t ? CHAR[t] : '.')).join('');
   cs.seen = SEEN.join('');
@@ -87,6 +96,7 @@ const digPower = () => part('arms').val * (1 + C.PET.digBonusPerLevel * S.pet);
 const batteryMax = () => part('body').val.battery;
 const cargoMax = () => part('body').val.cargo;
 const legs = () => part('legs').val;
+const keyName = k => C.CAVES[k].keyName;
 const oreValue = (t, r) => Math.round(C.BLOCKS[t].value * cave().valueMult * (1 + (r - BASE_ROWS) / C.ORE_DEPTH_BONUS));
 
 // ---------- Cargo ----------

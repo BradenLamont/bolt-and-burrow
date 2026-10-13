@@ -1,5 +1,5 @@
 // Bolt & Burrow — the HUD and the panels under the cave.
-// The left panel is the Workshop at base or an outpost, and your Inventory everywhere else.
+// The left panel is the Workshop in town or at an outpost, and your Inventory everywhere else.
 'use strict';
 
 const SLOTS = ['head', 'arms', 'body', 'legs'];
@@ -33,32 +33,15 @@ $('travel').addEventListener('click', e => {
 });
 let travelSig = '';
 function renderTravel() {
-  const here = station() === 'outpost' ? outpostAt(pCol(), pRow()) : station() === 'base' ? 0 : -1;
-  const sig = S.cave + ':' + CS().outposts + ':' + here;
+  const here = station() === 'outpost' ? 1 : station() === 'entrance' ? 0 : -1;
+  const sig = S.cave + ':' + outpostCount() + ':' + here;
   if (sig === travelSig) return;
   travelSig = sig;
-  $('travelRow').hidden = CS().outposts === 0;
+  $('travelRow').hidden = outpostCount() === 0;
+  if (inTown()) return;
   let html = '';
-  for (let k = 0; k <= CS().outposts; k++) html += `<button type="button" data-k="${k}" ${k === here ? 'disabled' : ''}>${k ? 'Outpost · ' + depthOf(outpostRow(k)) + ' m' : 'Base'}</button>`;
+  for (let k = 0; k <= outpostCount(); k++) html += `<button type="button" data-k="${k}" ${k === here ? 'disabled' : ''}>${k ? 'Halfway outpost · ' + depthOf(outpostRow(k)) + ' m' : 'Entrance outpost'}</button>`;
   $('travel').innerHTML = html;
-}
-
-// ---------- Caves (picked at base) ----------
-$('caves').addEventListener('click', e => {
-  const b = e.target.closest('button'); if (!b || b.disabled) return;
-  switchCave(Number(b.dataset.k));
-});
-let caveSig = '';
-function renderCaves(st) {
-  $('caveRow').hidden = st !== 'base';
-  const sig = S.cave + ':' + S.unlocked + ':' + S.caves.map(c => c.relicDone).join();
-  if (sig === caveSig) return;
-  caveSig = sig;
-  $('caves').innerHTML = C.CAVES.map((cv, k) => {
-    const locked = k >= S.unlocked, here = k === S.cave, done = S.caves[k].relicDone;
-    const label = (k + 1) + ' · ' + cv.name + (locked ? ' · locked' : done ? ' · cleared' : '');
-    return `<button type="button" data-k="${k}" ${locked || here ? 'disabled' : ''} class="${here ? 'here' : ''}">${label}</button>`;
-  }).join('');
 }
 
 // ---------- Context action ----------
@@ -76,20 +59,21 @@ $('train').addEventListener('click', () => {
 let invSig = '';
 function renderInventory() {
   const items = S.cargo.items;
-  const sig = JSON.stringify(items) + S.relicHeld;
+  const sig = JSON.stringify(items) + S.relicHeld + S.keys.join();
   if (sig === invSig) return;
   invSig = sig;
   const types = Object.keys(items).filter(t => items[t].n > 0).sort((a, b) => items[b].value - items[a].value);
   let html = '';
   if (S.relicHeld) { const rl = C.CAVES[S.relicHeld - 1].relic; html += `<li class="relic"><i style="background:#c9a2ff"></i><span>${rl.name}</span><b>1</b><em>${fmt(rl.reward)}</em></li>`; }
+  S.keys.forEach((n, k) => { if (n > 0) html += `<li class="key"><i style="background:#9fe3f0"></i><span>${keyName(k)}</span><b>×${n}</b><em>Cave ${k + 1}</em></li>`; });
   for (const t of types) {
     const col = (C.BLOCKS[t] && C.BLOCKS[t].ore) || '#a8937c';
     html += `<li><i style="background:${col}"></i><span>${ORE_NAMES[t] || t}</span><b>×${items[t].n}</b><em>${fmt(items[t].value)}</em></li>`;
   }
   $('invList').innerHTML = html || '<li class="empty">Nothing yet. Ore you dig up shows here.</li>';
   $('invTotal').textContent = types.length
-    ? 'Worth ' + fmt(cargoValue()) + ' coins. It sells automatically at base or any outpost.'
-    : 'Sell ore at base or any outpost.';
+    ? 'Worth ' + fmt(cargoValue()) + ' coins. It sells automatically in town or at any outpost.'
+    : 'Ore sells in town or at any outpost.';
 }
 
 // ---------- Buttons: recall and reset (tap twice to confirm) ----------
@@ -102,18 +86,18 @@ function confirmButton(id, label, armedLabel, onConfirm) {
     onConfirm();
   });
 }
-confirmButton('recall', 'Recall', () => 'Tap again · keep ' + Math.round(C.RECALL.keepCargo * 100) + '% ore', () => { if (station() !== 'base') recall('manual'); });
+confirmButton('recall', 'Recall', () => 'Tap again · keep ' + Math.round(C.RECALL.keepCargo * 100) + '% ore', () => { if (!inTown() && station() !== 'entrance') recall('manual'); });
 confirmButton('reset', 'Reset progress', () => 'Click again to reset', () => {
-  S = freshState(); S.seenNotes.push(cave().id); loadCave(); regenPet(); placePlayerFromSave();
-  wobble.clear(); lastCell = -1; markSeen(); caveSig = ''; travelSig = ''; save(); updateUI();
-  toast('New dig', 'Head into the cave for ore. Sell it at base or an outpost, then upgrade your robot.');
+  S = freshState(); loadArea(); regenPet(); placePlayerFromSave();
+  arrive(P.x, P.y, 'up');
+  toast('New dig', 'Walk up to the Cave 1 gate to start digging.');
 });
 
 // ---------- Refresh everything that shows numbers ----------
 function updateUI() {
   const st = station();
   $('depth').textContent = depthOf(pRow()) + ' m';
-  $('biome').textContent = st === 'base' ? 'Base' : st === 'outpost' ? 'Outpost' : 'Cave ' + (S.cave + 1) + ' · ' + cave().name;
+  $('biome').textContent = inTown() ? 'Town' : 'Cave ' + (S.cave + 1) + ' · ' + (st === 'entrance' ? 'entrance' : st === 'outpost' ? 'halfway outpost' : cave().name);
   $('coins').textContent = fmt(S.coins);
 
   // battery bar with a "trip back" marker
@@ -133,9 +117,10 @@ function updateUI() {
   $('shopView').hidden = !st; $('invView').hidden = !!st;
   $('panelTitle').textContent = st ? 'Workshop' : 'Inventory';
   const chip = $('shopState');
-  chip.textContent = st === 'base' ? 'At base' : st === 'outpost' ? 'At the outpost' : 'Cargo ' + cn + '/' + cargoMax();
+  chip.textContent = st === 'town' ? 'In town' : st === 'entrance' ? 'Entrance outpost' : st === 'outpost' ? 'Halfway outpost' : 'Cargo ' + cn + '/' + cargoMax();
   chip.classList.toggle('open', !!st);
-  $('recall').hidden = st === 'base';
+  $('recall').hidden = st === 'town' || st === 'entrance';
+  $('liftRow').hidden = inTown();
 
   if (st) {
     SLOTS.forEach(s => {
@@ -145,6 +130,7 @@ function updateUI() {
       if (!next) { btn.textContent = 'Maxed'; btn.disabled = true; }
       else { btn.textContent = next.name + ' · ' + fmt(next.cost); btn.disabled = S.coins < next.cost; }
     });
+    if (inTown()) { renderTravel(); } else {
     $('liftDepth').textContent = CS().outposts ? 'Reaches the outpost at ' + depthOf(beltEnd()) + ' m' : 'No outpost in this cave yet';
     const blocked = beltBlocked(), ext = $('extend');
     if (extendMaxed()) { ext.textContent = 'Built'; ext.disabled = true; $('liftNote').textContent = 'The relic lies at the end of the cave, about ' + depthOf(C.RELIC.row) + ' m in.'; }
@@ -156,7 +142,7 @@ function updateUI() {
         : 'The path is clear. Build the outpost at ' + depthOf(outpostRow(1)) + ' m.';
     }
     renderTravel();
-    renderCaves(st);
+    }
   } else {
     travelSig = '';
     renderInventory();

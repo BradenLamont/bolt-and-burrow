@@ -1,18 +1,21 @@
-// Bolt & Burrow — the caves: generation, the conveyor and outposts, chasms and bridges,
-// treasure caches, relic chambers, and switching between caves.
+// Bolt & Burrow — the world: the town, the caves (generation, conveyor and outposts, chasms and
+// bridges, caches, relic chambers), and moving between the town and the caves.
 'use strict';
 
 // ---------- Conveyor & outposts ----------
-// Each cave has one outpost, halfway in (25 m). The conveyor runs from the yard to it.
+// Each cave has a free outpost at its entrance, plus one you build halfway in (25 m).
+// The conveyor runs from the entrance to the halfway outpost.
+const outpostCount = () => (inTown() ? 0 : CS().outposts);
 const outpostRow = k => BASE_ROWS - 1 + C.CONVEYOR.step * k;
-const beltEnd = () => outpostRow(CS().outposts);
-const onBelt = (c, r) => c === BELT && r >= 0 && r <= beltEnd();
+const beltEnd = () => (inTown() ? -1 : outpostRow(CS().outposts));
+const onBelt = (c, r) => !inTown() && c === BELT && r >= 0 && r <= beltEnd();
 function outpostAt(c, r) {
+  if (inTown()) return 0;
   for (let k = 1; k <= CS().outposts; k++) { const row = outpostRow(k); if (Math.abs(c - BELT) <= 1 && Math.abs(r - row) <= 1) return k; }
   return 0;
 }
-const extendCost = () => Math.round(C.CONVEYOR.baseCost * Math.pow(C.CONVEYOR.costGrowth, S.cave));
-const extendMaxed = () => CS().outposts >= C.CONVEYOR.maxOutposts;
+const extendCost = () => Math.round(C.CONVEYOR.baseCost * Math.pow(C.CONVEYOR.costGrowth, Math.max(0, S.cave)));
+const extendMaxed = () => inTown() || CS().outposts >= C.CONVEYOR.maxOutposts;
 // Conveyor cells that still need digging before the outpost can be built
 function beltBlocked() {
   if (extendMaxed()) return [];
@@ -28,12 +31,12 @@ function buildOutpost(k) {
 }
 
 // ---------- Bridges ----------
-const bridgeCost = () => Math.round(C.BRIDGE.cost * Math.pow(C.BRIDGE.caveGrowth, S.cave));
-// A pad deploys the bridge in the two chasm cells beyond it (deeper into the cave)
+// A pad deploys the bridge in the two chasm cells beyond it (deeper into the cave), using one of
+// this cave's bridge keys.
 function deployBridge(c, r) {
   for (let rr = r + 1; rr <= r + 2; rr++) if (at(c, rr) === 'chasm') T[idx(c, rr)] = 'bridge';
 }
-const padReady = (c, r) => at(c, r) === 'pad' && at(c, r + 1) === 'chasm';
+const padReady = (c, r) => !inTown() && at(c, r) === 'pad' && at(c, r + 1) === 'chasm';
 
 // ---------- Relic chamber ----------
 function placeRelic() {
@@ -47,31 +50,34 @@ function placeRelic() {
   T[idx(c, r)] = 'relic';
 }
 function relicCell() {
+  if (inTown()) return null;
   for (let r = C.RELIC.row - 1; r <= C.RELIC.row + 1; r++) for (let c = 0; c < COLS; c++) if (T[idx(c, r)] === 'relic') return { c, r };
   return null;
 }
 
-// ---------- Generation ----------
+// ---------- Cave generation ----------
 // What plain rock looks like at a cell (also what hidden ore and caches look like before they're revealed)
 function baseFor(c, r) {
+  if (inTown()) return 'cliff';
   const rock = cave().rock;
   if (rock.length === 1) return rock[0];
   return hash(c, r, 7) < Math.min(0.75, (r - BASE_ROWS) / 40) ? rock[1] : rock[0];
 }
 const randInt = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
 
-function genWorld() {
+function genCave() {
   const cv = cave(), cs = CS();
   T = new Array(COLS * ROWS).fill(null);
   DECO = new Uint8Array(COLS * ROWS);
   SEEN = new Uint8Array(COLS * ROWS);
   const lastRow = ROWS - 1, beltRows = outpostRow(1) + 1;
+  const chasmRows = cv.chasms.map(ch => ch.row);
 
   // 1. Rock, ore, hard rock and unstable rock
   for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
     const i = idx(c, r);
     if (c === 0 || c === COLS - 1 || r === lastRow) { T[i] = 'bedrock'; continue; }
-    if (r < BASE_ROWS) continue; // the yard
+    if (r < BASE_ROWS) continue; // the entrance hall
     let t = baseFor(c, r), x = Math.random();
     for (const [ore, p] of Object.entries(cv.ores)) { if (x < p) { t = ore; break; } x -= p; }
     if (t === baseFor(c, r)) {
@@ -89,31 +95,43 @@ function genWorld() {
   // 2. Open caverns, decorated with stalagmites
   for (let n = 0; n < cv.caverns; n++) {
     const cr = randInt(9, C.RELIC.row - 8), cc = randInt(3, COLS - 4), rx = randInt(2, 3), ry = 2;
-    if (cv.chasmRows.some(h => Math.abs(h - cr) < 5)) continue;
+    if (chasmRows.some(h => Math.abs(h - cr) < 5)) continue;
     for (let r = cr - ry; r <= cr + ry; r++) for (let c = cc - rx; c <= cc + rx; c++) {
       if (c < 1 || c > COLS - 2) continue;
       if (((c - cc) / (rx + 0.5)) ** 2 + ((r - cr) / (ry + 0.5)) ** 2 <= 1) { T[idx(c, r)] = null; DECO[idx(c, r)] = 1; }
     }
   }
 
-  // 3. Chasms: a band two rows thick from wall to wall, with an old bridge and a bridge pad
-  for (const h of cv.chasmRows) {
-    let a, b; do { a = randInt(2, COLS - 3); b = randInt(2, COLS - 3); } while (Math.abs(a - b) < 7);
+  // 3. Chasms: a band two rows thick from wall to wall. Some have an old bridge; each has bridge pads,
+  //    and one marked key cache per pad is hidden somewhere before the chasm.
+  for (const ch of cv.chasms) {
+    const h = ch.row, cross = [];
+    while (cross.length < ch.pads + (ch.oldBridge ? 1 : 0)) {
+      const c = randInt(2, COLS - 3);
+      if (cross.every(o => Math.abs(o - c) >= 5)) cross.push(c);
+    }
     for (let c = 1; c < COLS - 1; c++) {
       T[idx(c, h)] = 'chasm'; T[idx(c, h + 1)] = 'chasm';
-      const nearCross = Math.abs(c - a) <= 1 || Math.abs(c - b) <= 1;
-      if (!nearCross && Math.random() < 0.3) T[idx(c, h - 1)] = 'chasm';
-      if (!nearCross && Math.random() < 0.3) T[idx(c, h + 2)] = 'chasm';
+      const near = cross.some(o => Math.abs(c - o) <= 1);
+      if (!near && Math.random() < 0.3) T[idx(c, h - 1)] = 'chasm';
+      if (!near && Math.random() < 0.3) T[idx(c, h + 2)] = 'chasm';
     }
-    T[idx(a, h)] = 'oldbridge'; T[idx(a, h + 1)] = 'oldbridge';
-    T[idx(b, h - 1)] = 'pad';
-    for (const c of [a, b]) for (const r of [h - 1, h + 2]) if (T[idx(c, r)] === 'chasm' || T[idx(c, r)] === 'granite' || T[idx(c, r)] === 'obsidian') T[idx(c, r)] = baseFor(c, r);
+    cross.forEach((c, k) => {
+      if (ch.oldBridge && k === 0) { T[idx(c, h)] = 'oldbridge'; T[idx(c, h + 1)] = 'oldbridge'; }
+      else T[idx(c, h - 1)] = 'pad';
+      for (const r of [h - 1, h + 2]) if (['chasm', 'granite', 'obsidian', 'loose'].includes(T[idx(c, r)])) T[idx(c, r)] = baseFor(c, r);
+    });
+    for (let n = 0, tries = 0; n < ch.pads && tries < 300; tries++) {
+      const r = randInt(8, h - 4), c = randInt(1, COLS - 2);
+      if (c === BELT || T[idx(c, r)] !== baseFor(c, r)) continue;
+      T[idx(c, r)] = 'keycache'; n++;
+    }
   }
   // 4. Small pits
   for (let n = 0; n < cv.pits; n++) {
     const pr = randInt(8, C.RELIC.row - 6), pc = randInt(2, COLS - 4);
-    if (Math.abs(pc - BELT) < 3 || cv.chasmRows.some(h => Math.abs(h - pr) < 4)) continue;
-    for (let r = pr; r <= pr + 1; r++) for (let c = pc; c <= pc + 1; c++) T[idx(c, r)] = 'chasm';
+    if (Math.abs(pc - BELT) < 3 || chasmRows.some(h => Math.abs(h - pr) < 4)) continue;
+    for (let r = pr; r <= pr + 1; r++) for (let c = pc; c <= pc + 1; c++) if (T[idx(c, r)] !== 'keycache') T[idx(c, r)] = 'chasm';
   }
   // 5. Treasure caches hidden in plain rock
   for (let n = 0, tries = 0; n < C.CACHE.perCave && tries < 200; tries++) {
@@ -121,9 +139,10 @@ function genWorld() {
     if (c === BELT || T[idx(c, r)] !== baseFor(c, r)) continue;
     T[idx(c, r)] = 'cache'; n++;
   }
-  // 6. The base building, the fossil (first cave only), outposts and the relic
+  // 6. The entrance outpost and exit door, the fossil (first cave only), outposts and the relic
   const B = C.BASE_BUILDING;
   for (let r = B.rows[0]; r <= B.rows[1]; r++) for (let c = B.cols[0]; c <= B.cols[1]; c++) T[idx(c, r)] = 'found';
+  T[idx(C.EXIT.col, C.EXIT.row)] = 'exit';
   if (cv.fossil && !S.pet) {
     const [a, b] = C.PET.fossilRows;
     let c; do { c = 1 + Math.floor(Math.random() * (COLS - 2)); } while (c === BELT);
@@ -132,29 +151,67 @@ function genWorld() {
   for (let k = 1; k <= cs.outposts; k++) buildOutpost(k);
   if (!cs.relicDone && S.relicHeld !== S.cave + 1) placeRelic();
 }
-function loadCave() {
-  const cs = CS(), n = COLS * ROWS;
+
+// ---------- The town ----------
+// Built fresh every time from the config: grass, a path, cliffs with three gates, buildings,
+// trees and relic pedestals. Gates open once the previous cave's relic is home.
+function genTown() {
+  const TW = C.TOWN;
+  T = new Array(COLS * ROWS).fill(null);
+  DECO = new Uint8Array(COLS * ROWS);
+  SEEN = new Uint8Array(COLS * ROWS).fill(1);
+  for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+    if (c === 0 || c === COLS - 1 || r >= TW.gateRow) T[idx(c, r)] = 'cliff';
+  }
+  TW.gates.forEach((g, k) => { T[idx(g, TW.gateRow)] = k < S.unlocked ? 'gate' : 'gatelocked'; });
+  for (const b of [TW.shop, TW.burrow])
+    for (let r = b.rows[0]; r <= b.rows[1]; r++) for (let c = b.cols[0]; c <= b.cols[1]; c++) T[idx(c, r)] = 'found';
+  TW.trees.forEach(([c, r]) => { T[idx(c, r)] = 'tree'; });
+  TW.pedestals.forEach(c => { T[idx(c, TW.pedestalRow)] = 'pedestal'; });
+  // a dirt path from the spawn point up to each gate (decoration)
+  for (let r = TW.spawn.row; r < TW.gateRow; r++) DECO[idx(TW.spawn.col, r)] = 2;
+  const pathRow = TW.gateRow - 2;
+  for (let c = TW.gates[0]; c <= TW.gates[2]; c++) DECO[idx(c, pathRow)] = 2;
+  TW.gates.forEach(g => { for (let r = pathRow; r < TW.gateRow; r++) DECO[idx(g, r)] = 2; });
+}
+
+// ---------- Loading areas and moving between them ----------
+function loadArea() {
+  ROWS = inTown() ? C.TOWN.rows : C.ROWS;
+  const n = COLS * ROWS;
   DMG = new Float32Array(n);
+  if (inTown()) return genTown();
+  const cs = CS();
   if (cs.world && cs.world.length === n) {
     T = Array.from(cs.world, ch => (ch === '.' ? null : CODE[ch] || null));
     SEEN = cs.seen && cs.seen.length === n ? Uint8Array.from(cs.seen, ch => Number(ch) || 0) : new Uint8Array(n);
     DECO = cs.deco && cs.deco.length === n ? Uint8Array.from(cs.deco, ch => Number(ch) || 0) : new Uint8Array(n);
-  } else genWorld();
+  } else genCave();
 }
-// Travel to another cave (from base). Upgrades, coins and cargo come with you.
-function switchCave(k) {
-  if (k === S.cave || k >= S.unlocked || station() !== 'base') return;
-  stashCave();
-  S.cave = k;
-  loadCave();
-  P.x = C.SPAWN.col + 0.5; P.y = C.SPAWN.row + 0.5; P.digging = [];
+function arrive(x, y, dir) {
+  P.x = x; P.y = y; P.dir = dir; P.digging = [];
   wobble.clear(); lastCell = -1; markSeen();
+  resizeMinimap(); resize();
   [camX, camY] = cameraTarget();
-  caveIntro();
+  travelSig = '';
   save(); updateUI();
 }
-function caveIntro() {
+// Walk through an open gate in town
+function enterCave(k) {
+  if (k >= S.unlocked) return;
+  S.cave = k;
+  loadArea();
+  arrive(C.SPAWN.col + 0.5, C.SPAWN.row + 0.5, 'up');
   const cv = cave();
-  if (!S.seenNotes.includes(cv.id)) { S.seenNotes.push(cv.id); toast('Cave ' + (S.cave + 1) + ': ' + cv.name, cv.note); }
-  else toast(null, 'Cave ' + (S.cave + 1) + ': ' + cv.name);
+  if (!S.seenNotes.includes(cv.id)) { S.seenNotes.push(cv.id); toast('Cave ' + (k + 1) + ': ' + cv.name, cv.note); }
+  else toast(null, 'Cave ' + (k + 1) + ': ' + cv.name);
+}
+// Walk out of a cave's exit door
+function goToTown() {
+  const from = S.cave;
+  stashCave();
+  S.cave = -1;
+  loadArea();
+  arrive(C.TOWN.gates[Math.max(0, from)] + 0.5, C.TOWN.gateRow - 1.5, 'down');
+  toast(null, 'Back in town.');
 }
