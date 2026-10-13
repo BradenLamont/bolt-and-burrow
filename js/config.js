@@ -52,19 +52,21 @@ const CONFIG = {
   //   chasms: { row, oldBridge, pads } — pads need this cave's bridge keys; one key cache per pad
   //   is hidden before the chasm · pits: small extra chasms · unstable: falling-rock chance
   //   caverns: open chambers · valueMult: ore value multiplier
+  //   sand: patches of sliding sand · boulders: rolling boulder chance · aquifers: hidden water pockets
+  //   gas: hidden gas pockets. Every cave slopes down toward its entrance, so sand and boulders move that way.
   CAVES: [
     { id: 'hollow', name: 'Topsoil Hollow', rock: ['dirt', 'clay'], floor: '#2a1e15',
       ores: { copper: 0.06, silver: 0.025 }, granite: 0.04, obsidian: 0, chasms: [], pits: 0, unstable: 0, caverns: 2,
-      valueMult: 1, relic: { name: 'Ember Idol', reward: 300, wall: null }, keyName: 'Hollow bridge key', coinMult: 1,
-      note: 'Soft soil and copper. Watch for granite: Rock Claws can\'t break it.' },
+      valueMult: 1, relic: { name: 'Ember Idol', reward: 300, wall: null }, keyName: 'Hollow bridge key', coinMult: 1, sand: 9,
+      note: 'Soft soil and copper. Pale sand slides toward the entrance when you dig the block in front of it. Rock Claws can\'t break granite.' },
     { id: 'rift', name: 'Granite Rift', rock: ['stone'], floor: '#211d1f',
       ores: { silver: 0.05, gold: 0.03 }, granite: 0.1, obsidian: 0.02, chasms: [{ row: 38, oldBridge: true, pads: 1 }], pits: 0, unstable: 0, caverns: 3,
-      valueMult: 2, relic: { name: 'Storm Lens', reward: 800, wall: 'granite' }, keyName: 'Rift bridge key', coinMult: 1.5,
-      note: 'A chasm splits this cave. Cross on the old bridge, or find the bridge key hidden before the chasm and use it on a bridge pad.' },
+      valueMult: 2, relic: { name: 'Storm Lens', reward: 800, wall: 'granite' }, keyName: 'Rift bridge key', coinMult: 1.5, boulders: 0.02, aquifers: 5,
+      note: 'A chasm splits this cave. Boulders roll toward the entrance, and dark wet rock hides water that floods your tunnels. Push boulders by walking into them.' },
     { id: 'deeps', name: 'Basalt Deeps', rock: ['basalt'], floor: '#1b1820',
       ores: { gold: 0.05, crystal: 0.025 }, granite: 0.06, obsidian: 0.07, chasms: [{ row: 36, oldBridge: false, pads: 2 }], pits: 3, unstable: 0.08, caverns: 3,
-      valueMult: 3.5, relic: { name: 'Core Heart', reward: 2000, wall: 'obsidian' }, keyName: 'Deeps bridge key', coinMult: 2,
-      note: 'No old bridge here: find this cave\'s bridge keys before the chasm. Unstable rock collapses as you pass and sets off the rock around it.' },
+      valueMult: 3.5, relic: { name: 'Core Heart', reward: 2000, wall: 'obsidian' }, keyName: 'Deeps bridge key', coinMult: 2, gas: 8,
+      note: 'No old bridge here: find this cave\'s bridge keys before the chasm. Unstable rock collapses as you pass, and green gas pockets explode if you dig next to them.' },
   ],
 
   // hp = how much digging a block takes; coin = coins for digging it (× the cave's coinMult);
@@ -96,6 +98,12 @@ const CONFIG = {
     counter: { hp: Infinity },                  // Pip's counter
     void:    { hp: Infinity },                  // nothing (outside the shop's walls)
     loose:   { hp: 3,   coin: 2, color: '#7a6d5e' },  // unstable rock (hazard)
+    sand:    { hp: 1.2, coin: 1, color: '#c9b07a' },  // slides toward the entrance into open space
+    boulder: { hp: 30,  coin: 3, color: '#8a8178' },  // rolls toward the entrance; push it by walking into it
+    aquifer: { hp: 3,   coin: 1, color: '#3d4a52' },  // wet rock: floods your tunnels when opened
+    water:   { hp: Infinity },                        // flood water (walkable, slows you)
+    gas:     { hp: 3,   coin: 1, color: '#4f5e3c' },  // a gas pocket: explodes if you dig next to it
+    beam:    { hp: Infinity },                        // a support beam you placed (walkable)
     rubble:  { hp: 1,   color: '#5d544b' },  // left behind by a cave-in
     copper:  { hp: 3,   coin: 1, value: 9,   ore: '#e08a42', label: 'copper' },
     silver:  { hp: 5,   coin: 1, value: 24,  ore: '#e2e6ea', label: 'silver' },
@@ -173,6 +181,28 @@ const CONFIG = {
   // ----- Recall (emergency exit) -----
   RECALL: { keepCargo: 0.5 }, // a manual recall keeps half your ore; a dead battery loses it all
 
+  // ----- Reactive blocks -----
+  REACT: {
+    sandSlide: 0.3,      // seconds before sand slides into an open space
+    boulderStart: 0.6,   // a boulder that comes loose rumbles this long before it rolls
+    boulderRoll: 0.14,   // seconds per block while a boulder rolls
+    pushTime: 0.3,       // seconds of pushing to shove a boulder one block
+    floodVolume: 10, floodStep: 0.2,   // blocks of water per pocket, seconds per block
+    waterSpeed: 0.55, waterDrain: 1.2, // speed while wading, extra battery per second
+    gasFuse: 0.9, gasRadius: 1, gasHit: 1.8,
+    hits: { sand: { battery: 0.05, cargo: 0 }, boulder: { battery: 0.15, cargo: 0.1 }, gas: { battery: 0.3, cargo: 0.3 } },
+  },
+
+  // ----- Tools (bought from Pip, carried on your tool belt) -----
+  // Each tool type takes one belt slot. Slots = beltSlots + your Tank tier. max = how many fit in a slot.
+  TOOLS: {
+    blast:   { name: 'Blast charge', cost: 40, max: 3, key: '1', text: 'Breaks a 3×3 area in front of you, even hard rock' },
+    beam:    { name: 'Support beam', cost: 15, max: 5, key: '2', text: 'Placed where you stand: sand and boulders can\'t move into it, and nearby unstable rock stays put' },
+    flare:   { name: 'Flare',        cost: 10, max: 5, key: '3', text: 'Lights up a wide area for 30 seconds', radius: 7, time: 30 },
+    grapple: { name: 'Grapple',      cost: 60, max: 2, key: '4', text: 'Face a chasm and swing across it (up to 3 blocks)' },
+  },
+  BELT_SLOTS: 3,
+
   // ----- Unstable rock hazard (only in caves with an `unstable` chance) -----
   // It starts shaking once two sides are dug open, or as soon as you pass within triggerRadius of
   // it with one side open. A collapse sets nearby unstable rock shaking too (a chain reaction).
@@ -195,6 +225,7 @@ const CONFIG = {
   // A grid of cells. The top row is the passive area; the bottom row is for active skills and
   // opens after the first town. Every mod is a fixed shape (no rotating): cells are [x, y] from its
   // top-left corner. Build a mod with materials and coins; upgrade it with Flux (levels 1–3).
+  // The active row opens when you bring home the Core Heart (the end of Town 1); it holds one skill at a time.
   // eff = its effect at each level.
   COMPUTER: { cols: 2, rows: 2, passiveRows: 1, upgradeFlux: [25, 75] },  // Flux per cell for level 2, level 3
   MODS: {
@@ -216,6 +247,15 @@ const CONFIG = {
                   eff: [3, 4, 5],          text: e => 'see ore through rock within ' + e + ' blocks' },
     overclock:  { name: 'Overclock',       shape: [[0, 0], [1, 0], [2, 0], [1, 1]], cost: { conductors: 2, lenses: 2 }, coins: 600,
                   eff: [0.25, 0.35, 0.45], text: e => '+' + pct(e) + ' dig speed, +10% battery use' },
+    // Active skills: they go in the bottom row (one at a time). eff = seconds for the nano-bot to recharge it.
+    dash:       { name: 'Dash',            shape: [[0, 0]], active: true, cost: { wire: 3, circuits: 1 }, coins: 150, battery: 3,
+                  eff: [8, 6, 4],          text: e => 'Burst 3 blocks forward · recharges in ' + e + ' s' },
+    burst:      { name: 'Drill Burst',     shape: [[0, 0]], active: true, cost: { circuits: 2, conductors: 1 }, coins: 250, battery: 5,
+                  eff: [20, 16, 12],       text: e => 'Triple dig speed for 4 s · recharges in ' + e + ' s' },
+    pulse:      { name: 'Scan Pulse',      shape: [[0, 0]], active: true, cost: { circuits: 2, lenses: 1 }, coins: 250, battery: 0,
+                  eff: [15, 12, 9],        text: e => 'Reveals ore, caches and hazards 8 blocks around · recharges in ' + e + ' s' },
+    shield:     { name: 'Shield',          shape: [[0, 0], [1, 0]], active: true, cost: { conductors: 2, lenses: 1 }, coins: 400, battery: 0,
+                  eff: [30, 25, 20],       text: e => 'Blocks the next cave-in, boulder or gas blast · recharges in ' + e + ' s' },
   },
 
   // ----- Nano-bots -----

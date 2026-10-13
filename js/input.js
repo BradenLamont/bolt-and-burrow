@@ -1,4 +1,4 @@
-// Bolt & Burrow — controls. Keyboard (arrows / WASD) and a touch joystick.
+// Bolt & Burrow — controls. Keyboard (arrows / WASD, E, Space/Q for the skill, 1–4 for tools) and a touch joystick.
 // Directions are screen directions: 'up' means up the screen, which is deeper into the cave.
 'use strict';
 
@@ -10,8 +10,12 @@ const horizDir = () => joyH || lastOf('left', 'right');
 const vertDir = () => joyV || lastOf('up', 'down');
 
 addEventListener('keydown', e => {
+  if (e.target.closest && e.target.closest('textarea, input')) return;   // typing a backup code
   const d = KEYMAP[e.code];
   if (d) { e.preventDefault(); if (!held.includes(d)) held.push(d); }
+  if ((e.code === 'Space' || e.code === 'KeyQ') && !e.repeat) { e.preventDefault(); useSkill(); updateUI(); }
+  const tool = TOOL_IDS.find(id => 'Digit' + C.TOOLS[id].key === e.code);
+  if (tool && !e.repeat) { useTool(tool); updateUI(); }
   if ((e.code === 'KeyE' || e.code === 'Enter') && !e.repeat && !(e.target.closest && e.target.closest('button'))) { e.preventDefault(); runAction(); }
 });
 addEventListener('keyup', e => { const d = KEYMAP[e.code]; if (d) { const i = held.indexOf(d); if (i >= 0) held.splice(i, 1); } });

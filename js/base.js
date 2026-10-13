@@ -24,7 +24,7 @@ function shopSpot() {
 function buyPart(slot) {
   const next = C.PARTS[slot].tiers[S.tiers[slot] + 1];
   if (shopSpot() !== 'stand-' + slot || !next || S.coins < next.cost) { if (next && S.coins < next.cost) toast(null, 'Pip: "Come back with ' + fmt(next.cost - S.coins) + ' more coins!"'); return; }
-  S.coins -= next.cost; S.tiers[slot]++;
+  S.coins -= next.cost; S.tiers[slot]++; sfx('buy');
   if (slot === 'body') P.battery = batteryMax();
   toast(null, next.name + ' installed. Pip: "Pleasure doing business!"'); save();
 }
@@ -37,7 +37,7 @@ function depositCargo() {
   if (!n) return;
   for (const [t, k] of Object.entries(S.cargo.items)) S.storage[t] = (S.storage[t] || 0) + k;
   S.cargo.items = {};
-  floatText(P.x, P.y + 0.6, '+' + n + ' ore home', '#e8a160');
+  floatText(P.x, P.y + 0.6, '+' + n + ' ore home', '#e8a160'); sfx('coin');
   toast(null, n + ' ore ' + (inTown() ? 'unloaded into the storage car.' : 'sent home along the conveyor to the train\'s storage car.'));
   hintOnce('storage', null, 'Ore isn\'t sold automatically any more. Sell it at the town SHOP, or refine it in the Forge car.');
 }
@@ -49,7 +49,7 @@ function sellItem(id, all) {
   if (!n) return;
   if (C.MATERIALS[id]) S.mats[id] -= n; else S.storage[id] -= n;
   const coins = n * itemValue(id);
-  S.coins += coins;
+  S.coins += coins; sfx('sell');
   toast(null, 'Sold ' + n + ' ' + itemName(id).toLowerCase() + ' for ' + fmt(coins) + ' coins.');
   save();
 }
@@ -65,7 +65,8 @@ function queueRecipe(id) {
   if (townSpot() !== 'forge' || S.forge.queue.length >= C.FORGE.queueMax || !canAfford(m.needs)) return;
   for (const [k, n] of Object.entries(m.needs)) S.storage[k] -= n;
   if (!S.forge.queue.length) S.forge.start = Date.now();
-  S.forge.queue.push(id);
+  S.forge.queue.push(id); sfx('click');
+  hintOnce('forge-queue', 'Forge', 'Jobs keep running while you\'re in a cave or the game is closed. Collect materials from the Storage car later.');
   save();
 }
 function updateForge() {
@@ -73,7 +74,7 @@ function updateForge() {
   let made = 0;
   while (q.length && now - S.forge.start >= recipeTime(q[0])) {
     S.forge.start += recipeTime(q[0]);
-    S.mats[q[0]]++; made++;
+    S.mats[q[0]]++; made++; sfx('ding');
     if (onTownMap()) floatText(carDoor('forge') + 0.5, C.TOWN.station.platformRow + 1.2, '+1 ' + C.MATERIALS[q[0]].name, C.MATERIALS[q[0]].color);
     q.shift();
   }
@@ -91,22 +92,24 @@ function modVal(id) {
   const lv = modLevel(id);
   return lv && placedMod(id) ? C.MODS[id].eff[lv - 1] : 0;
 }
-const activeOpen = () => false;   // the active row opens after the first town (not in this version)
+const activeOpen = () => S.caves[C.CAVES.length - 1].relicDone;   // the active row opens with the Core Heart (end of Town 1)
 const cellOpen = (x, y) => x >= 0 && y >= 0 && x < CP.cols && y < CP.rows && (y < CP.passiveRows || activeOpen());
 function modAt(x, y) {
   return S.grid.find(p => C.MODS[p.id].shape.some(([dx, dy]) => p.x + dx === x && p.y + dy === y));
 }
 // Can mod `id` go with its top-left corner at (x, y)? Ignores the mod's own current spot.
+// Passive mods go in the top row, skills in the bottom row
+const rowOk = (id, y) => (C.MODS[id].active ? y >= CP.passiveRows : y < CP.passiveRows);
 function fits(id, x, y) {
   return C.MODS[id].shape.every(([dx, dy]) => {
     const cx = x + dx, cy = y + dy, o = modAt(cx, cy);
-    return cellOpen(cx, cy) && (!o || o.id === id);
+    return cellOpen(cx, cy) && rowOk(id, cy) && (!o || o.id === id || (C.MODS[id].active && C.MODS[o.id].active));
   });
 }
 // Could it fit in an empty computer? (If not, it needs a bigger computer: expansions come later.)
 function fitsEmpty(id) {
   for (let y = 0; y < CP.rows; y++) for (let x = 0; x < CP.cols; x++)
-    if (C.MODS[id].shape.every(([dx, dy]) => cellOpen(x + dx, y + dy))) return true;
+    if (C.MODS[id].shape.every(([dx, dy]) => cellOpen(x + dx, y + dy) && rowOk(id, y + dy))) return true;
   return false;
 }
 // Could it fit anywhere in the computer as it is now (counting space it would free up)?
@@ -117,8 +120,9 @@ function fitsAnywhere(id) {
 function placeMod(id, x, y) {
   if (townSpot() !== 'lab' || !modLevel(id)) return false;
   if (!fits(id, x, y)) { toast(null, C.MODS[id].name + ' doesn\'t fit there.'); return false; }
-  S.grid = S.grid.filter(p => p.id !== id);
-  S.grid.push({ id, x, y });
+  S.grid = S.grid.filter(p => p.id !== id && !(C.MODS[id].active && C.MODS[p.id].active));   // one skill at a time
+  S.grid.push({ id, x, y }); sfx('click');
+  if (C.MODS[id].active) { S.skillCharge = 0; hintOnce('skill', C.MODS[id].name, 'Your nano-bot charges this skill. Use it in a cave with Space or Q, or the skill button.'); }
   if (P.battery > batteryMax()) P.battery = batteryMax();
   save(); return true;
 }
@@ -133,14 +137,14 @@ function buildMod(id) {
   const m = C.MODS[id];
   if (townSpot() !== 'lab' || modLevel(id) || !modCostOk(id)) return;
   for (const [k, n] of Object.entries(m.cost)) S.mats[k] -= n;
-  S.coins -= m.coins; S.mods[id] = 1;
-  toast(m.name + ' built', 'Tap it, then tap a cell in the computer to install it.' + (fitsEmpty(id) ? '' : ' It\'s too big for your computer right now. Expansions come later.'));
+  S.coins -= m.coins; S.mods[id] = 1; sfx('buy');
+  toast(m.name + ' built', 'Tap it, then tap a cell in the computer to install it.' + (m.active && !activeOpen() ? ' Skills go in the active row, which opens when you bring home the Core Heart.' : fitsEmpty(id) ? '' : ' It\'s too big for your computer right now. Expansions come later.'));
   save();
 }
 const upgradeCost = id => (modLevel(id) >= 3 ? 0 : CP.upgradeFlux[modLevel(id) - 1] * C.MODS[id].shape.length);
 function upgradeMod(id) {
   if (townSpot() !== 'lab' || !modLevel(id) || modLevel(id) >= 3 || S.flux < upgradeCost(id)) return;
-  S.flux -= upgradeCost(id); S.mods[id]++;
+  S.flux -= upgradeCost(id); S.mods[id]++; sfx('buy');
   toast(null, C.MODS[id].name + ' is now level ' + S.mods[id] + ': ' + C.MODS[id].text(C.MODS[id].eff[S.mods[id] - 1]) + '.');
   save();
 }

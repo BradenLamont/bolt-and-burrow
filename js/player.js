@@ -4,7 +4,7 @@
 'use strict';
 
 const HB = C.BODY / 2, EPS = 1e-4;
-const P = { x: C.SPAWN.col + 0.5, y: C.SPAWN.row + 0.5, battery: 0, face: 1, dir: 'up', digging: [], shake: 0, riding: false, warned: false };
+const P = { x: C.SPAWN.col + 0.5, y: C.SPAWN.row + 0.5, battery: 0, face: 1, dir: 'up', digging: [], shake: 0, riding: false, warned: false, burstT: 0, shield: false };
 const pCol = () => Math.floor(P.x);
 const pRow = () => Math.floor(P.y);
 
@@ -91,6 +91,8 @@ function claimRelic() {
   const next = C.CAVES[k + 1];
   if (next && S.unlocked < k + 2) S.unlocked = k + 2;
   let extra = '';
+  sfx('relic');
+  if (k === 2) extra = ' Town 1 is complete: the active row of your computer is open. Build a skill in the Lab car!';
   if (k === 0 && !S.bots) { S.bots = 1; extra = ' A nano-bot was sealed inside it! It now makes Flux for your computer, even while you\'re away.'; }
   toast(cv.relic.name + ' recovered!', 'You claimed ' + fmt(cv.relic.reward) + ' coins. ' +
     (next ? 'Its pedestal in town now glows, and the gate to Cave ' + (k + 2) + ', ' + next.name + ', is open.' : 'You\'ve cleared every cave in this version. More are coming.') + extra);
@@ -104,6 +106,7 @@ function breakBlock(c, r) {
   T[i] = null; DMG[i] = 0;
   const B = C.BLOCKS[t];
   burst(c + 0.5, r + 0.5, B.ore || B.color || (t === 'relic' ? '#c9a2ff' : C.BLOCKS[baseFor(c, r)].color), t === 'relic' ? 30 : 10);
+  sfx(B.value || t === 'relic' || t === 'cache' || t === 'keycache' ? 'ore' : 'break');
   // every block pays a few coins (more for hard rock and deeper caves)
   if (B.coin) {
     const coins = Math.max(1, Math.round(B.coin * cave().coinMult * (1 + modVal('prospector'))));
@@ -158,7 +161,7 @@ function dig(c, r, dt) {
   if (!t) return;
   if (C.BLOCKS[t].hp === Infinity) {
     if (t === 'bedrock') hintOnce('bedrock', null, 'Bedrock. You can\'t dig through the cave walls.');
-    else if (t === 'chasm') hintOnce('chasm', 'Chasm', 'Too wide to cross. Find the old bridge, or stand on a bridge pad to deploy one.');
+    else if (t === 'chasm') hintOnce('chasm', 'Chasm', 'Too wide to cross. Find the old bridge, stand on a bridge pad to deploy one, or use a grapple from Pip.');
     else if (t === 'found' || t === 'post' || t === 'shopwall' || t === 'stand' || t === 'counter') hintOnce('build', null, 'Buildings can\'t be dug.');
     else if (t === 'gatelocked') {
       const k = C.TOWN.gates.indexOf(c);
@@ -170,7 +173,10 @@ function dig(c, r, dt) {
   if (S.tiers.arms < needs) { tooHard(c, r, t); return; }
   const i = idx(c, r);
   const hard = t === 'granite' || t === 'obsidian' ? 1 + modVal('hardrock') : 1;
-  DMG[i] += digPower() * hard * C.DIG_RATE * dt;
+  const burstMult = P.burstT > 0 ? 3 : 1;   // the Drill Burst skill
+  DMG[i] += digPower() * hard * burstMult * C.DIG_RATE * dt;
+  touchGas(c, r);   // digging next to a gas pocket lights it
+  sfx('dig');
   P.digging.push({ c, r });
   if (Math.random() < dt * 18) burst(c + 0.5, r + 0.5, C.BLOCKS[t].color || C.BLOCKS[baseFor(c, r)].color, 1);
   if (DMG[i] >= C.BLOCKS[t].hp) { breakBlock(c, r); drain(C.BATTERY.dig * drainMult()); }
@@ -179,10 +185,10 @@ function dig(c, r, dt) {
 function digEdge(axis, dir, dt) {
   if (axis === 'x') {
     const c = Math.floor(dir > 0 ? P.x + HB + 0.02 : P.x - HB - 0.02);
-    for (let r = Math.floor(P.y - HB + EPS); r <= Math.floor(P.y + HB - EPS); r++) if (solidAt(c, r)) dig(c, r, dt);
+    for (let r = Math.floor(P.y - HB + EPS); r <= Math.floor(P.y + HB - EPS); r++) if (solidAt(c, r) && !(at(c, r) === 'boulder' && tryPush(c, r, dir, 0, dt))) dig(c, r, dt);
   } else {
     const r = Math.floor(dir > 0 ? P.y + HB + 0.02 : P.y - HB - 0.02);
-    for (let c = Math.floor(P.x - HB + EPS); c <= Math.floor(P.x + HB - EPS); c++) if (solidAt(c, r)) dig(c, r, dt);
+    for (let c = Math.floor(P.x - HB + EPS); c <= Math.floor(P.x + HB - EPS); c++) if (solidAt(c, r) && !(at(c, r) === 'boulder' && tryPush(c, r, 0, dir, dt))) dig(c, r, dt);
   }
 }
 
@@ -224,7 +230,9 @@ function updatePlayer(dt) {
   }
   if (!dx && !dy) { finishMove(); return; }
 
-  const sp = legs().speed;
+  const wet = at(pCol(), pRow()) === 'water';   // wading through flood water
+  if (wet && !station() && drain(C.REACT.waterDrain * dt)) return;
+  const sp = legs().speed * (wet ? C.REACT.waterSpeed : 1);
   const len = Math.hypot(dx, dy), vx = dx / len * sp, vy = dy / len * sp;
   if (dx && !dy) align('y', dt);
   if (dy && !dx) align('x', dt);

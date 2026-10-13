@@ -3,11 +3,12 @@
 
 let prev = performance.now(), uiT = 0, saveT = 0;
 function frame(now) {
-  const dt = Math.min(0.05, (now - prev) / 1000); prev = now; time += dt;
+  const dt = Math.max(0, Math.min(0.05, (now - prev) / 1000)); prev = now; time += dt;
   depositAndCharge(dt);
   updatePlayer(dt);
   updateRocks(dt);
   updateBots(dt);
+  updateSkills(dt);
   if (updateForge()) updateUI();
   updateEffects(dt);
   render(dt);

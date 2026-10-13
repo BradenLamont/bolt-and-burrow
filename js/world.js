@@ -139,6 +139,23 @@ function genCave() {
     if (c === BELT || T[idx(c, r)] !== baseFor(c, r)) continue;
     T[idx(c, r)] = 'cache'; n++;
   }
+  // 5b. Reactive blocks: sand patches, boulders, water pockets and gas pockets (only in plain rock,
+  //     away from the conveyor path, the chasm and the relic chamber)
+  const plain = (c, r) => c > 0 && c < COLS - 1 && Math.abs(c - BELT) > 1 && r >= 7 && r < C.RELIC.row - 4 &&
+    !chasmRows.some(h => r >= h - 2 && r <= h + 3) && T[idx(c, r)] === baseFor(c, r);
+  for (let n = 0; n < (cv.sand || 0); n++) {
+    const pr = randInt(7, C.RELIC.row - 6), pc = randInt(2, COLS - 3), rx = randInt(1, 2), ry = randInt(1, 2);
+    for (let r = pr - ry; r <= pr + ry; r++) for (let c = pc - rx; c <= pc + rx; c++)
+      if (plain(c, r) && ((c - pc) / (rx + 0.5)) ** 2 + ((r - pr) / (ry + 0.5)) ** 2 <= 1) T[idx(c, r)] = 'sand';
+  }
+  if (cv.boulders) for (let r = 7; r < C.RELIC.row - 4; r++) for (let c = 1; c < COLS - 1; c++)
+    if (plain(c, r) && Math.random() < cv.boulders) T[idx(c, r)] = 'boulder';
+  for (const [type, count] of [['aquifer', cv.aquifers || 0], ['gas', cv.gas || 0]])
+    for (let n = 0, tries = 0; n < count && tries < 300; tries++) {
+      const r = randInt(9, C.RELIC.row - 5), c = randInt(2, COLS - 3);
+      if (!plain(c, r)) continue;
+      T[idx(c, r)] = type; n++;
+    }
   // 6. The entrance outpost and exit door, outposts and the relic
   const B = C.BASE_BUILDING;
   for (let r = B.rows[0]; r <= B.rows[1]; r++) for (let c = B.cols[0]; c <= B.cols[1]; c++) T[idx(c, r)] = 'found';
@@ -207,7 +224,7 @@ function loadArea() {
 }
 function arrive(x, y, dir) {
   P.x = x; P.y = y; P.dir = dir; P.digging = [];
-  wobble.clear(); lastCell = -1; markSeen();
+  clearHazards(); flares.length = 0; lastCell = -1; markSeen();
   resizeMinimap(); resize();
   [camX, camY] = cameraTarget();
   save(); updateUI();
@@ -215,6 +232,7 @@ function arrive(x, y, dir) {
 // Walk through an open gate in town
 function enterCave(k) {
   if (k >= S.unlocked) return;
+  sfx('door');
   S.cave = k;
   loadArea();
   arrive(C.SPAWN.col + 0.5, C.SPAWN.row + 0.5, 'up');
@@ -224,6 +242,7 @@ function enterCave(k) {
 }
 // Walk out of a cave's exit door
 function goToTown() {
+  sfx('door');
   const from = S.cave;
   stashCave();
   S.cave = -1;
@@ -233,12 +252,14 @@ function goToTown() {
 }
 // Walk through the SHOP door in town, and back out again
 function enterShop() {
+  sfx('door');
   S.cave = -2;
   loadArea();
   arrive(C.SHOP.door + 0.5, 1.5, 'up');
   hintOnce('shop', 'Pip\'s shop', 'Walk up to a display stand to look at parts, or to Pip at the counter to sell ore and materials.');
 }
 function leaveShop() {
+  sfx('door');
   S.cave = -1;
   loadArea();
   arrive(C.TOWN.shop.door + 0.5, C.TOWN.shop.rows[0] - 0.5, 'down');

@@ -13,11 +13,12 @@ const $ = id => document.getElementById(id);
 // World cells are saved as one character each ('.' = open floor)
 const CODE = { d: 'dirt', c: 'clay', e: 'stone', b: 'basalt', l: 'loose', r: 'rubble', o: 'copper', s: 'silver', g: 'gold', k: 'crystal',
   f: 'fossil', q: 'relic', n: 'found', t: 'post', x: 'bedrock', G: 'granite', O: 'obsidian', h: 'cache', K: 'keycache', v: 'chasm', B: 'bridge', w: 'oldbridge', p: 'pad',
-  E: 'exit', A: 'gate', L: 'gatelocked', Q: 'cliff', Y: 'tree', D: 'pedestal', R: 'rail' };
+  E: 'exit', A: 'gate', L: 'gatelocked', Q: 'cliff', Y: 'tree', D: 'pedestal', R: 'rail',
+  z: 'sand', U: 'boulder', a: 'aquifer', W: 'water', y: 'gas', m: 'beam' };
 const CHAR = Object.fromEntries(Object.entries(CODE).map(([k, v]) => [v, k]));
 const ORES = new Set(['copper', 'silver', 'gold', 'crystal']);
 // Tiles you can walk on even though they aren't empty
-const WALKABLE = new Set(['bridge', 'oldbridge', 'pad', 'exit', 'gate', 'shopdoor']);
+const WALKABLE = new Set(['bridge', 'oldbridge', 'pad', 'exit', 'gate', 'shopdoor', 'water', 'beam']);
 
 const freshCave = () => ({ world: null, seen: null, deco: null, outposts: 0, relicDone: false });
 const ORE_LIST = ['copper', 'silver', 'gold', 'crystal'];
@@ -33,6 +34,10 @@ const freshState = () => ({
   grid: [],                     // mods placed in the computer: [{ id, x, y }]
   flux: 0,
   bots: 0,                      // nano-bots (the first comes with the Ember Idol)
+  tools: {},                    // tools on your belt: { blast: 2 }
+  skillCharge: 0,               // 0–1: how charged your active skill is
+  hints: [],                    // first-time hints already shown
+  ver: 9,                       // save layout version
   cave: -1,                     // where you are: -1 = town, -2 = inside Pip's shop, 0–2 = a cave
   unlocked: 1,                  // how many cave gates are open
   keys: C.CAVES.map(() => 0),   // bridge keys held for each cave (they only work in their own cave)
@@ -51,7 +56,11 @@ let isNewGame = true, migrated = false;
 
 try {
   const raw = localStorage.getItem(SAVE_KEY);
-  if (raw) { S = Object.assign(freshState(), JSON.parse(raw)); isNewGame = false; }
+  if (raw) {
+    S = Object.assign(freshState(), JSON.parse(raw)); isNewGame = false;
+    // v0.9 added sand, boulders, water and gas: rebuild cave layouts once (progress is kept)
+    if ((S.ver || 8) < 9) { S.caves.forEach(c => { c.world = c.seen = c.deco = null; }); S.ver = 9; S.pos = null; }
+  }
 } catch (e) { /* storage unavailable: play without saving */ }
 while (S.caves.length < C.CAVES.length) S.caves.push(freshCave());
 while (S.keys.length < C.CAVES.length) S.keys.push(0);
@@ -69,7 +78,9 @@ function stashCave() {
   cs.seen = SEEN.join('');
   cs.deco = DECO.join('');
 }
+let noSave = false;   // set while loading a backup, so the old game doesn't overwrite it
 function save() {
+  if (noSave) return;
   S.last = Date.now();
   stashCave();
   S.pos = { x: P.x, y: P.y, battery: P.battery };

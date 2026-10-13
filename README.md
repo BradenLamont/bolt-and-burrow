@@ -7,6 +7,8 @@ A browser mining game: steer a robot with swappable parts down through the earth
 ## Controls
 - Desktop: arrow keys or WASD to move. Push into blocks to dig them (standing between two blocks digs both). Up goes deeper into the cave. Stand on the conveyor and hold Up or Down to ride it. E (or the action button) uses a bridge pad or boards the train. Walk into an open gate in town to enter a cave; walk out the TOWN door to leave. In town, walk through the SHOP door to go inside, or stand at a train car's door to use it.
 - Computer (Lab car): tap a mod, then tap a cell. With a mouse you can also drag mods onto the grid.
+- Space or Q: use your active skill. 1–4: use tools from your belt (or tap the buttons by Recall).
+- Sound on/off button by Recall. Backup button at the bottom of the left panel.
 - Phone: touch and drag anywhere on the cave for a joystick.
 - Recall button: emergency trip back to the cave entrance, keeping half your ore.
 
@@ -15,9 +17,11 @@ A browser mining game: steer a robot with swappable parts down through the earth
 - `css/style.css` – look and layout
 - `js/config.js` – every balance number (part stats, costs, blocks, conveyor, relic, materials, mods, nano-bots)
 - `js/state.js` – shared game state, saving, helpers
+- `js/sound.js` – sound effects (made in code, no sound files) and mute
 - `js/world.js` – the town and the three caves: generation, conveyor and outposts, chasms and bridges, caches, relic chambers, moving between town and caves
 - `js/player.js` – walker movement, digging and hard rock, battery, caches, bridge pads, recall, fast travel
-- `js/hazards.js` – unstable rock cave-ins
+- `js/hazards.js` – unstable rock, sand, boulders, flood water and gas pockets
+- `js/gear.js` – the tool belt and active skills
 - `js/base.js` – the train base: storage, shop, forge, computer and mods, nano-bots
 - `js/walker.js` – the Canopy Walker mech (every part, every facing, walk and dig animation)
 - `js/render.js` – drawing the cave, town, train, effects, the minimap and the nano-bot window
@@ -115,6 +119,15 @@ A browser mining game: steer a robot with swappable parts down through the earth
 - Sell ore and materials to Pip at the counter
 - Ore and materials are worth about 50% more, so selling ore beats block coins again
 
+## v0.9 – tools, reactive blocks and skills
+- Caves slope toward their entrance. Cave 1 has sand that slides, Cave 2 has boulders that roll (walk into one to push it) and water pockets that flood your tunnels, and Cave 3 has gas pockets that explode if you dig next to them
+- Pip sells tools at the counter for your belt: blast charge, support beam, flare and grapple. 3 belt slots, +1 per Tank upgrade. Keys 1–4 or the on-screen buttons
+- Active skills: Dash, Drill Burst, Scan Pulse and Shield. They go in the computer's bottom row, which opens when you bring home the Core Heart. One at a time; the nano-bot recharges it. Space or Q to use
+- Sound effects with a mute button
+- First-time hints for every new place and system, remembered with your save
+- Save backup: make a code or download a file, and load either one back
+- Cave layouts rebuild once so the new blocks appear (your progress is kept)
+
 ## The plan (agreed October 2026)
 
 ### v0.8 – the train base, materials and the computer (done)
@@ -138,7 +151,7 @@ A browser mining game: steer a robot with swappable parts down through the earth
   - Flux upgrades mods, buys nano-bot slots, powers the computer, and installs expansion slots
 - Old saves are not carried over for this update
 
-### v0.9 – tools, reactive blocks and active skills
+### v0.9 – tools, reactive blocks and active skills (done)
 - Reactive blocks: falling sand, rolling boulders, flooding water, gas pockets
 - Tools you buy and carry: blast charges, support beams, flares, grapple
 - Fragile and special ore (crystal that shatters with strong tools, "hot" ore, heavy cargo)

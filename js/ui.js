@@ -101,7 +101,7 @@ function computerGrid() {
   }
   return `<div class="computer">
     <div class="grid" style="grid-template-columns:repeat(${CPc.cols},1fr)">${cells}</div>
-    <div class="legend"><span><i class="lg open"></i>Passive</span><span><i class="lg locked"></i>Active · opens after Town 1</span>
+    <div class="legend"><span><i class="lg open"></i>Passive mods (top row)</span><span><i class="lg ${activeOpen() ? 'open' : 'locked'}"></i>${activeOpen() ? 'Active skill (bottom row, one at a time)' : 'Active skill · opens with the Core Heart'}</span>
     <p>${selMod ? 'Now tap a cell for <b>' + C.MODS[selMod].name + '</b> (its top-left corner goes there).' : 'Tap a mod, then a cell. On a computer you can also drag it.'}</p></div>
   </div>`;
 }
@@ -122,15 +122,41 @@ function modRows() {
       status = 'Build: ' + haveText(m.cost) + ' · ' + fmt(m.coins) + ' coins';
       btns = `<button type="button" data-act="build" data-id="${id}" ${modCostOk(id) ? '' : 'disabled'}>Build</button>`;
     } else {
-      status = placed ? 'Installed' : !fitsEmpty(id) ? 'Too big for your computer for now' : fitsAnywhere(id) ? 'Not installed · tap to pick it up' : 'No room · remove a mod to make space';
+      status = placed ? 'Installed' : m.active && !activeOpen() ? 'Skill · the active row opens with the Core Heart' : !fitsEmpty(id) ? 'Too big for your computer for now' : fitsAnywhere(id) ? 'Not installed · tap to pick it up' : 'No room · remove a mod to make space';
       btns = lv >= 3 ? '<button type="button" disabled>Max level</button>'
         : `<button type="button" data-act="upgrade" data-id="${id}" ${S.flux >= upgradeCost(id) ? '' : 'disabled'}>Lv ${lv + 1} · ${upgradeCost(id)} Flux</button>`;
       if (placed) btns += `<button type="button" data-act="remove" data-id="${id}">Remove</button>`;
     }
     const cls = ['mod', lv ? 'owned' : '', id === selMod ? 'sel' : '', placed ? 'placed' : ''].join(' ');
     return `<div class="${cls}" ${lv ? `data-act="select" data-id="${id}" draggable="true" data-mod="${id}"` : ''}>
-      ${shapeMini(id)}<div><strong>${m.name}${lv ? ' · Lv ' + lv : ''}</strong><span>${eff}</span><small>${status}</small></div><div class="mod-btns">${btns}</div></div>`;
+      ${shapeMini(id)}<div><strong>${m.name}${lv ? ' · Lv ' + lv : ''}${m.active ? ' <em class="tag">skill</em>' : ''}</strong><span>${eff}</span><small>${status}</small></div><div class="mod-btns">${btns}</div></div>`;
   }).join('') + '</div>';
+}
+
+function toolRows() {
+  return '<div class="rows">' + TOOL_IDS.map(id => {
+    const t = C.TOOLS[id], n = S.tools[id] || 0, full = !n && beltTypes().length >= beltSlots();
+    return `<div class="row"><div><small>Key ${t.key} · ${fmt(t.cost)} coins · ${n}/${t.max} on belt</small><strong>${t.name}</strong><span>${t.text}.</span></div>
+      <div class="mod-btns"><button type="button" data-act="tool" data-id="${id}" ${n >= t.max || full || S.coins < t.cost ? 'disabled' : ''}>${full ? 'Belt full' : 'Buy'}</button>${n ? `<button type="button" data-act="untool" data-id="${id}">Put back</button>` : ''}</div></div>`;
+  }).join('') + '</div>';
+}
+// Save backup: a code you can copy somewhere safe, or a file
+let backupCode = '', panelOverride = null;
+const encodeSave = () => btoa(unescape(encodeURIComponent(JSON.stringify(S))));
+function backupView() {
+  return `<p class="note">Your progress lives in this browser. Make a backup code and keep it somewhere safe (a note, an email to yourself), or download it as a file. To restore, paste a code or choose a file.</p>
+    <div class="row"><div><small>Back up</small><span>${backupCode ? 'Code made. Copy all of it.' : 'Makes a code from your current progress.'}</span></div><div class="mod-btns"><button type="button" data-act="mkcode">Make code</button><button type="button" data-act="dlsave">Download file</button></div></div>
+    ${backupCode ? `<textarea class="code" readonly>${backupCode}</textarea>` : ''}
+    <div class="row"><div><small>Restore</small><span>Paste a backup code below, or choose a backup file. This replaces your current progress.</span></div><div class="mod-btns"><button type="button" data-act="loadsave">Load code</button><label class="filebtn">Choose file<input type="file" id="saveFile" accept=".json,.txt,application/json,text/plain" hidden></label></div></div>
+    <textarea class="code" id="importCode" placeholder="Paste a backup code here"></textarea>
+    <button type="button" class="back" data-act="closebackup">Back to the game panel</button>`;
+}
+function loadSaveText(text) {
+  let o;
+  try { const t = text.trim(); o = JSON.parse(t.startsWith('{') ? t : decodeURIComponent(escape(atob(t)))); } catch (e) { return toast(null, 'That doesn\'t look like a Bolt & Burrow backup.'); }
+  if (!o || !o.tiers || !Array.isArray(o.caves)) return toast(null, 'That doesn\'t look like a Bolt & Burrow backup.');
+  try { noSave = true; localStorage.setItem(SAVE_KEY, JSON.stringify(o)); } catch (e) { noSave = false; return toast(null, 'Couldn\'t save in this browser.'); }
+  location.reload();
 }
 
 const PANEL = {
@@ -138,8 +164,11 @@ const PANEL = {
     '<small class="sub">In storage</small>' + itemList([...ORE_LIST, ...MAT_LIST], { empty: 'Storage is empty. Ore you bring to any outpost ends up here.' })],
   shopfloor: () => ['Pip\'s shop', 'Inside', '<p class="note">Walk up to a <b>display stand</b> to look at a part, or to <b>Pip</b> at the counter to sell. The door at the bottom leads back to town.</p>' + partsSummary()],
   stand: () => { const slot = shopSpot().slice(6); return [C.PARTS[slot].label + ' stand', C.PARTS[slot].stat, standRows(slot)]; },
-  counter: () => ['Pip\'s counter', 'Selling', '<p class="note pip">Pip: "Ore and materials straight from your storage car? I\'ll take them!"</p>' +
+  counter: () => ['Pip\'s counter', 'Tools and trading', '<p class="note pip">Pip: "Tools for the road, and I\'ll buy whatever you dug up!"</p>' +
+    '<small class="sub">Tool belt · ' + beltTypes().length + '/' + beltSlots() + ' slots</small>' + toolRows() +
+    '<small class="sub">Sell from storage</small>' +
     itemList([...ORE_LIST, ...MAT_LIST], { sell: true, empty: 'Nothing to sell. Ore you bring home is kept in the storage car until you sell or refine it.' })],
+  backup: () => ['Save backup', 'Copy or load', backupView()],
   engine: () => ['Engine car', 'Coming later', '<p class="note">The engine will take the whole train, forge and lab included, to the next town once that line opens. Press E or tap Board train to have a look.</p>'],
   forge: () => ['Forge car', 'Queue ' + S.forge.queue.length + '/' + C.FORGE.queueMax, forgeRows()],
   lab: () => ['Lab car', '<span data-live="flux"></span>', computerGrid() + modRows()],
@@ -152,7 +181,7 @@ const PANEL = {
 
 let panelHTML = '', titleSig = '';
 function renderPanel() {
-  const [title, chip, body] = PANEL[panelMode()]();
+  const [title, chip, body] = PANEL[panelOverride || panelMode()]();
   if (title + chip !== titleSig) { titleSig = title + chip; $('panelTitle').textContent = title; $('shopState').innerHTML = chip; }
   $('shopState').classList.toggle('open', panelMode() !== 'cargo');
   if (body !== panelHTML && !dragging) { panelHTML = body; $('panelBody').innerHTML = body; }
@@ -166,6 +195,18 @@ $('panelBody').addEventListener('click', e => {
   const b = e.target.closest('[data-act]'); if (!b || b.disabled) return;
   const id = b.dataset.id, act = b.dataset.act;
   if (act === 'buy') buyPart(id);
+  if (act === 'tool') buyTool(id);
+  if (act === 'untool') returnTool(id);
+  if (act === 'mkcode') { save(); backupCode = encodeSave(); }
+  if (act === 'dlsave') {
+    save();
+    const a = document.createElement('a'), d = new Date();
+    a.href = URL.createObjectURL(new Blob([JSON.stringify(S)], { type: 'application/json' }));
+    a.download = 'bolt-burrow-save-' + d.toISOString().slice(0, 10) + '.json';
+    document.body.appendChild(a); a.click(); a.remove();
+  }
+  if (act === 'loadsave') loadSaveText($('importCode').value);
+  if (act === 'closebackup') { panelOverride = null; backupCode = ''; }
   if (act === 'sell' || act === 'sellall') sellItem(id, act === 'sellall');
   if (act === 'refine') queueRecipe(id);
   if (act === 'build') buildMod(id);
@@ -186,6 +227,15 @@ $('panelBody').addEventListener('click', e => {
   if (act === 'travel') travelTo(Number(id));
   updateUI();
 });
+$('panelBody').addEventListener('change', e => {
+  if (e.target.id !== 'saveFile' || !e.target.files[0]) return;
+  e.target.files[0].text().then(loadSaveText);
+});
+$('backup').addEventListener('click', () => { panelOverride = panelOverride ? null : 'backup'; backupCode = ''; updateUI(); });
+$('mute').addEventListener('click', () => { toggleMute(); updateUI(); });
+$('skill').addEventListener('click', () => { useSkill(); updateUI(); });
+$('belt').addEventListener('click', e => { const b = e.target.closest('[data-tool]'); if (b) { useTool(b.dataset.tool); updateUI(); } });
+
 // Drag and drop (mouse): drag a mod onto a cell
 $('panelBody').addEventListener('dragstart', e => {
   const m = e.target.closest('[data-mod]'); if (!m) return;
@@ -247,6 +297,31 @@ function updateUI() {
 
   if (panelMode() !== 'lab') selMod = null;
   renderPanel();
+  // first visits to each part of the base
+  const spot = panelMode();
+  const FIRST = {
+    forge: ['Forge car', 'Refine ore from storage into materials. Mixed recipes need more than one kind of ore.'],
+    lab: ['Lab car', 'Build mods with materials and coins, then place them in the computer. Each mod has a fixed shape.'],
+    storage: ['Storage car', 'Everything you send home ends up here. Sell it at Pip\'s counter or refine it in the Forge car.'],
+    engine: ['Engine car', 'The line to the next town opens in a future update.'],
+    stand: ['Display stand', 'Each stand shows every tier of one part. Buy the next tier with the button or press E.'],
+    counter: ['Pip\'s counter', 'Buy tools for your belt and sell ore and materials from storage.'],
+  };
+  if (FIRST[spot]) hintOnce('visit-' + spot, ...FIRST[spot]);
+
+  // tool belt and skill button (caves only)
+  const inCave = !inTown();
+  const beltHtml = inCave ? beltTypes().map(id => `<button type="button" data-tool="${id}" title="${C.TOOLS[id].text}">${C.TOOLS[id].key} · ${C.TOOLS[id].name} ×${S.tools[id]}</button>`).join('') : '';
+  if ($('belt').innerHTML !== beltHtml) $('belt').innerHTML = beltHtml;
+  const sk = activeSkill();
+  $('skill').hidden = !sk || !inCave;
+  if (sk) {
+    $('skill').classList.toggle('ready', S.skillCharge >= 1);
+    $('skillName').textContent = C.MODS[sk].name;
+    $('skillBar').style.width = (S.skillCharge * 100) + '%';
+  }
+  $('mute').textContent = muted ? 'Sound off' : 'Sound on';
+  $('mute').classList.toggle('off', muted);
 
   // context action (bridge pads, the engine car)
   const act = actionHere(), ab = $('action');
@@ -269,4 +344,8 @@ function toast(title, msg) {
   t.hidden = false;
   clearTimeout(toastTimer); toastTimer = setTimeout(() => (t.hidden = true), title ? 4200 : 2600);
 }
-function hintOnce(key, title, msg) { if (hinted.has(key)) return; hinted.add(key); toast(title, msg); }
+// First-time hints are remembered with your save, so each one shows once
+function hintOnce(key, title, msg) {
+  if (hinted.has(key) || S.hints.includes(key)) return;
+  hinted.add(key); S.hints.push(key); toast(title, msg);
+}

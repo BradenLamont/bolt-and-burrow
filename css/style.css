@@ -59,6 +59,7 @@ body { margin: 0; font-family: var(--body); font-size: 14px; line-height: 1.45; 
   display: flex; gap: 12px; align-items: center; justify-content: space-between;
   pointer-events: none;
 }
+.controls { flex-wrap: wrap; }
 .controls p { margin: 0; color: var(--muted); font-size: .72rem; background: rgba(11, 8, 6, .7); padding: 3px 8px; border-radius: 3px; }
 @media (pointer: coarse) { .keys { display: none; } }
 @media (pointer: fine) { .touch { display: none; } }
@@ -71,6 +72,15 @@ button:focus-visible { outline: 2px solid var(--crystal); outline-offset: 2px; }
   background: rgba(33, 25, 19, .9); color: var(--muted); font-size: .78rem;
 }
 #recall.armed { border-color: var(--danger); color: var(--danger); }
+#mute { padding: 8px 10px; border-radius: 4px; border: 2px solid var(--line); background: rgba(33, 25, 19, .9); color: var(--muted); font-size: .72rem; }
+#mute.off { text-decoration: line-through; }
+.belt { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.belt button { padding: 6px 9px; border-radius: 4px; border: 1px solid var(--line); background: rgba(33, 25, 19, .9); color: var(--fg); font-size: .72rem; }
+#skill { display: grid; gap: 3px; padding: 6px 12px; border-radius: 4px; border: 2px solid var(--line); background: rgba(33, 25, 19, .92); color: var(--muted); font-family: var(--display); font-size: .95rem; min-width: 96px; }
+#skill[hidden] { display: none; }
+#skill i { display: block; height: 4px; background: #0b0806; border-radius: 2px; overflow: hidden; }
+#skill b { display: block; height: 100%; width: 0; background: var(--crystal); }
+#skill.ready { border-color: var(--crystal); color: var(--fg); }
 
 /* Minimap: top right, under the coins */
 .minimap {
@@ -139,6 +149,14 @@ button:focus-visible { outline: 2px solid var(--crystal); outline-offset: 2px; }
 .mod-btns button:disabled { border-color: var(--line); color: var(--muted); cursor: default; }
 .pbar { height: 6px; margin: 4px 0; background: #0b0806; border: 1px solid var(--line); border-radius: 2px; overflow: hidden; }
 .pbar i { display: block; height: 100%; width: 0; background: var(--copper); }
+
+/* Backup */
+.code { width: 100%; min-height: 70px; background: #0b0806; color: var(--fg); border: 1px solid var(--line); border-radius: 4px; font: .7rem var(--body); padding: 6px; resize: vertical; word-break: break-all; }
+.filebtn { padding: 4px 8px; border-radius: 4px; border: 1px solid var(--copper); color: var(--copper); font-size: .7rem; cursor: pointer; text-align: center; }
+.back { align-self: flex-start; padding: 5px 10px; border-radius: 4px; border: 1px solid var(--line); background: none; color: var(--muted); font-size: .75rem; }
+.foot-btns { display: flex; gap: 6px; }
+#backup { background: none; border: 1px solid var(--line); border-radius: 4px; padding: 3px 9px; font-size: .7rem; color: var(--muted); }
+.tag { font-style: normal; font-size: .62rem; color: var(--crystal); border: 1px solid var(--crystal); border-radius: 3px; padding: 0 4px; margin-left: 4px; }
 
 /* Computer (Lab car) */
 .computer { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }

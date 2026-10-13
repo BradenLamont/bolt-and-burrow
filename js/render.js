@@ -76,6 +76,8 @@ function drawFloor(c, r, x, y, s) {
   g.fillStyle = town && !path ? 'rgba(120,150,80,.25)' : 'rgba(255,230,200,.05)';
   g.fillRect(x + s * (0.2 + hash(c, r, 3) * 0.5), y + s * (0.2 + hash(c, r, 4) * 0.5), s * 0.1, s * 0.1);
   if (t === 'exit') drawExit(x, y, s);
+  if (t === 'water') drawWater(c, r, x, y, s);
+  if (t === 'beam') drawBeam(x, y, s);
   if (t === 'gate') { g.fillStyle = '#120d0a'; g.fillRect(x + s * 0.12, y, s * 0.76, s); }
   if (!town && DECO[idx(c, r)] && hash(c, r, 11) < 0.35) drawStalagmite(c, r, x, y, s);
   if (t === 'pad') drawPad(c, r, x, y, s);
@@ -163,6 +165,33 @@ function drawBelt(x, y, s) {
   }
 }
 
+// A boulder: a big round rock sitting on the floor (rolls toward the entrance)
+function drawBoulder(c, r, x, y, s, W) {
+  const cx = x + s * 0.5, cy = y + s * 0.5 - W * 0.6, rad = s * 0.46;
+  g.fillStyle = 'rgba(0,0,0,.35)'; g.beginPath(); g.ellipse(cx, y + s * 0.82, rad * 0.95, rad * 0.35, 0, 0, 7); g.fill();
+  g.fillStyle = C.BLOCKS.boulder.color; g.beginPath(); g.arc(cx, cy, rad, 0, 7); g.fill();
+  g.fillStyle = 'rgba(0,0,0,.25)'; g.beginPath(); g.arc(cx + rad * 0.15, cy + rad * 0.2, rad * 0.8, 0, 7); g.fill();
+  g.fillStyle = C.BLOCKS.boulder.color; g.beginPath(); g.arc(cx - rad * 0.08, cy - rad * 0.08, rad * 0.78, 0, 7); g.fill();
+  g.fillStyle = 'rgba(255,240,220,.18)'; g.beginPath(); g.arc(cx - rad * 0.35, cy - rad * 0.35, rad * 0.22, 0, 7); g.fill();
+  g.strokeStyle = 'rgba(40,30,25,.5)'; g.lineWidth = Math.max(1, s * 0.03);
+  g.beginPath(); g.moveTo(cx - rad * 0.1, cy - rad * 0.5); g.lineTo(cx + rad * 0.05, cy); g.lineTo(cx + rad * 0.4, cy + rad * 0.2); g.stroke();
+  const d = DMG[idx(c, r)] / C.BLOCKS.boulder.hp;
+  if (d > 0) { g.strokeStyle = 'rgba(10,6,3,' + (0.3 + d * 0.6) + ')'; g.beginPath(); g.moveTo(cx - rad * 0.5, cy + rad * 0.1); g.lineTo(cx - rad * 0.1, cy + rad * 0.3); g.lineTo(cx + rad * 0.1, cy + rad * 0.7); g.stroke(); }
+}
+// Flood water and support beams (both walkable)
+function drawWater(c, r, x, y, s) {
+  g.fillStyle = 'rgba(40,90,130,.78)'; g.fillRect(x, y, s, s);
+  g.strokeStyle = 'rgba(170,220,250,.35)'; g.lineWidth = 1;
+  for (let k = 0; k < 2; k++) {
+    const yy = y + s * (0.3 + k * 0.4) + Math.sin(time * 2 + c + k) * s * 0.05;
+    g.beginPath(); g.moveTo(x + s * 0.1, yy); g.quadraticCurveTo(x + s * 0.5, yy - s * 0.08, x + s * 0.9, yy); g.stroke();
+  }
+}
+function drawBeam(x, y, s) {
+  g.strokeStyle = '#8a6a44'; g.lineWidth = Math.max(3, s * 0.12); g.lineCap = 'round';
+  g.beginPath(); g.moveTo(x + s * 0.15, y + s * 0.15); g.lineTo(x + s * 0.85, y + s * 0.85); g.moveTo(x + s * 0.85, y + s * 0.15); g.lineTo(x + s * 0.15, y + s * 0.85); g.stroke();
+  g.lineCap = 'butt'; g.strokeStyle = '#5a3f2a'; g.lineWidth = Math.max(2, s * 0.06); g.strokeRect(x + s * 0.1, y + s * 0.1, s * 0.8, s * 0.8);
+}
 function drawWall(t, c, r, x, y, s, W) {
   const i = idx(c, r), seen = SEEN[i];
   if (t === 'tree') return drawTree(c, r, x, y, s, W);
@@ -171,7 +200,8 @@ function drawWall(t, c, r, x, y, s, W) {
   if (t === 'void') return;
   if (t === 'stand') return drawStand(c, r, x, y, s, W);
   if (t === 'counter') return drawCounter(c, r, x, y, s, W);
-  const hidden = t === 'cache' ? seen !== 2 : (ORES.has(t) || t === 'fossil' || t === 'relic' || t === 'keycache') && !seen;
+  if (t === 'boulder') return drawBoulder(c, r, x, y, s, W);
+  const hidden = t === 'cache' ? seen !== 2 : (ORES.has(t) || t === 'fossil' || t === 'relic' || t === 'keycache' || t === 'gas' || t === 'aquifer') && !seen;
   const look = hidden ? baseFor(c, r) : t;
   const base = C.BLOCKS[look].color || C.BLOCKS[baseFor(c, r)].color;
   const ty = y - W; // top face
@@ -229,6 +259,22 @@ function drawWall(t, c, r, x, y, s, W) {
     g.fillStyle = C.BLOCKS[t].ore;
     const q = Math.max(2, s * 0.12);
     for (let k = 0; k < 5; k++) g.fillRect(x + s * 0.15 + hash(c, r, k * 3) * (s * 0.7 - q), ty + s * 0.15 + hash(r, c, k * 7) * (s * 0.7 - q), q, q);
+  }
+  if (look === 'sand') {   // fine grains and ripples
+    g.fillStyle = 'rgba(90,70,40,.25)';
+    for (let k = 0; k < 6; k++) g.fillRect(x + s * (0.1 + hash(c, r, k + 60) * 0.8), ty + s * (0.1 + hash(r, c, k + 60) * 0.8), 2, 2);
+    g.strokeStyle = 'rgba(255,245,220,.25)'; g.lineWidth = 1;
+    g.beginPath(); g.moveTo(x + s * 0.15, ty + s * 0.4); g.quadraticCurveTo(x + s * 0.5, ty + s * 0.3, x + s * 0.85, ty + s * 0.42); g.stroke();
+  }
+  if (look === 'aquifer') {   // wet rock with water seeping out
+    g.fillStyle = 'rgba(120,180,220,.35)';
+    for (let k = 0; k < 3; k++) { const dx = x + s * (0.2 + hash(c, r, k + 70) * 0.6), ph = (time * 0.7 + hash(c, k, 71)) % 1; g.beginPath(); g.arc(dx, ty + s * (0.25 + ph * 0.55), s * 0.05, 0, 7); g.fill(); }
+    g.strokeStyle = 'rgba(160,210,240,.4)'; g.lineWidth = Math.max(1, s * 0.03); g.strokeRect(x + s * 0.08, ty + s * 0.08, s * 0.84, s * 0.84);
+  }
+  if (look === 'gas') {   // greenish rock with bubbles; flashes once lit
+    const lit = fuses.has(i);
+    g.fillStyle = lit && Math.sin(time * 40) > 0 ? 'rgba(220,255,160,.6)' : 'rgba(160,210,110,.35)';
+    for (let k = 0; k < 5; k++) { g.beginPath(); g.arc(x + s * (0.2 + hash(c, r, k + 80) * 0.6), ty + s * (0.2 + hash(r, c, k + 80) * 0.6), s * (0.05 + hash(k, c, 81) * 0.06), 0, 7); g.fill(); }
   }
   if (!hidden && t === 'fossil') {
     g.strokeStyle = '#eadfc4'; g.lineWidth = Math.max(2, s * 0.1); g.lineCap = 'round';
@@ -359,6 +405,7 @@ function drawTrain(X, Y, s, W) {
   g.fillStyle = '#d9813b'; g.font = '500 ' + Math.round(s * 0.13) + 'px "IBM Plex Mono", monospace';
   g.fillText('STAND AT A DOOR', sx + s * 0.5, sy + s * 0.3);
 }
+const fogCv = document.createElement('canvas');
 // ---------- Pip's shop ----------
 function drawShopFloor(c, r, x, y, s) {
   const t = at(c, r);
@@ -487,7 +534,7 @@ function render(dt) {
   const blocked = new Set(beltBlocked());
 
   // Pass 1: all floor tiles first, so floor never paints over the walker's feet
-  for (let r = rTop; r >= rBot; r--) for (let c = c0; c <= c1; c++) { const t = at(c, r); if (isFloor(t) || t === 'chasm' || t === 'tree' || t === 'pedestal') drawFloor(c, r, X(c), Y(r + 1), s); }
+  for (let r = rTop; r >= rBot; r--) for (let c = c0; c <= c1; c++) { const t = at(c, r); if (isFloor(t) || t === 'chasm' || t === 'tree' || t === 'pedestal' || t === 'boulder') drawFloor(c, r, X(c), Y(r + 1), s); }
   // Pass 2: walls, buildings and the walker, top of screen to bottom.
   // The walker is drawn with the row its feet stand in, so only walls in front of it overlap it.
   const walkerRow = Math.floor(P.y - HB + 0.01);
@@ -496,7 +543,7 @@ function render(dt) {
     for (let c = c0; c <= c1; c++) {
       const t = at(c, r);
       if (isFloor(t) || t === 'chasm' || t === 'found' || t === 'post') continue;
-      const w = wobble.get(idx(c, r));
+      const w = wobble.get(idx(c, r)) || (t === 'boulder' && moveT.get(idx(c, r)) > 0 && !rolling.has(idx(c, r)));
       drawWall(t, c, r, X(c) + (w ? Math.sin(time * 60) * s * 0.06 : 0), y, s, W);
       if (c === BELT && blocked.has(r)) { // conveyor path still to dig
         g.setLineDash([4, 4]); g.strokeStyle = 'rgba(217,129,59,.6)'; g.lineWidth = 1.5;
@@ -534,10 +581,23 @@ function render(dt) {
   if (caveEdge > 0) {
     const px = X(P.x), py = Y(P.y);
     g.save(); g.beginPath(); g.rect(0, 0, VW, Math.min(VH, caveEdge)); g.clip();
-    const R = lightRadius() * s;
-    const fog = g.createRadialGradient(px, py, R * 0.5, px, py, R * 1.1);
-    fog.addColorStop(0, 'rgba(8,5,3,0)'); fog.addColorStop(1, 'rgba(8,5,3,.94)');
-    g.fillStyle = fog; g.fillRect(0, 0, VW, VH);
+    // the dark is drawn on its own layer, with holes cut out for your light and any flares
+    if (fogCv.width !== cv.width || fogCv.height !== cv.height) { fogCv.width = cv.width; fogCv.height = cv.height; }
+    const f = fogCv.getContext('2d'), dpr = cv.width / VW;
+    f.setTransform(dpr, 0, 0, dpr, 0, 0); f.globalCompositeOperation = 'source-over';
+    f.clearRect(0, 0, VW, VH); f.fillStyle = 'rgba(8,5,3,.94)'; f.fillRect(0, 0, VW, VH);
+    f.globalCompositeOperation = 'destination-out';
+    const hole = (hx, hy, R) => {
+      const gr = f.createRadialGradient(hx, hy, R * 0.5, hx, hy, R * 1.1);
+      gr.addColorStop(0, 'rgba(0,0,0,1)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
+      f.fillStyle = gr; f.fillRect(hx - R * 1.2, hy - R * 1.2, R * 2.4, R * 2.4);
+    };
+    hole(px, py, lightRadius() * s);
+    flares.forEach(fl => hole(X(fl.x), Y(fl.y), C.TOOLS.flare.radius * s * Math.min(1, fl.t / 3)));
+    g.drawImage(fogCv, 0, 0, VW, VH);
+    flares.forEach(fl => { // the flare itself
+      g.fillStyle = 'rgba(255,120,80,' + (0.6 + Math.sin(time * 20) * 0.3) + ')'; g.beginPath(); g.arc(X(fl.x), Y(fl.y), s * 0.12, 0, 7); g.fill();
+    });
     for (let k2 = 1; k2 <= outpostCount(); k2++) { // outposts keep a lamp lit
       const oy = Y(outpostRow(k2) + 0.5), ox2 = X(BELT + 1);
       if (oy < -s * 3 || oy > VH + s * 3) continue;
@@ -566,6 +626,19 @@ function render(dt) {
       }
     }
     g.restore();
+  }
+
+  // skill effects: scan pulse rings, the shield bubble and the drill-burst glow
+  pulses.forEach(pl => {
+    g.strokeStyle = 'rgba(134,207,220,' + (1 - pl.t) + ')'; g.lineWidth = 3;
+    g.beginPath(); g.arc(X(pl.x), Y(pl.y), pl.t * 8 * s, 0, 7); g.stroke();
+  });
+  if (P.shield) {
+    g.strokeStyle = 'rgba(134,207,220,' + (0.5 + Math.sin(time * 5) * 0.2) + ')'; g.lineWidth = 2;
+    g.fillStyle = 'rgba(134,207,220,.08)'; g.beginPath(); g.arc(X(P.x), Y(P.y) - s * 0.1, s * 0.75, 0, 7); g.fill(); g.stroke();
+  }
+  if (P.burstT > 0) {
+    g.fillStyle = 'rgba(242,201,76,' + (0.15 + Math.sin(time * 30) * 0.08) + ')'; g.beginPath(); g.arc(X(P.x), Y(P.y), s * 0.85, 0, 7); g.fill();
   }
 
   g.textAlign = 'center'; g.font = '600 ' + Math.max(11, Math.round(s * 0.28)) + 'px "IBM Plex Mono", monospace';
@@ -601,6 +674,7 @@ function renderMinimap(dt) {
     if (r < BASE_ROWS) col = isFloor(t) ? '#3c4a2c' : '#4b4038';
     else if (t === 'chasm') col = '#000';
     else if (t === 'bridge' || t === 'oldbridge') col = '#a77d48';
+    else if (t === 'water') col = '#3d6f96';
     else if (isFloor(t)) col = '#9a7a58';
     else if (t === 'granite') col = '#8c8286';
     else if (t === 'obsidian') col = '#3a2d48';
