@@ -160,7 +160,7 @@ function loadSaveText(text) {
 }
 
 const PANEL = {
-  town: () => [TOWN().name, 'Town ' + (S.town + 1), `<p class="note">${TOWN().shop ? 'Walk through the <b>SHOP</b> door to buy parts and sell.' : 'Pip hasn\'t opened a shop here yet: buy and sell back in Hollowmouth.'} Stand at a train car's door (the marked platform tiles) to use the <b>Forge</b>, <b>Lab</b> or <b>Storage</b>.</p>` +
+  town: () => [TOWN().name, 'Town ' + (S.town + 1), `<p class="note">${TOWN().shop ? 'Walk through the big door of <b>Pip\'s shop</b> to buy parts and sell.' : 'Pip hasn\'t opened a shop here yet: buy and sell back in Hollowmouth.'} Stand at a train car's door (the marked platform tiles) to use the <b>Forge</b>, <b>Lab</b> or <b>Storage</b>.</p>` +
     '<small class="sub">In storage</small>' + itemList([...ORE_LIST, ...MAT_LIST], { empty: 'Storage is empty. Ore you bring to any outpost ends up here.' })],
   shopfloor: () => ['Pip\'s shop', 'Inside', '<p class="note">Walk up to a <b>display stand</b> to look at a part, or to <b>Pip</b> at the counter to sell. The door at the bottom leads back to town.</p>' + partsSummary()],
   stand: () => { const slot = shopSpot().slice(6); return [C.PARTS[slot].label + ' stand', C.PARTS[slot].stat, standRows(slot)]; },

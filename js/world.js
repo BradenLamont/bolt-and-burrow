@@ -185,7 +185,7 @@ function genTown() {
   TW.gates.forEach((g, k) => { T[idx(g, TW.gateRow)] = gateOpen(k) ? 'gate' : 'gatelocked'; });
   const b = TW.shop;
   for (let r = b.rows[0]; r <= b.rows[1]; r++) for (let c = b.cols[0]; c <= b.cols[1]; c++) T[idx(c, r)] = 'found';
-  if (TN.shop) T[idx(b.door, b.rows[0])] = 'shopdoor';   // Rustvale's building is still closed
+  if (TN.shop) for (let k = 0; k < b.doorW; k++) T[idx(b.door + k, b.rows[0])] = 'shopdoor';   // the shop's wide door
   TW.trees.forEach(([c, r]) => { T[idx(c, r)] = 'tree'; });
   if (TN.pedestals) TW.pedestals.forEach(c => { T[idx(c, TW.pedestalRow)] = 'pedestal'; });
   // train station: tracks across the bottom row, a stone platform above them (DECO 3)
@@ -197,7 +197,7 @@ function genTown() {
   const pathRow = TW.gateRow - 2;
   for (let c = TW.gates[0]; c <= TW.gates[2]; c++) DECO[idx(c, pathRow)] = 2;
   TW.gates.forEach(g => { for (let r = pathRow; r < TW.gateRow; r++) DECO[idx(g, r)] = 2; });
-  DECO[idx(b.door, b.rows[0] - 1)] = 2;   // a doorstep in front of the shop
+  for (let k = 0; k < b.doorW; k++) DECO[idx(b.door + k, b.rows[0] - 1)] = 2;   // a doorstep in front of the shop
 }
 
 // ---------- Pip's shop (inside the SHOP building) ----------
@@ -211,7 +211,7 @@ function genShop() {
     const edge = c === c0 - 1 || c === c1 + 1 || r === 0 || r === ROWS - 1;
     T[idx(c, r)] = edge ? 'shopwall' : null;
   }
-  T[idx(SH.door, 0)] = 'shopdoor';
+  for (let k = 0; k < SH.doorW; k++) T[idx(SH.door + k, 0)] = 'shopdoor';
   for (let c = c0; c <= c1; c++) T[idx(c, SH.counterRow)] = 'counter';
   SH.stands.forEach(st => { T[idx(st.col, st.row)] = 'stand'; });
 }
@@ -263,12 +263,12 @@ function enterShop() {
   sfx('door');
   S.cave = -2;
   loadArea();
-  arrive(C.SHOP.door + 0.5, 1.5, 'up');
-  hintOnce('shop', 'Pip\'s shop', 'Walk up to a display stand to look at parts, or to Pip at the counter to sell ore and materials.');
+  arrive(C.SHOP.door + C.SHOP.doorW / 2, 1.5, 'up');
+  hintOnce('shop', TOWN().shop === 'garage' ? 'Pip\'s Salvage Garage' : 'Pip\'s Burrow Workshop', 'Walk up to a display stand to look at parts, or to Pip at the counter to sell ore and materials.');
 }
 function leaveShop() {
   sfx('door');
   S.cave = -1;
   loadArea();
-  arrive(C.TOWN.shop.door + 0.5, C.TOWN.shop.rows[0] - 0.5, 'down');
+  arrive(C.TOWN.shop.door + C.TOWN.shop.doorW / 2, C.TOWN.shop.rows[0] - 0.5, 'down');
 }

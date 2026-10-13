@@ -22,7 +22,7 @@ const CONFIG = {
     rows: 12,
     gates: [5, 12, 19],                          // gate columns for caves 1, 2, 3 (in the cliff at gateRow)
     gateRow: 10,
-    shop: { cols: [2, 6], rows: [3, 4], label: 'SHOP', door: 5 },   // walk through the door to go inside
+    shop: { cols: [2, 6], rows: [3, 4], label: 'SHOP', door: 4, doorW: 2 },   // a 2-block door (cols 4–5): walk into it to go inside
     pedestals: [4, 11, 18], pedestalRow: 9,      // a relic pedestal beside each cave's gate (left side)
     trees: [[1, 8], [23, 8], [8, 7], [16, 7], [23, 5], [1, 5], [19, 4], [21, 3], [17, 5]],
     spawn: { col: 12, row: 5 },
@@ -38,11 +38,12 @@ const CONFIG = {
 
   // ----- Towns on the train line -----
   // Every town uses the TOWN layout above; each has its own name, colours and caves behind its gates
-  // (gates: a cave number, or null for a sealed "coming soon" gate). Town 2 is a placeholder for testing travel.
+  // (gates: a cave number, or null for a sealed "coming soon" gate). shop: Pip's shop style there
+  // ('burrow' = Burrow Workshop, 'garage' = Salvage Garage). Town 2 is a placeholder for testing travel.
   TOWNS: [
-    { name: 'Hollowmouth', gates: [0, 1, 2], shop: true, pedestals: true,
+    { name: 'Hollowmouth', gates: [0, 1, 2], shop: 'burrow', pedestals: true,
       look: { grass: '#3c4a2c', grassDot: 'rgba(120,150,80,.25)', path: '#7a6248', cliff: '#4a4038' } },
-    { name: 'Rustvale', gates: [3, null, null], shop: false, pedestals: false, placeholder: true,
+    { name: 'Rustvale', gates: [3, null, null], shop: 'garage', pedestals: false, placeholder: true,
       look: { grass: '#4d4230', grassDot: 'rgba(190,150,90,.22)', path: '#86684a', cliff: '#5a4334' } },
   ],
   // The train trip: seconds for each part of boarding, the drilling scene and unloading
@@ -53,7 +54,7 @@ const CONFIG = {
   // A small room: walk up to a display stand to buy that part, or to Pip at the counter to sell.
   // Rows count up from the door (row 0). cols: the room's inside, between its side walls.
   SHOP: {
-    rows: 9, cols: [7, 17], door: 12, counterRow: 6, pipRow: 7,
+    rows: 9, cols: [7, 17], door: 12, doorW: 2, counterRow: 6, pipRow: 7,
     stands: [ { slot: 'head', col: 7, row: 4 }, { slot: 'arms', col: 7, row: 2 },
               { slot: 'body', col: 17, row: 4 }, { slot: 'legs', col: 17, row: 2 } ],
   },

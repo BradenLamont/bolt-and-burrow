@@ -137,6 +137,12 @@ A browser mining game: steer a robot with swappable parts down through the earth
 - Your whole train comes with you, so the forge, lab and storage work in both towns
 - New sounds for the doors, the crane, the drill and arriving; town names on the platform sign and in the HUD
 
+## v0.10.1 – Pip's two shops
+- Hollowmouth: the Burrow Workshop, a grassy mound with a round 2-block double door, chimney, round window and lanterns. Inside: a dirt floor, a round rug, lanterns, pegboard displays and a tree-stump counter
+- Rustvale: the Salvage Garage, corrugated metal with a 2-block roller door, a glowing PIP'S SALVAGE sign and a roof gantry. Inside: steel floor plates, a mech lift with robot arms, steel shelves and a workbench counter (Pip wears a hard hat)
+- Both shop doors are 2 blocks wide, outside and in, so they're easy to walk into
+- Rustvale now has a shop, so you can buy and sell in both towns
+
 ## The plan (agreed October 2026)
 
 ### v0.8 – the train base, materials and the computer (done)

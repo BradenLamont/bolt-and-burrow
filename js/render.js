@@ -49,7 +49,7 @@ new ResizeObserver(resize).observe($('botView'));
 function cameraTarget() {
   const s = CELL, worldW = COLS * s;
   const tx = worldW <= VW ? (worldW - VW) / 2 : Math.max(0, Math.min(worldW - VW, P.x * s - VW / 2));
-  if (inShop()) return [(C.SHOP.door + 0.5) * s - VW / 2, -(padTop + (VH - padTop - padBot - ROWS * s) / 2) + s * 0.25];
+  if (inShop()) return [(C.SHOP.door + C.SHOP.doorW / 2) * s - VW / 2, -(padTop + (VH - padTop - padBot - ROWS * s) / 2) + s * 0.25];
   if (inTown()) return [tx, -(padTop + (VH - padTop - padBot - ROWS * s) / 2) + s * 0.25];   // the whole town fits between the HUD and controls
   let ty = (ROWS - P.y) * s - VH * 0.55;
   ty = Math.min(ty, ROWS * s - VH + s * 1.4);   // room under the bottom row for the controls
@@ -204,7 +204,7 @@ function drawWall(t, c, r, x, y, s, W) {
   if (t === 'boulder') return drawBoulder(c, r, x, y, s, W);
   const hidden = t === 'cache' ? seen !== 2 : (ORES.has(t) || t === 'fossil' || t === 'relic' || t === 'keycache' || t === 'gas' || t === 'aquifer') && !seen;
   const look = hidden ? baseFor(c, r) : t;
-  const base = look === 'cliff' && inTown() ? TOWN().look.cliff : C.BLOCKS[look].color || C.BLOCKS[baseFor(c, r)].color;
+  const base = look === 'shopwall' ? (garageShop() ? '#3B3F46' : '#3d2b1f') : look === 'cliff' && inTown() ? TOWN().look.cliff : C.BLOCKS[look].color || C.BLOCKS[baseFor(c, r)].color;
   const ty = y - W; // top face
   const front = at(c, r - 1);
   if (isFloor(front) || front === 'chasm') { // front face, where open floor lies in front (below on screen)
@@ -551,16 +551,34 @@ function drawTravel() {
 }
 const fogCv = document.createElement('canvas');
 // ---------- Pip's shop ----------
+// Pip runs a different shop in each town: the Burrow Workshop (dirt floor, lanterns) in Hollowmouth,
+// and the Salvage Garage (steel floor, a mech lift) in Rustvale.
+const garageShop = () => TOWN().shop === 'garage';
 function drawShopFloor(c, r, x, y, s) {
-  const t = at(c, r);
-  g.fillStyle = (Math.floor(c / 1) + r) % 2 ? '#5a4232' : '#614836'; g.fillRect(x, y, s, s);          // wooden boards
-  g.fillStyle = 'rgba(0,0,0,.18)'; g.fillRect(x, y + s * 0.5, s, 1); g.fillRect(x + s * (hash(c, r, 7) * 0.8), y, 1, s * 0.5);
-  if (r >= C.SHOP.pipRow) { g.fillStyle = '#3e2e23'; g.fillRect(x, y, s, s); }                     // behind the counter
+  const t = at(c, r), SH = C.SHOP, gar = garageShop();
+  if (gar) {
+    g.fillStyle = (c + r) % 2 ? '#4A5059' : '#4f555e'; g.fillRect(x, y, s, s);                          // steel floor plates
+    g.fillStyle = '#6d737c'; g.fillRect(x + 3, y + 3, 2, 2); g.fillRect(x + s - 5, y + s - 5, 2, 2);
+    // the mech lift in the middle of the floor, with a hazard border
+    const L = c >= SH.door && c < SH.door + SH.doorW && r >= 2 && r <= 4;
+    if (L) {
+      g.fillStyle = '#3B3F46'; g.fillRect(x, y, s, s);
+      g.strokeStyle = '#E8B33A'; g.lineWidth = Math.max(2, s * 0.08); g.setLineDash([6, 5]); g.beginPath();
+      if (c === SH.door) { g.moveTo(x + 2, y); g.lineTo(x + 2, y + s); }
+      if (c === SH.door + SH.doorW - 1) { g.moveTo(x + s - 2, y); g.lineTo(x + s - 2, y + s); }
+      if (r === 4) { g.moveTo(x, y + 2); g.lineTo(x + s, y + 2); }
+      if (r === 2) { g.moveTo(x, y + s - 2); g.lineTo(x + s, y + s - 2); }
+      g.stroke(); g.setLineDash([]);
+    }
+  } else {
+    g.fillStyle = '#5a4232'; g.fillRect(x, y, s, s);                                                      // packed dirt
+    g.fillStyle = '#6e5440'; for (let k = 0; k < 3; k++) g.fillRect(x + s * hash(c, r, k + 20), y + s * hash(r, c, k + 21), 3, 3);
+  }
+  if (r >= SH.pipRow) { g.fillStyle = gar ? '#2f3238' : '#3e2e23'; g.fillRect(x, y, s, s); }             // behind the counter
   if (t === 'shopdoor') {
-    g.fillStyle = '#16110d'; g.fillRect(x + s * 0.1, y + s * 0.55, s * 0.8, s * 0.45);                 // the way out
-    g.fillStyle = '#8a3b2a'; g.fillRect(x + s * 0.12, y + s * 0.1, s * 0.76, s * 0.4);                 // doormat
-    g.fillStyle = '#efe3d3'; g.font = '700 ' + Math.round(s * 0.17) + 'px "Pixelify Sans", monospace'; g.textAlign = 'center';
-    g.fillText('TOWN', x + s * 0.5, y + s * 0.37);
+    if (gar) { g.fillStyle = '#8E96A0'; g.fillRect(x, y + s * 0.5, s, s * 0.5); g.fillStyle = '#5D646E'; for (let k = 0; k < 3; k++) g.fillRect(x, y + s * (0.58 + k * 0.13), s, 2); g.fillStyle = '#E8B33A'; g.fillRect(x, y + s * 0.44, s, s * 0.06); }
+    else { g.fillStyle = '#0b0806'; g.beginPath(); g.ellipse(x + (c === SH.door ? s : 0), y + s, s * 0.95, s * 0.5, 0, Math.PI, 0); g.fill(); }
+    if (c === SH.door + SH.doorW - 1) { g.fillStyle = '#efe3d3'; g.font = '700 ' + Math.round(s * 0.2) + 'px "Pixelify Sans", monospace'; g.textAlign = 'center'; g.fillText('TOWN', x + s - SH.doorW * s / 2, y + s * 0.35); }   // drawn on the last door tile so nothing paints over it
   }
   const st = C.SHOP.stands.find(k => k.row === r && Math.abs(k.col - c) === 1);
   if (st && shopSpot() === 'stand-' + st.slot) { g.strokeStyle = 'rgba(239,227,211,.6)'; g.lineWidth = 1.5; g.strokeRect(x + 3, y + 3, s - 6, s - 6); }
@@ -569,8 +587,11 @@ function drawShopFloor(c, r, x, y, s) {
 const STAND_ICON = { head: '#86cfdc', arms: '#a8a39c', body: '#d9813b', legs: '#7a756f' };
 function drawStand(c, r, x, y, s, W) {
   const st = C.SHOP.stands.find(k => k.col === c && k.row === r), slot = st.slot, ty = y - W;
-  g.fillStyle = '#2a1f17'; g.fillRect(x + s * 0.08, y + s - W, s * 0.84, W);                            // front
-  g.fillStyle = '#6a5038'; g.fillRect(x + s * 0.08, ty + s * 0.1, s * 0.84, s * 0.8);                     // table top
+  const gar = garageShop();
+  g.fillStyle = gar ? '#2f3238' : '#2a1f17'; g.fillRect(x + s * 0.08, y + s - W, s * 0.84, W);            // front
+  g.fillStyle = gar ? '#5D646E' : '#7a5538'; g.fillRect(x + s * 0.08, ty + s * 0.1, s * 0.84, s * 0.8);   // steel shelf or pegboard
+  if (gar) { g.fillStyle = '#E8B33A'; g.fillRect(x + s * 0.08, ty + s * 0.1, s * 0.84, s * 0.05); }
+  else { g.fillStyle = 'rgba(0,0,0,.25)'; for (let a = 0; a < 3; a++) for (let b = 0; b < 3; b++) g.fillRect(x + s * (0.22 + a * 0.28), ty + s * (0.2 + b * 0.25), 2, 2); }
   g.fillStyle = 'rgba(0,0,0,.25)'; g.beginPath(); g.ellipse(x + s * 0.5, ty + s * 0.62, s * 0.3, s * 0.1, 0, 0, 7); g.fill();
   const cx = x + s * 0.5, cy = ty + s * 0.42, k = s * 0.22, col = STAND_ICON[slot];
   g.fillStyle = col; g.strokeStyle = '#16110d'; g.lineWidth = 1.5;
@@ -585,24 +606,122 @@ function drawStand(c, r, x, y, s, W) {
 }
 function drawCounter(c, r, x, y, s, W) {
   const ty = y - W;
-  g.fillStyle = '#4a2f1e'; g.fillRect(x, y + s - W, s, W);                                             // front panel
-  g.fillStyle = '#7a5538'; g.fillRect(x, ty, s, s);                                                    // counter top
-  g.fillStyle = 'rgba(255,255,255,.06)'; g.fillRect(x, ty + s * 0.2, s, 2);
-  if (c === C.SHOP.door - 2) { g.fillStyle = '#f2c94c'; for (let k = 0; k < 3; k++) { g.beginPath(); g.ellipse(x + s * 0.5, ty + s * (0.6 - k * 0.09), s * 0.16, s * 0.07, 0, 0, 7); g.fill(); } } // a stack of coins
-  if (c === C.SHOP.door + 2) { g.fillStyle = '#5b5753'; g.fillRect(x + s * 0.25, ty + s * 0.35, s * 0.5, s * 0.35); g.fillStyle = '#e08a42'; g.fillRect(x + s * 0.3, ty + s * 0.4, s * 0.12, s * 0.1); } // a scale with ore
+  if (garageShop()) {   // a steel workbench with hazard stripes
+    g.fillStyle = '#3B3F46'; g.fillRect(x, y + s - W, s, W);
+    g.fillStyle = '#E8B33A'; for (let k = 0; k < 3; k++) g.fillRect(x + k * s / 3, y + s - W * 0.6, s / 6, W * 0.4);
+    g.fillStyle = '#6d737c'; g.fillRect(x, ty, s, s);
+    g.fillStyle = 'rgba(255,255,255,.08)'; g.fillRect(x, ty + s * 0.2, s, 2);
+    if (c === C.SHOP.door + 4) { g.fillStyle = '#0d2a33'; g.fillRect(x + s * 0.15, ty + s * 0.15, s * 0.7, s * 0.45); g.fillStyle = 'rgba(134,207,220,.7)'; g.fillRect(x + s * 0.22, ty + s * 0.25, s * 0.4, 2); g.fillRect(x + s * 0.22, ty + s * 0.35, s * 0.3, 2); }
+  } else {   // a big tree-stump counter: wood with growth rings
+    g.fillStyle = '#6a4a30'; g.fillRect(x, y + s - W, s, W);
+    g.fillStyle = '#8a6440'; g.fillRect(x, ty, s, s);
+    g.strokeStyle = '#6a4a30'; g.lineWidth = 1.5;
+    g.beginPath(); g.ellipse(x + s * 0.5, ty + s * 0.5, s * 0.36, s * 0.22, 0, 0, 7); g.stroke();
+    g.beginPath(); g.ellipse(x + s * 0.5, ty + s * 0.5, s * 0.16, s * 0.1, 0, 0, 7); g.stroke();
+  }
+  if (c === C.SHOP.door - 1) { g.fillStyle = '#f2c94c'; for (let k = 0; k < 3; k++) { g.beginPath(); g.ellipse(x + s * 0.5, ty + s * (0.6 - k * 0.09), s * 0.16, s * 0.07, 0, 0, 7); g.fill(); } } // a stack of coins
+  if (c === C.SHOP.door + 3) { g.fillStyle = '#5b5753'; g.fillRect(x + s * 0.25, ty + s * 0.35, s * 0.5, s * 0.35); g.fillStyle = '#e08a42'; g.fillRect(x + s * 0.3, ty + s * 0.4, s * 0.12, s * 0.1); } // a scale with ore
 }
 // Pip the Mole, the shopkeeper, behind the counter
 function drawPip(x, y, s, W) {
   const cx = x + s * 0.5, cy = y + s * 0.55 - W + Math.sin(time * 2) * s * 0.02;
   g.fillStyle = '#5a463a'; g.beginPath(); g.ellipse(cx, cy, s * 0.42, s * 0.5, 0, 0, 7); g.fill();           // body
-  g.fillStyle = '#d9813b'; g.beginPath(); g.ellipse(cx, cy + s * 0.18, s * 0.28, s * 0.28, 0, 0, Math.PI); g.fill(); // apron
+  const gar = garageShop();
+  g.fillStyle = gar ? '#86CFDC' : '#d9813b'; g.beginPath(); g.ellipse(cx, cy + s * 0.18, s * 0.28, s * 0.28, 0, 0, Math.PI); g.fill(); // apron
+  if (gar) { g.fillStyle = '#E8B33A'; g.beginPath(); g.ellipse(cx, cy - s * 0.34, s * 0.3, s * 0.16, 0, Math.PI, 0); g.fill(); g.fillRect(cx - s * 0.36, cy - s * 0.36, s * 0.72, s * 0.06); }   // hard hat
   g.fillStyle = '#e9a0a0'; g.beginPath(); g.arc(cx, cy - s * 0.02, s * 0.09, 0, 7); g.fill();                // nose
   g.fillStyle = '#16110d'; g.fillRect(cx - s * 0.17, cy - s * 0.2, s * 0.06, s * 0.06); g.fillRect(cx + s * 0.11, cy - s * 0.2, s * 0.06, s * 0.06);
   g.fillStyle = '#d9c7b0'; const wave = Math.max(0, Math.sin(time * 1.3)) * s * 0.12;                        // a waving claw
   g.fillRect(cx + s * 0.34, cy - s * 0.05 - wave, s * 0.16, s * 0.1); g.fillRect(cx - s * 0.5, cy + s * 0.05, s * 0.16, s * 0.1);
   g.fillStyle = '#3a2b20'; rr2(g, cx - s * 0.7, cy - s * 1.15, s * 1.4, s * 0.36, 3); g.fill();              // name sign
   g.fillStyle = '#efe3d3'; g.font = '700 ' + Math.round(s * 0.2) + 'px "Pixelify Sans", monospace'; g.textAlign = 'center';
-  g.fillText('PIP\'S PARTS', cx, cy - s * 0.9);
+  g.fillText(gar ? 'PIP\'S SALVAGE' : 'PIP\'S PARTS', cx, cy - s * 0.9);
+}
+// Extra details in each shop: lanterns and a rug in the burrow; tyres, a toolbox and lift arms in the garage
+function drawShopDecor(X, Y, s) {
+  const SH = C.SHOP, [c0, c1] = SH.cols;
+  if (garageShop()) {
+    for (const side of [-1, 1]) {   // robot arms beside the lift
+      const bx = side < 0 ? X(SH.door) - s * 0.15 : X(SH.door + SH.doorW) + s * 0.15, by = Y(3.5);
+      g.strokeStyle = '#E8B33A'; g.lineWidth = Math.max(3, s * 0.1); g.lineCap = 'round';
+      g.beginPath(); g.moveTo(bx, by); g.lineTo(bx + side * s * 0.4, by - s * 0.3); g.lineTo(bx + side * s * 0.15, by - s * 0.6); g.stroke(); g.lineCap = 'butt';
+      g.fillStyle = '#5D646E'; g.beginPath(); g.arc(bx, by, s * 0.1, 0, 7); g.fill();
+    }
+    for (const [tx, ty] of [[c0 + 0.5, 1.5], [c0 + 0.9, 1.3]]) { g.fillStyle = '#2B2A2E'; g.beginPath(); g.arc(X(tx), Y(ty), s * 0.28, 0, 7); g.fill(); g.fillStyle = '#4A5059'; g.beginPath(); g.arc(X(tx), Y(ty), s * 0.11, 0, 7); g.fill(); }
+    g.fillStyle = '#c0392b'; g.fillRect(X(c1) + s * 0.15, Y(2) + s * 0.25, s * 0.7, s * 0.4); g.fillStyle = '#2B2A2E'; g.fillRect(X(c1) + s * 0.15, Y(2) + s * 0.38, s * 0.7, 2);
+  } else {
+    g.fillStyle = 'rgba(138,59,42,.85)'; g.beginPath(); g.ellipse(X(SH.door + 1), Y(3), s * 1.6, s * 0.95, 0, 0, 7); g.fill();   // round rug
+    g.strokeStyle = 'rgba(217,129,59,.8)'; g.lineWidth = 2; g.setLineDash([8, 5]); g.beginPath(); g.ellipse(X(SH.door + 1), Y(3), s * 1.35, s * 0.75, 0, 0, 7); g.stroke(); g.setLineDash([]);
+    for (const [lx, ly] of [[c0 + 0.5, SH.rows - 1.5], [c1 + 0.5, SH.rows - 1.5], [c0 + 0.5, 1.5], [c1 + 0.5, 1.5]]) {
+      const gl = g.createRadialGradient(X(lx), Y(ly), 0, X(lx), Y(ly), s * 1.4);
+      gl.addColorStop(0, 'rgba(255,179,71,.25)'); gl.addColorStop(1, 'rgba(255,179,71,0)');
+      g.fillStyle = gl; g.fillRect(X(lx) - s * 1.4, Y(ly) - s * 1.4, s * 2.8, s * 2.8);
+      g.fillStyle = '#ffd98a'; g.beginPath(); g.arc(X(lx), Y(ly), s * 0.09, 0, 7); g.fill();
+    }
+  }
+}
+// ---------- Pip's shop, seen from town ----------
+// Burrow Workshop (Hollowmouth): a grassy mound with a round 2-block double door, chimney, window and lanterns
+function drawBurrowOutside(X, Y, s, W) {
+  const B = C.TOWN.shop, x0 = X(B.cols[0]), w = (B.cols[1] - B.cols[0] + 1) * s, h = (B.rows[1] - B.rows[0] + 1) * s;
+  const yR = Y(B.rows[1] + 1) - W * 2.2, yF = yR + h, fh = W * 2.2, cx = x0 + w / 2;
+  g.fillStyle = 'rgba(0,0,0,.3)'; g.beginPath(); g.ellipse(cx, yF + fh, w * 0.55, s * 0.25, 0, 0, 7); g.fill();
+  g.fillStyle = '#2f3b22'; g.beginPath(); g.ellipse(cx, yR + h * 0.6, w * 0.56, h * 0.7, 0, 0, 7); g.fill();
+  g.fillStyle = '#4a5b33'; g.beginPath(); g.ellipse(cx, yR + h * 0.55, w * 0.5, h * 0.6, 0, 0, 7); g.fill();
+  g.fillStyle = '#56693b'; g.beginPath(); g.ellipse(cx, yR + h * 0.45, w * 0.38, h * 0.42, 0, 0, 7); g.fill();
+  g.fillStyle = '#7d9a4f'; for (let k = 0; k < 8; k++) g.fillRect(x0 + w * (0.2 + hash(k, 1, 30) * 0.6), yR + h * (0.15 + hash(k, 2, 31) * 0.5), 3, 3);
+  g.fillStyle = '#5a4232'; rr2(g, x0 + s * 0.1, yF - s * 0.15, w - s * 0.2, fh + s * 0.15, s * 0.3); g.fill();   // dirt front
+  g.strokeStyle = '#2a1f17'; g.lineWidth = 2; rr2(g, x0 + s * 0.1, yF - s * 0.15, w - s * 0.2, fh + s * 0.15, s * 0.3); g.stroke();
+  // chimney pipe with smoke, round window
+  const px = x0 + w - s * 1.2;
+  g.fillStyle = '#5D646E'; g.fillRect(px, yR - s * 0.1, s * 0.22, s * 0.6);
+  for (let k = 0; k < 3; k++) { const ph = (time * 0.5 + k / 3) % 1; g.fillStyle = 'rgba(160,150,140,' + (0.3 * (1 - ph)) + ')'; g.beginPath(); g.arc(px + s * 0.11 + Math.sin(ph * 5) * s * 0.1, yR - s * 0.2 - ph * s * 0.8, s * (0.08 + ph * 0.12), 0, 7); g.fill(); }
+  g.fillStyle = 'rgba(134,207,220,.35)'; g.strokeStyle = '#5a4232'; g.lineWidth = 3; g.beginPath(); g.arc(x0 + s * 1.1, yR + h * 0.45, s * 0.28, 0, 7); g.fill(); g.stroke();
+  // round double door across the two door blocks
+  const dl = X(B.door) + s * 0.08, dr = X(B.door + B.doorW) - s * 0.08, dw = dr - dl, bot = yF + fh, arcY = yF + fh * 0.2;
+  g.fillStyle = 'rgba(255,179,71,.25)'; g.beginPath(); g.ellipse((dl + dr) / 2, bot, dw * 0.7, s * 0.3, 0, 0, 7); g.fill();
+  g.fillStyle = '#8a6440'; g.strokeStyle = '#2a1f17'; g.lineWidth = 2.5;
+  g.beginPath(); g.moveTo(dl, bot); g.lineTo(dl, arcY); g.arc((dl + dr) / 2, arcY, dw / 2, Math.PI, 0); g.lineTo(dr, bot); g.closePath(); g.fill(); g.stroke();
+  g.beginPath(); g.moveTo((dl + dr) / 2, arcY - dw / 2); g.lineTo((dl + dr) / 2, bot); g.stroke();
+  g.fillStyle = '#f2c94c'; g.beginPath(); g.arc((dl + dr) / 2 - s * 0.12, bot - fh * 0.4, s * 0.05, 0, 7); g.arc((dl + dr) / 2 + s * 0.12, bot - fh * 0.4, s * 0.05, 0, 7); g.fill();
+  // sign above the door, lanterns on each side
+  g.fillStyle = '#3a2b20'; rr2(g, (dl + dr) / 2 - s * 0.95, arcY - dw / 2 - s * 0.48, s * 1.9, s * 0.38, 3); g.fill();
+  g.strokeStyle = '#d9813b'; g.lineWidth = 1; rr2(g, (dl + dr) / 2 - s * 0.95, arcY - dw / 2 - s * 0.48, s * 1.9, s * 0.38, 3); g.stroke();
+  g.fillStyle = '#efe3d3'; g.font = '700 ' + Math.round(s * 0.22) + 'px "Pixelify Sans", monospace'; g.textAlign = 'center';
+  g.fillText('PIP\'S PARTS', (dl + dr) / 2, arcY - dw / 2 - s * 0.22);
+  for (const lx of [dl - s * 0.3, dr + s * 0.3]) {
+    g.fillStyle = '#2a1f17'; g.fillRect(lx - 1.5, bot - s * 0.55, 3, s * 0.55);
+    g.fillStyle = 'rgba(255,179,71,.25)'; g.beginPath(); g.arc(lx, bot - s * 0.6, s * 0.3, 0, 7); g.fill();
+    g.fillStyle = '#ffd98a'; g.beginPath(); g.arc(lx, bot - s * 0.6, s * 0.08, 0, 7); g.fill();
+  }
+}
+// Salvage Garage (Rustvale): corrugated metal with a 2-block roller door, a glowing sign and a roof gantry
+function drawGarageOutside(X, Y, s, W) {
+  const B = C.TOWN.shop, x0 = X(B.cols[0]), w = (B.cols[1] - B.cols[0] + 1) * s, h = (B.rows[1] - B.rows[0] + 1) * s;
+  const yR = Y(B.rows[1] + 1) - W * 2.2, yF = yR + h, fh = W * 2.2;
+  g.fillStyle = 'rgba(0,0,0,.3)'; g.fillRect(x0 + s * 0.1, yF + fh, w, s * 0.15);
+  g.fillStyle = '#5D646E'; g.fillRect(x0, yR, w, h);
+  g.fillStyle = '#4A5059'; for (let k = 0; k < 12; k++) g.fillRect(x0 + s * 0.15 + k * w / 12, yR + 2, 3, h - 4);
+  g.fillStyle = '#3B3F46'; g.fillRect(x0, yF, w, fh);
+  g.fillStyle = '#E8B33A'; g.fillRect(x0, yF + fh - s * 0.12, w, s * 0.12);
+  g.fillStyle = '#17130F'; for (let k = 0; k < w; k += s * 0.3) g.fillRect(x0 + k, yF + fh - s * 0.12, s * 0.12, s * 0.12);
+  // roller door across the two door blocks, with warning lights
+  const dl = X(B.door) + s * 0.06, dw = B.doorW * s - s * 0.12;
+  g.fillStyle = '#8E96A0'; g.fillRect(dl, yF + fh * 0.18, dw, fh * 0.82 - s * 0.12);
+  g.fillStyle = '#5D646E'; for (let k = 1; k < 6; k++) g.fillRect(dl, yF + fh * 0.18 + k * fh * 0.13, dw, 2);
+  g.fillStyle = '#E8B33A'; g.fillRect(dl, yF + fh * 0.1, dw, fh * 0.1);
+  const blink = Math.sin(time * 4) > 0 ? '#ffb347' : '#7a4a2a';
+  g.fillStyle = blink; g.beginPath(); g.arc(dl - s * 0.12, yF + fh * 0.3, s * 0.06, 0, 7); g.arc(dl + dw + s * 0.12, yF + fh * 0.3, s * 0.06, 0, 7); g.fill();
+  // glowing sign on the roof and a little gantry crane
+  g.fillStyle = '#16110d'; rr2(g, x0 + w / 2 - s * 1.2, yR + h * 0.18, s * 2.4, s * 0.5, 4); g.fill();
+  g.strokeStyle = 'rgba(134,207,220,' + (0.7 + Math.sin(time * 3) * 0.2) + ')'; g.lineWidth = 2; rr2(g, x0 + w / 2 - s * 1.2, yR + h * 0.18, s * 2.4, s * 0.5, 4); g.stroke();
+  g.fillStyle = '#9fe3f0'; g.font = '700 ' + Math.round(s * 0.24) + 'px "Pixelify Sans", monospace'; g.textAlign = 'center';
+  g.fillText('PIP\'S SALVAGE', x0 + w / 2, yR + h * 0.18 + s * 0.33);
+  g.strokeStyle = '#E8B33A'; g.lineWidth = Math.max(2, s * 0.08);
+  g.beginPath(); g.moveTo(x0 + w - s * 0.5, yR + h * 0.9); g.lineTo(x0 + w - s * 0.5, yR - s * 0.3); g.lineTo(x0 + w - s * 1.4, yR - s * 0.3); g.stroke();
+  g.strokeStyle = '#2B2A2E'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(x0 + w - s * 1.3, yR - s * 0.3); g.lineTo(x0 + w - s * 1.3, yR + s * 0.1); g.stroke();
+  // tyre stack by the wall
+  for (let k = 0; k < 2; k++) { g.fillStyle = '#2B2A2E'; g.beginPath(); g.arc(x0 + s * (0.45 + k * 0.4), yF + fh * 0.55, s * 0.2, 0, 7); g.fill(); g.fillStyle = '#4A5059'; g.beginPath(); g.arc(x0 + s * (0.45 + k * 0.4), yF + fh * 0.55, s * 0.08, 0, 7); g.fill(); }
 }
 // A sealed cave gate: a heavy door with a relic-shaped slot
 function drawLockedGate(c, r, x, ty, s) {
@@ -697,9 +816,9 @@ function render(dt) {
     // the block(s) you're digging get a thin outline
     P.digging.forEach(d => { if (d.r === r) { g.strokeStyle = 'rgba(239,227,211,.55)'; g.lineWidth = 1.5; g.strokeRect(X(d.c) + 1.5, y - W + 1.5, s - 3, s - 3); } });
     if (inShop()) {
-      if (r === C.SHOP.pipRow) drawPip(X(C.SHOP.door), Y(r + 1), s, W);
+      if (r === C.SHOP.pipRow) { drawPip(X(C.SHOP.door) + s * 0.5, Y(r + 1), s, W); drawShopDecor(X, Y, s); }
     } else if (inTown()) {
-      if (r === C.TOWN.shop.rows[0]) { TOWN().shop ? drawBaseBuilding(X, Y, s, W, C.TOWN.shop, 'SHOP') : drawBaseBuilding(X, Y, s, W, Object.assign({}, C.TOWN.shop, { door: null }), 'CLOSED'); }
+      if (r === C.TOWN.shop.rows[0]) { TOWN().shop === 'garage' ? drawGarageOutside(X, Y, s, W) : drawBurrowOutside(X, Y, s, W); }
       if (r === C.TOWN.gateRow) drawGates(X, Y, s, W);
       if (r === C.TOWN.station.railRow) { drawTrain(X, Y, s, W); drawTripMech(X, Y, s); }
     } else {

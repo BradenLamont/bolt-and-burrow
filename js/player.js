@@ -18,7 +18,7 @@ function placePlayerFromSave() {
   const p = S.pos;
   if (p && typeof p.x === 'number' && !boxSolid(p.x, p.y)) { P.x = p.x; P.y = p.y; P.battery = Math.min(p.battery, batteryMax()); }
   else {
-    const sp = inShop() ? { col: C.SHOP.door, row: 1 } : inTown() ? C.TOWN.spawn : C.SPAWN;
+    const sp = inShop() ? { col: C.SHOP.door + C.SHOP.doorW / 2 - 0.5, row: 1 } : inTown() ? C.TOWN.spawn : C.SPAWN;
     P.x = sp.col + 0.5; P.y = sp.row + 0.5; P.battery = batteryMax();
   }
 }
