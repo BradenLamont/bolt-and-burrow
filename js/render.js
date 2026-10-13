@@ -40,7 +40,7 @@ function resize() {
   const ctl = document.querySelector('.controls').getBoundingClientRect();
   padTop = Math.max(0, hud.bottom - sr.top); padBot = Math.max(0, sr.bottom - ctl.top);
   // the town is shown whole; caves zoom in a little closer
-  CELL = Math.max(22, Math.floor(Math.min(VW / 15, inTown() ? (VH - padTop - padBot) / (C.TOWN.rows + 0.4) : VH / 9.5)));
+  CELL = Math.max(22, Math.floor(Math.min(VW / 15, inTown() ? (VH - padTop - padBot) / (ROWS + 0.4) : VH / 9.5)));
 }
 new ResizeObserver(resize).observe(stage);
 new ResizeObserver(resize).observe($('botView'));
@@ -49,6 +49,7 @@ new ResizeObserver(resize).observe($('botView'));
 function cameraTarget() {
   const s = CELL, worldW = COLS * s;
   const tx = worldW <= VW ? (worldW - VW) / 2 : Math.max(0, Math.min(worldW - VW, P.x * s - VW / 2));
+  if (inShop()) return [(C.SHOP.door + 0.5) * s - VW / 2, -(padTop + (VH - padTop - padBot - ROWS * s) / 2) + s * 0.25];
   if (inTown()) return [tx, -(padTop + (VH - padTop - padBot - ROWS * s) / 2) + s * 0.25];   // the whole town fits between the HUD and controls
   let ty = (ROWS - P.y) * s - VH * 0.55;
   ty = Math.min(ty, ROWS * s - VH + s * 1.4);   // room under the bottom row for the controls
@@ -67,6 +68,7 @@ function drawFloor(c, r, x, y, s) {
   const t = at(c, r);
   if (t === 'chasm') return drawChasm(c, r, x, y, s);
   if (t === 'bridge' || t === 'oldbridge') { drawChasm(c, r, x, y, s); return drawBridge(c, r, x, y, s, t === 'oldbridge'); }
+  if (inShop()) return drawShopFloor(c, r, x, y, s);
   const town = inTown(), hall = !town && r < BASE_ROWS, path = town && DECO[idx(c, r)] === 2;
   if (town && DECO[idx(c, r)] === 3) return drawPlatform(c, r, x, y, s);
   g.fillStyle = town ? (path ? '#7a6248' : '#3c4a2c') : hall ? '#3a3128' : cave().floor;
@@ -166,6 +168,9 @@ function drawWall(t, c, r, x, y, s, W) {
   if (t === 'tree') return drawTree(c, r, x, y, s, W);
   if (t === 'pedestal') return drawPedestal(c, r, x, y, s, W);
   if (t === 'rail') return drawRail(c, r, x, y, s);
+  if (t === 'void') return;
+  if (t === 'stand') return drawStand(c, r, x, y, s, W);
+  if (t === 'counter') return drawCounter(c, r, x, y, s, W);
   const hidden = t === 'cache' ? seen !== 2 : (ORES.has(t) || t === 'fossil' || t === 'relic' || t === 'keycache') && !seen;
   const look = hidden ? baseFor(c, r) : t;
   const base = C.BLOCKS[look].color || C.BLOCKS[baseFor(c, r)].color;
@@ -354,6 +359,60 @@ function drawTrain(X, Y, s, W) {
   g.fillStyle = '#d9813b'; g.font = '500 ' + Math.round(s * 0.13) + 'px "IBM Plex Mono", monospace';
   g.fillText('STAND AT A DOOR', sx + s * 0.5, sy + s * 0.3);
 }
+// ---------- Pip's shop ----------
+function drawShopFloor(c, r, x, y, s) {
+  const t = at(c, r);
+  g.fillStyle = (Math.floor(c / 1) + r) % 2 ? '#5a4232' : '#614836'; g.fillRect(x, y, s, s);          // wooden boards
+  g.fillStyle = 'rgba(0,0,0,.18)'; g.fillRect(x, y + s * 0.5, s, 1); g.fillRect(x + s * (hash(c, r, 7) * 0.8), y, 1, s * 0.5);
+  if (r >= C.SHOP.pipRow) { g.fillStyle = '#3e2e23'; g.fillRect(x, y, s, s); }                     // behind the counter
+  if (t === 'shopdoor') {
+    g.fillStyle = '#16110d'; g.fillRect(x + s * 0.1, y + s * 0.55, s * 0.8, s * 0.45);                 // the way out
+    g.fillStyle = '#8a3b2a'; g.fillRect(x + s * 0.12, y + s * 0.1, s * 0.76, s * 0.4);                 // doormat
+    g.fillStyle = '#efe3d3'; g.font = '700 ' + Math.round(s * 0.17) + 'px "Pixelify Sans", monospace'; g.textAlign = 'center';
+    g.fillText('TOWN', x + s * 0.5, y + s * 0.37);
+  }
+  const st = C.SHOP.stands.find(k => k.row === r && Math.abs(k.col - c) === 1);
+  if (st && shopSpot() === 'stand-' + st.slot) { g.strokeStyle = 'rgba(239,227,211,.6)'; g.lineWidth = 1.5; g.strokeRect(x + 3, y + 3, s - 6, s - 6); }
+}
+// A display stand with its part on top
+const STAND_ICON = { head: '#86cfdc', arms: '#a8a39c', body: '#d9813b', legs: '#7a756f' };
+function drawStand(c, r, x, y, s, W) {
+  const st = C.SHOP.stands.find(k => k.col === c && k.row === r), slot = st.slot, ty = y - W;
+  g.fillStyle = '#2a1f17'; g.fillRect(x + s * 0.08, y + s - W, s * 0.84, W);                            // front
+  g.fillStyle = '#6a5038'; g.fillRect(x + s * 0.08, ty + s * 0.1, s * 0.84, s * 0.8);                     // table top
+  g.fillStyle = 'rgba(0,0,0,.25)'; g.beginPath(); g.ellipse(x + s * 0.5, ty + s * 0.62, s * 0.3, s * 0.1, 0, 0, 7); g.fill();
+  const cx = x + s * 0.5, cy = ty + s * 0.42, k = s * 0.22, col = STAND_ICON[slot];
+  g.fillStyle = col; g.strokeStyle = '#16110d'; g.lineWidth = 1.5;
+  if (slot === 'head') { g.beginPath(); g.arc(cx, cy + k * 0.3, k, Math.PI, 0); g.closePath(); g.fill(); g.stroke(); g.fillStyle = 'rgba(255,255,255,.4)'; g.fillRect(cx - k * 0.5, cy - k * 0.3, k * 0.3, k * 0.3); }
+  if (slot === 'arms') { g.fillRect(cx - k * 0.25, cy - k, k * 0.5, k * 1.4); g.strokeRect(cx - k * 0.25, cy - k, k * 0.5, k * 1.4); g.beginPath(); g.moveTo(cx - k * 0.6, cy + k * 0.4); g.lineTo(cx, cy + k * 1.1); g.lineTo(cx + k * 0.6, cy + k * 0.4); g.closePath(); g.fill(); g.stroke(); }
+  if (slot === 'body') { rr2(g, cx - k * 0.7, cy - k * 0.9, k * 1.4, k * 1.8, k * 0.4); g.fill(); g.stroke(); g.fillStyle = '#16110d'; g.fillRect(cx - k * 0.7, cy - k * 0.1, k * 1.4, k * 0.2); }
+  if (slot === 'legs') { g.fillRect(cx - k * 0.7, cy - k, k * 0.45, k * 1.6); g.fillRect(cx + k * 0.25, cy - k, k * 0.45, k * 1.6); g.strokeRect(cx - k * 0.7, cy - k, k * 0.45, k * 1.6); g.strokeRect(cx + k * 0.25, cy - k, k * 0.45, k * 1.6); }
+  const next = C.PARTS[slot].tiers[S.tiers[slot] + 1];
+  g.fillStyle = '#efe3d3'; g.font = '700 ' + Math.round(s * 0.15) + 'px "Pixelify Sans", monospace'; g.textAlign = 'center';
+  g.fillText(C.PARTS[slot].label.toUpperCase(), cx, ty + s * 0.86);
+  if (next) { g.fillStyle = '#d9813b'; g.fillText(fmt(next.cost), cx, ty + s * 0.08); }
+}
+function drawCounter(c, r, x, y, s, W) {
+  const ty = y - W;
+  g.fillStyle = '#4a2f1e'; g.fillRect(x, y + s - W, s, W);                                             // front panel
+  g.fillStyle = '#7a5538'; g.fillRect(x, ty, s, s);                                                    // counter top
+  g.fillStyle = 'rgba(255,255,255,.06)'; g.fillRect(x, ty + s * 0.2, s, 2);
+  if (c === C.SHOP.door - 2) { g.fillStyle = '#f2c94c'; for (let k = 0; k < 3; k++) { g.beginPath(); g.ellipse(x + s * 0.5, ty + s * (0.6 - k * 0.09), s * 0.16, s * 0.07, 0, 0, 7); g.fill(); } } // a stack of coins
+  if (c === C.SHOP.door + 2) { g.fillStyle = '#5b5753'; g.fillRect(x + s * 0.25, ty + s * 0.35, s * 0.5, s * 0.35); g.fillStyle = '#e08a42'; g.fillRect(x + s * 0.3, ty + s * 0.4, s * 0.12, s * 0.1); } // a scale with ore
+}
+// Pip the Mole, the shopkeeper, behind the counter
+function drawPip(x, y, s, W) {
+  const cx = x + s * 0.5, cy = y + s * 0.55 - W + Math.sin(time * 2) * s * 0.02;
+  g.fillStyle = '#5a463a'; g.beginPath(); g.ellipse(cx, cy, s * 0.42, s * 0.5, 0, 0, 7); g.fill();           // body
+  g.fillStyle = '#d9813b'; g.beginPath(); g.ellipse(cx, cy + s * 0.18, s * 0.28, s * 0.28, 0, 0, Math.PI); g.fill(); // apron
+  g.fillStyle = '#e9a0a0'; g.beginPath(); g.arc(cx, cy - s * 0.02, s * 0.09, 0, 7); g.fill();                // nose
+  g.fillStyle = '#16110d'; g.fillRect(cx - s * 0.17, cy - s * 0.2, s * 0.06, s * 0.06); g.fillRect(cx + s * 0.11, cy - s * 0.2, s * 0.06, s * 0.06);
+  g.fillStyle = '#d9c7b0'; const wave = Math.max(0, Math.sin(time * 1.3)) * s * 0.12;                        // a waving claw
+  g.fillRect(cx + s * 0.34, cy - s * 0.05 - wave, s * 0.16, s * 0.1); g.fillRect(cx - s * 0.5, cy + s * 0.05, s * 0.16, s * 0.1);
+  g.fillStyle = '#3a2b20'; rr2(g, cx - s * 0.7, cy - s * 1.15, s * 1.4, s * 0.36, 3); g.fill();              // name sign
+  g.fillStyle = '#efe3d3'; g.font = '700 ' + Math.round(s * 0.2) + 'px "Pixelify Sans", monospace'; g.textAlign = 'center';
+  g.fillText('PIP\'S PARTS', cx, cy - s * 0.9);
+}
 // A sealed cave gate: a heavy door with a relic-shaped slot
 function drawLockedGate(c, r, x, ty, s) {
   g.fillStyle = '#4a372a'; g.fillRect(x + s * 0.1, ty + s * 0.1, s * 0.8, s * 0.9);
@@ -385,7 +444,14 @@ function drawBaseBuilding(X, Y, s, W, B = C.BASE_BUILDING, label = 'OUTPOST') {
   g.fillStyle = '#4a372a'; for (let k = 1; k < 6; k++) g.fillRect(x, y + k * h / 6, w, 2);
   g.fillStyle = '#2a1f17'; g.fillRect(x, y + h, w, W * 2.2);                            // front wall
   g.fillStyle = '#e8a160'; g.fillRect(x + s * 0.4, y + h + W * 0.5, s * 0.5, W * 0.9);   // window
-  g.fillStyle = '#16110d'; g.fillRect(x + w - s * 1.1, y + h + W * 0.4, s * 0.6, W * 1.8); // door
+  const dx = B.door != null ? X(B.door) + s * 0.2 : x + w - s * 1.1;
+  g.fillStyle = '#16110d'; g.fillRect(dx, y + h + W * 0.4, s * 0.6, W * 1.8);           // door
+  if (B.door != null) { // a shop you can walk into: warm light and an OPEN sign
+    g.fillStyle = 'rgba(232,161,96,.35)'; g.fillRect(dx + 2, y + h + W * 0.4 + 2, s * 0.6 - 4, W * 1.8 - 2);
+    g.fillStyle = '#d9813b'; g.fillRect(dx - s * 0.05, y + h + W * 0.05, s * 0.7, W * 0.32);
+    g.fillStyle = '#16110d'; g.font = '700 ' + Math.round(W * 0.28) + 'px "IBM Plex Mono", monospace'; g.textAlign = 'center';
+    g.fillText('OPEN', dx + s * 0.3, y + h + W * 0.3);
+  }
   g.fillStyle = '#efe3d3'; g.font = '700 ' + Math.round(s * 0.42) + 'px "Pixelify Sans", monospace'; g.textAlign = 'center';
   g.fillText(label, x + w / 2, y + h / 2 + s * 0.15);
 }
@@ -439,7 +505,9 @@ function render(dt) {
     }
     // the block(s) you're digging get a thin outline
     P.digging.forEach(d => { if (d.r === r) { g.strokeStyle = 'rgba(239,227,211,.55)'; g.lineWidth = 1.5; g.strokeRect(X(d.c) + 1.5, y - W + 1.5, s - 3, s - 3); } });
-    if (inTown()) {
+    if (inShop()) {
+      if (r === C.SHOP.pipRow) drawPip(X(C.SHOP.door), Y(r + 1), s, W);
+    } else if (inTown()) {
       if (r === C.TOWN.shop.rows[0]) { drawBaseBuilding(X, Y, s, W, C.TOWN.shop, 'SHOP'); }
       if (r === C.TOWN.gateRow) drawGates(X, Y, s, W);
       if (r === C.TOWN.station.railRow) drawTrain(X, Y, s, W);

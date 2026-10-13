@@ -125,6 +125,8 @@ button:focus-visible { outline: 2px solid var(--crystal); outline-offset: 2px; }
 /* Panel text */
 .note { margin: 0; color: var(--muted); font-size: .75rem; }
 .note b { color: var(--fg); font-weight: 600; }
+.note.pip { color: var(--fg); font-style: italic; }
+.row.here { border-color: var(--copper); }
 .sub { color: var(--muted); font-size: .64rem; text-transform: uppercase; letter-spacing: .1em; margin-bottom: -4px; }
 .short { color: var(--danger) !important; }
 .row strong i, .inv li i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; }

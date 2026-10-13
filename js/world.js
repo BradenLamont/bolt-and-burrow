@@ -159,8 +159,9 @@ function genTown() {
     if (c === 0 || c === COLS - 1 || r >= TW.gateRow) T[idx(c, r)] = 'cliff';
   }
   TW.gates.forEach((g, k) => { T[idx(g, TW.gateRow)] = k < S.unlocked ? 'gate' : 'gatelocked'; });
-  for (const b of [TW.shop])
-    for (let r = b.rows[0]; r <= b.rows[1]; r++) for (let c = b.cols[0]; c <= b.cols[1]; c++) T[idx(c, r)] = 'found';
+  const b = TW.shop;
+  for (let r = b.rows[0]; r <= b.rows[1]; r++) for (let c = b.cols[0]; c <= b.cols[1]; c++) T[idx(c, r)] = 'found';
+  T[idx(b.door, b.rows[0])] = 'shopdoor';
   TW.trees.forEach(([c, r]) => { T[idx(c, r)] = 'tree'; });
   TW.pedestals.forEach(c => { T[idx(c, TW.pedestalRow)] = 'pedestal'; });
   // train station: tracks across the bottom row, a stone platform above them (DECO 3)
@@ -172,13 +173,30 @@ function genTown() {
   const pathRow = TW.gateRow - 2;
   for (let c = TW.gates[0]; c <= TW.gates[2]; c++) DECO[idx(c, pathRow)] = 2;
   TW.gates.forEach(g => { for (let r = pathRow; r < TW.gateRow; r++) DECO[idx(g, r)] = 2; });
+  DECO[idx(b.door, b.rows[0] - 1)] = 2;   // a doorstep in front of the shop
 }
 
+// ---------- Pip's shop (inside the SHOP building) ----------
+// One room: the door at the bottom, display stands along the side walls, Pip's counter at the back.
+function genShop() {
+  const SH = C.SHOP, [c0, c1] = SH.cols;
+  T = new Array(COLS * ROWS).fill('void');
+  DECO = new Uint8Array(COLS * ROWS);
+  SEEN = new Uint8Array(COLS * ROWS).fill(1);
+  for (let r = 0; r < ROWS; r++) for (let c = c0 - 1; c <= c1 + 1; c++) {
+    const edge = c === c0 - 1 || c === c1 + 1 || r === 0 || r === ROWS - 1;
+    T[idx(c, r)] = edge ? 'shopwall' : null;
+  }
+  T[idx(SH.door, 0)] = 'shopdoor';
+  for (let c = c0; c <= c1; c++) T[idx(c, SH.counterRow)] = 'counter';
+  SH.stands.forEach(st => { T[idx(st.col, st.row)] = 'stand'; });
+}
 // ---------- Loading areas and moving between them ----------
 function loadArea() {
-  ROWS = inTown() ? C.TOWN.rows : C.ROWS;
+  ROWS = inShop() ? C.SHOP.rows : inTown() ? C.TOWN.rows : C.ROWS;
   const n = COLS * ROWS;
   DMG = new Float32Array(n);
+  if (inShop()) return genShop();
   if (inTown()) return genTown();
   const cs = CS();
   if (cs.world && cs.world.length === n) {
@@ -212,4 +230,16 @@ function goToTown() {
   loadArea();
   arrive(C.TOWN.gates[Math.max(0, from)] + 0.5, C.TOWN.gateRow - 1.5, 'down');
   toast(null, 'Back in town.');
+}
+// Walk through the SHOP door in town, and back out again
+function enterShop() {
+  S.cave = -2;
+  loadArea();
+  arrive(C.SHOP.door + 0.5, 1.5, 'up');
+  hintOnce('shop', 'Pip\'s shop', 'Walk up to a display stand to look at parts, or to Pip at the counter to sell ore and materials.');
+}
+function leaveShop() {
+  S.cave = -1;
+  loadArea();
+  arrive(C.TOWN.shop.door + 0.5, C.TOWN.shop.rows[0] - 0.5, 'down');
 }

@@ -18,7 +18,7 @@ function placePlayerFromSave() {
   const p = S.pos;
   if (p && typeof p.x === 'number' && !boxSolid(p.x, p.y)) { P.x = p.x; P.y = p.y; P.battery = Math.min(p.battery, batteryMax()); }
   else {
-    const sp = inTown() ? C.TOWN.spawn : C.SPAWN;
+    const sp = inShop() ? { col: C.SHOP.door, row: 1 } : inTown() ? C.TOWN.spawn : C.SPAWN;
     P.x = sp.col + 0.5; P.y = sp.row + 0.5; P.battery = batteryMax();
   }
 }
@@ -94,7 +94,7 @@ function claimRelic() {
   if (k === 0 && !S.bots) { S.bots = 1; extra = ' A nano-bot was sealed inside it! It now makes Flux for your computer, even while you\'re away.'; }
   toast(cv.relic.name + ' recovered!', 'You claimed ' + fmt(cv.relic.reward) + ' coins. ' +
     (next ? 'Its pedestal in town now glows, and the gate to Cave ' + (k + 2) + ', ' + next.name + ', is open.' : 'You\'ve cleared every cave in this version. More are coming.') + extra);
-  if (inTown()) genTown();
+  if (onTownMap()) genTown();
   save();
 }
 
@@ -159,7 +159,7 @@ function dig(c, r, dt) {
   if (C.BLOCKS[t].hp === Infinity) {
     if (t === 'bedrock') hintOnce('bedrock', null, 'Bedrock. You can\'t dig through the cave walls.');
     else if (t === 'chasm') hintOnce('chasm', 'Chasm', 'Too wide to cross. Find the old bridge, or stand on a bridge pad to deploy one.');
-    else if (t === 'found' || t === 'post') hintOnce('build', null, 'Buildings can\'t be dug.');
+    else if (t === 'found' || t === 'post' || t === 'shopwall' || t === 'stand' || t === 'counter') hintOnce('build', null, 'Buildings can\'t be dug.');
     else if (t === 'gatelocked') {
       const k = C.TOWN.gates.indexOf(c);
       hintOnce('gate' + k, 'Sealed gate', 'Bring home the ' + C.CAVES[k - 1].relic.name + ' from Cave ' + k + ' to open the way to ' + C.CAVES[k].name + '.');
@@ -255,6 +255,7 @@ function finishMove() {
   const here = at(pCol(), pRow());
   if (here === 'gate') return enterCave(C.TOWN.gates.indexOf(pCol()));
   if (here === 'exit') return goToTown();
+  if (here === 'shopdoor') return inShop() ? leaveShop() : enterShop();
   if (padReady(pCol(), pRow())) hintOnce('pad', 'Bridge pad', S.keys[S.cave] ? 'Press E or tap Deploy to use a ' + keyName(S.cave) + '.' : 'You need a ' + keyName(S.cave) + '. Marked caches before the chasm hold them.');
 }
 function markSeen() {
@@ -278,6 +279,11 @@ function markSeen() {
 }
 // The action button: deploy a bridge when standing on a ready bridge pad
 function actionHere() {
+  const sp = shopSpot();
+  if (sp && sp.startsWith('stand-')) {
+    const slot = sp.slice(6), next = C.PARTS[slot].tiers[S.tiers[slot] + 1];
+    if (next) return { label: 'Buy ' + next.name + ' · ' + fmt(next.cost), run: () => buyPart(slot) };
+  }
   if (townSpot() === 'engine') return { label: 'Board train', run: () => {
     toast('Engine car', 'The line to the next town opens in a future update. For now, the train is your base.');
   } };

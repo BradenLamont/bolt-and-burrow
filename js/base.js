@@ -3,17 +3,30 @@
 'use strict';
 
 // ---------- Where you're standing in town ----------
-// Returns the train car at your position ('engine', 'forge', 'lab', 'storage'), 'shop', or null.
+// Returns the train car at your position ('engine', 'forge', 'lab', 'storage'), or null.
 function townSpot() {
-  if (!inTown()) return null;
+  if (!onTownMap()) return null;
   const ST = C.TOWN.station, c = pCol(), r = pRow();
   if (r === ST.platformRow) {
     const car = ST.cars.find(k => c >= k.cols[0] && c <= k.cols[1]);
     if (car) return car.id;
   }
-  const sh = C.TOWN.shop;
-  if (r === sh.rows[0] - 1 && c >= sh.cols[0] && c <= sh.cols[1]) return 'shop';
   return null;
+}
+// Inside the shop: 'stand-head' (etc.) when you're right next to a display stand, 'counter' at Pip's counter
+function shopSpot() {
+  if (!inShop()) return null;
+  const SH = C.SHOP, c = pCol(), r = pRow();
+  for (const st of SH.stands) if (r === st.row && Math.abs(c - st.col) === 1) return 'stand-' + st.slot;
+  if (r === SH.counterRow - 1 && c >= SH.cols[0] + 2 && c <= SH.cols[1] - 2) return 'counter';
+  return null;
+}
+function buyPart(slot) {
+  const next = C.PARTS[slot].tiers[S.tiers[slot] + 1];
+  if (shopSpot() !== 'stand-' + slot || !next || S.coins < next.cost) { if (next && S.coins < next.cost) toast(null, 'Pip: "Come back with ' + fmt(next.cost - S.coins) + ' more coins!"'); return; }
+  S.coins -= next.cost; S.tiers[slot]++;
+  if (slot === 'body') P.battery = batteryMax();
+  toast(null, next.name + ' installed. Pip: "Pleasure doing business!"'); save();
 }
 const carDoor = id => { const k = C.TOWN.station.cars.find(c => c.id === id); return (k.cols[0] + k.cols[1]) / 2; };
 
@@ -31,7 +44,7 @@ function depositCargo() {
 const itemValue = id => (C.BLOCKS[id] && C.BLOCKS[id].value) || C.MATERIALS[id].value;
 const owned = id => (C.MATERIALS[id] ? S.mats[id] : S.storage[id]) || 0;
 function sellItem(id, all) {
-  if (townSpot() !== 'shop') return;
+  if (shopSpot() !== 'counter') return;
   const n = all ? owned(id) : Math.min(1, owned(id));
   if (!n) return;
   if (C.MATERIALS[id]) S.mats[id] -= n; else S.storage[id] -= n;
@@ -61,7 +74,7 @@ function updateForge() {
   while (q.length && now - S.forge.start >= recipeTime(q[0])) {
     S.forge.start += recipeTime(q[0]);
     S.mats[q[0]]++; made++;
-    if (inTown()) floatText(carDoor('forge') + 0.5, C.TOWN.station.platformRow + 1.2, '+1 ' + C.MATERIALS[q[0]].name, C.MATERIALS[q[0]].color);
+    if (onTownMap()) floatText(carDoor('forge') + 0.5, C.TOWN.station.platformRow + 1.2, '+1 ' + C.MATERIALS[q[0]].name, C.MATERIALS[q[0]].color);
     q.shift();
   }
   if (!q.length) S.forge.start = 0;

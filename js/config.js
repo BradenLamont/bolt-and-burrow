@@ -22,7 +22,7 @@ const CONFIG = {
     rows: 12,
     gates: [5, 12, 19],                          // gate columns for caves 1, 2, 3 (in the cliff at gateRow)
     gateRow: 10,
-    shop: { cols: [2, 6], rows: [3, 4], label: 'SHOP' },   // stand in front of it to buy parts and sell
+    shop: { cols: [2, 6], rows: [3, 4], label: 'SHOP', door: 5 },   // walk through the door to go inside
     pedestals: [4, 11, 18], pedestalRow: 9,      // a relic pedestal beside each cave's gate (left side)
     trees: [[1, 8], [23, 8], [8, 7], [16, 7], [23, 5], [1, 5], [19, 4], [21, 3], [17, 5]],
     spawn: { col: 12, row: 5 },
@@ -34,6 +34,15 @@ const CONFIG = {
       { id: 'lab',     name: 'Lab car',     cols: [11, 13] },
       { id: 'storage', name: 'Storage car', cols: [15, 17] },
     ] },
+  },
+
+  // ----- Pip's shop (inside the SHOP building) -----
+  // A small room: walk up to a display stand to buy that part, or to Pip at the counter to sell.
+  // Rows count up from the door (row 0). cols: the room's inside, between its side walls.
+  SHOP: {
+    rows: 9, cols: [7, 17], door: 12, counterRow: 6, pipRow: 7,
+    stands: [ { slot: 'head', col: 7, row: 4 }, { slot: 'arms', col: 7, row: 2 },
+              { slot: 'body', col: 17, row: 4 }, { slot: 'legs', col: 17, row: 2 } ],
   },
 
   // ----- The caves (levels) -----
@@ -81,12 +90,17 @@ const CONFIG = {
     tree:    { hp: Infinity },                  // town decoration
     pedestal: { hp: Infinity },
     rail:    { hp: Infinity },                  // train tracks in town
+    shopdoor: { hp: Infinity },                 // the shop's door (walkable)
+    shopwall: { hp: Infinity, color: '#4a372a' },
+    stand:   { hp: Infinity },                  // a part display stand in the shop
+    counter: { hp: Infinity },                  // Pip's counter
+    void:    { hp: Infinity },                  // nothing (outside the shop's walls)
     loose:   { hp: 3,   coin: 2, color: '#7a6d5e' },  // unstable rock (hazard)
     rubble:  { hp: 1,   color: '#5d544b' },  // left behind by a cave-in
-    copper:  { hp: 3,   coin: 1, value: 6,   ore: '#e08a42', label: 'copper' },
-    silver:  { hp: 5,   coin: 1, value: 16,  ore: '#e2e6ea', label: 'silver' },
-    gold:    { hp: 8,   coin: 1, value: 45,  ore: '#f2c94c', label: 'gold' },
-    crystal: { hp: 11,  coin: 1, value: 110, ore: '#9fe3f0', label: 'crystal' },
+    copper:  { hp: 3,   coin: 1, value: 9,   ore: '#e08a42', label: 'copper' },
+    silver:  { hp: 5,   coin: 1, value: 24,  ore: '#e2e6ea', label: 'silver' },
+    gold:    { hp: 8,   coin: 1, value: 68,  ore: '#f2c94c', label: 'gold' },
+    crystal: { hp: 11,  coin: 1, value: 165, ore: '#9fe3f0', label: 'crystal' },
     fossil:  { hp: 4 },
     relic:   { hp: 40 },                        // each cave's relic, at the deep end
     found:   { hp: Infinity, color: '#4b4038' }, // base building: can't be dug
@@ -170,10 +184,10 @@ const CONFIG = {
   // time (jobs keep running while you're in a cave or away). time = seconds (short while testing);
   // value = what the shop pays for one.
   MATERIALS: {
-    wire:       { name: 'Wire',       color: '#e08a42', needs: { copper: 2 },             time: 2, value: 16 },
-    circuits:   { name: 'Circuits',   color: '#8fd18a', needs: { silver: 2, copper: 1 },  time: 3, value: 50 },
-    conductors: { name: 'Conductors', color: '#f2c94c', needs: { gold: 2, silver: 1 },    time: 4, value: 130 },
-    lenses:     { name: 'Lenses',     color: '#9fe3f0', needs: { crystal: 2, gold: 1 },   time: 6, value: 320 },
+    wire:       { name: 'Wire',       color: '#e08a42', needs: { copper: 2 },             time: 2, value: 24 },
+    circuits:   { name: 'Circuits',   color: '#8fd18a', needs: { silver: 2, copper: 1 },  time: 3, value: 75 },
+    conductors: { name: 'Conductors', color: '#f2c94c', needs: { gold: 2, silver: 1 },    time: 4, value: 195 },
+    lenses:     { name: 'Lenses',     color: '#9fe3f0', needs: { crystal: 2, gold: 1 },   time: 6, value: 480 },
   },
   FORGE: { queueMax: 6 },
 

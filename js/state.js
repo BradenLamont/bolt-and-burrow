@@ -17,7 +17,7 @@ const CODE = { d: 'dirt', c: 'clay', e: 'stone', b: 'basalt', l: 'loose', r: 'ru
 const CHAR = Object.fromEntries(Object.entries(CODE).map(([k, v]) => [v, k]));
 const ORES = new Set(['copper', 'silver', 'gold', 'crystal']);
 // Tiles you can walk on even though they aren't empty
-const WALKABLE = new Set(['bridge', 'oldbridge', 'pad', 'exit', 'gate']);
+const WALKABLE = new Set(['bridge', 'oldbridge', 'pad', 'exit', 'gate', 'shopdoor']);
 
 const freshCave = () => ({ world: null, seen: null, deco: null, outposts: 0, relicDone: false });
 const ORE_LIST = ['copper', 'silver', 'gold', 'crystal'];
@@ -33,7 +33,7 @@ const freshState = () => ({
   grid: [],                     // mods placed in the computer: [{ id, x, y }]
   flux: 0,
   bots: 0,                      // nano-bots (the first comes with the Ember Idol)
-  cave: -1,                     // where you are: -1 = town, 0–2 = a cave
+  cave: -1,                     // where you are: -1 = town, -2 = inside Pip's shop, 0–2 = a cave
   unlocked: 1,                  // how many cave gates are open
   keys: C.CAVES.map(() => 0),   // bridge keys held for each cave (they only work in their own cave)
   caves: C.CAVES.map(freshCave),
@@ -56,7 +56,9 @@ try {
 while (S.caves.length < C.CAVES.length) S.caves.push(freshCave());
 while (S.keys.length < C.CAVES.length) S.keys.push(0);
 
-const inTown = () => S.cave < 0;
+const inTown = () => S.cave < 0;            // above ground: the town or inside the shop
+const inShop = () => S.cave === -2;
+const onTownMap = () => S.cave === -1;
 const cave = () => C.CAVES[S.cave];        // the current cave's settings (undefined in town)
 const CS = () => S.caves[S.cave];          // the current cave's saved progress (undefined in town)
 

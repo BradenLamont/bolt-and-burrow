@@ -15,6 +15,7 @@ let selMod = null, dragging = false;
 
 // Which panel to show
 function panelMode() {
+  if (inShop()) return shopSpot() ? (shopSpot() === 'counter' ? 'counter' : 'stand') : 'shopfloor';
   if (inTown()) return townSpot() || 'town';
   return station() ? 'outpost' : 'cargo';
 }
@@ -35,11 +36,23 @@ function cargoList() {
   for (const t of ORE_LIST) if (S.cargo.items[t]) html += `<li>${dot(C.BLOCKS[t].ore)}<span>${ORE_NAMES[t]}</span><b>×${S.cargo.items[t]}</b><em>${fmt(C.BLOCKS[t].value)} each</em></li>`;
   return html ? `<ul class="inv">${html}</ul>` : '<p class="note">Nothing yet. Ore you dig up shows here.</p>';
 }
-function partsRows() {
+// One display stand: every tier of that part, with the next one for sale
+function standRows(slot) {
+  const P_ = C.PARTS[slot];
+  return '<div class="rows">' + P_.tiers.map((t, k) => {
+    const have = k <= S.tiers[slot], next = k === S.tiers[slot] + 1;
+    const btn = k === S.tiers[slot] ? '<button type="button" disabled>Equipped</button>'
+      : have ? '<button type="button" disabled>Owned</button>'
+      : next ? `<button type="button" data-act="buy" data-id="${slot}" ${S.coins < t.cost ? 'disabled' : ''}>Buy · ${fmt(t.cost)}</button>`
+      : `<button type="button" disabled>${fmt(t.cost)}</button>`;
+    return `<div class="row${k === S.tiers[slot] ? ' here' : ''}"><div><small>Tier ${k + 1}${next ? ' · next' : ''}</small><strong>${t.name}</strong><span>${P_.fmt(t.val)}</span></div>${btn}</div>`;
+  }).join('') + '</div>';
+}
+// What's on each stand at a glance (shown when you're inside but not at a stand)
+function partsSummary() {
   return '<div class="rows">' + SLOTS.map(s => {
     const cur = part(s), next = C.PARTS[s].tiers[S.tiers[s] + 1];
-    const btn = next ? `<button type="button" data-act="buy" data-id="${s}" ${S.coins < next.cost ? 'disabled' : ''}>${next.name} · ${fmt(next.cost)}</button>` : '<button type="button" disabled>Maxed</button>';
-    return `<div class="row"><div><small>${C.PARTS[s].label} · ${C.PARTS[s].stat}</small><strong>${cur.name}</strong><span>${C.PARTS[s].fmt(cur.val)}</span></div>${btn}</div>`;
+    return `<div class="row"><div><small>${C.PARTS[s].label} · ${C.PARTS[s].stat}</small><strong>${cur.name}</strong><span>${next ? 'Next: ' + next.name + ' · ' + fmt(next.cost) + ' coins' : 'Maxed'}</span></div></div>`;
   }).join('') + '</div>';
 }
 function outpostRows() {
@@ -121,9 +134,11 @@ function modRows() {
 }
 
 const PANEL = {
-  town: () => ['Town', 'Home base', `<p class="note">Stand in front of the <b>SHOP</b> to buy parts and sell. Stand at a train car's door (the marked platform tiles) to use the <b>Forge</b>, <b>Lab</b> or <b>Storage</b>.</p>` +
+  town: () => ['Town', 'Home base', `<p class="note">Walk through the <b>SHOP</b> door to buy parts and sell. Stand at a train car's door (the marked platform tiles) to use the <b>Forge</b>, <b>Lab</b> or <b>Storage</b>.</p>` +
     '<small class="sub">In storage</small>' + itemList([...ORE_LIST, ...MAT_LIST], { empty: 'Storage is empty. Ore you bring to any outpost ends up here.' })],
-  shop: () => ['Shop', 'Parts and trading', partsRows() + '<small class="sub">Sell from storage</small>' +
+  shopfloor: () => ['Pip\'s shop', 'Inside', '<p class="note">Walk up to a <b>display stand</b> to look at a part, or to <b>Pip</b> at the counter to sell. The door at the bottom leads back to town.</p>' + partsSummary()],
+  stand: () => { const slot = shopSpot().slice(6); return [C.PARTS[slot].label + ' stand', C.PARTS[slot].stat, standRows(slot)]; },
+  counter: () => ['Pip\'s counter', 'Selling', '<p class="note pip">Pip: "Ore and materials straight from your storage car? I\'ll take them!"</p>' +
     itemList([...ORE_LIST, ...MAT_LIST], { sell: true, empty: 'Nothing to sell. Ore you bring home is kept in the storage car until you sell or refine it.' })],
   engine: () => ['Engine car', 'Coming later', '<p class="note">The engine will take the whole train, forge and lab included, to the next town once that line opens. Press E or tap Board train to have a look.</p>'],
   forge: () => ['Forge car', 'Queue ' + S.forge.queue.length + '/' + C.FORGE.queueMax, forgeRows()],
@@ -150,13 +165,7 @@ function renderPanel() {
 $('panelBody').addEventListener('click', e => {
   const b = e.target.closest('[data-act]'); if (!b || b.disabled) return;
   const id = b.dataset.id, act = b.dataset.act;
-  if (act === 'buy') {
-    const next = C.PARTS[id].tiers[S.tiers[id] + 1];
-    if (townSpot() !== 'shop' || !next || S.coins < next.cost) return;
-    S.coins -= next.cost; S.tiers[id]++;
-    if (id === 'body') P.battery = batteryMax();
-    toast(null, next.name + ' installed.'); save();
-  }
+  if (act === 'buy') buyPart(id);
   if (act === 'sell' || act === 'sellall') sellItem(id, act === 'sellall');
   if (act === 'refine') queueRecipe(id);
   if (act === 'build') buildMod(id);
@@ -216,8 +225,8 @@ confirmButton('reset', 'Reset progress', () => 'Click again to reset', () => {
 // ---------- Refresh everything that shows numbers ----------
 function updateUI() {
   const st = station();
-  $('depth').textContent = depthOf(pRow()) + ' m';
-  $('biome').textContent = inTown() ? 'Town' : 'Cave ' + (S.cave + 1) + ' · ' + (st === 'entrance' ? 'entrance' : st === 'outpost' ? 'halfway outpost' : cave().name);
+  $('depth').textContent = (inTown() ? 0 : depthOf(pRow())) + ' m';
+  $('biome').textContent = inShop() ? 'Pip\'s shop' : inTown() ? 'Town' : 'Cave ' + (S.cave + 1) + ' · ' + (st === 'entrance' ? 'entrance' : st === 'outpost' ? 'halfway outpost' : cave().name);
   $('coins').textContent = fmt(S.coins);
   $('flux').hidden = !S.bots && S.flux < 1;
   $('flux').textContent = fmt(S.flux) + ' Flux';

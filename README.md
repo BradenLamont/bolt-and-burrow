@@ -5,7 +5,7 @@ A browser mining game: steer a robot with swappable parts down through the earth
 **Play:** open `index.html`, or publish the repo with GitHub Pages.
 
 ## Controls
-- Desktop: arrow keys or WASD to move. Push into blocks to dig them (standing between two blocks digs both). Up goes deeper into the cave. Stand on the conveyor and hold Up or Down to ride it. E (or the action button) uses a bridge pad or boards the train. Walk into an open gate in town to enter a cave; walk out the TOWN door to leave. In town, stand in front of the SHOP or at a train car's door to use it.
+- Desktop: arrow keys or WASD to move. Push into blocks to dig them (standing between two blocks digs both). Up goes deeper into the cave. Stand on the conveyor and hold Up or Down to ride it. E (or the action button) uses a bridge pad or boards the train. Walk into an open gate in town to enter a cave; walk out the TOWN door to leave. In town, walk through the SHOP door to go inside, or stand at a train car's door to use it.
 - Computer (Lab car): tap a mod, then tap a cell. With a mouse you can also drag mods onto the grid.
 - Phone: touch and drag anywhere on the cave for a joystick.
 - Recall button: emergency trip back to the cave entrance, keeping half your ore.
@@ -109,6 +109,12 @@ A browser mining game: steer a robot with swappable parts down through the earth
 - Saves start fresh in this version
 - Balancing sheet updated: block coins, materials and mods tabs
 
+## v0.8.1 – Pip's shop
+- Walk through the SHOP door to go inside. Pip the Mole runs the shop from behind his counter
+- Each part has its own display stand: walk up to one to see every tier and buy the next (or press E)
+- Sell ore and materials to Pip at the counter
+- Ore and materials are worth about 50% more, so selling ore beats block coins again
+
 ## The plan (agreed October 2026)
 
 ### v0.8 – the train base, materials and the computer (done)
@@ -177,5 +183,7 @@ A browser mining game: steer a robot with swappable parts down through the earth
 - Contracts from the town (e.g. bring back 10 silver)
 - Pilot XP: the pilot levels up separately from the mech, with small perks
 - More towns, each with its own caves, linked by the train
+- More nano-bots with their own movement patterns, and interactions between them
+- Spend Flux to speed up the nano-bot's paths between chips, or to upgrade the chips themselves
 - Train upgrades per car: engine reaches new biomes, storage size limit, faster forge, bigger lab
 - A nano-bot widget outside the game (much later)
