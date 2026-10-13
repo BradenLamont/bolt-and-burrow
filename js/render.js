@@ -27,7 +27,7 @@ function updateEffects(dt) {
 // ---------- Canvas setup ----------
 const stage = $('stage'), cv = $('world'), g = cv.getContext('2d');
 const pcv = $('pet'), pg = pcv.getContext('2d');
-let VW = 1, VH = 1, PW = 1, PH = 1, CELL = 40, camX = 0, camY = 0, time = 0;
+let padTop = 0, padBot = 0, VW = 1, VH = 1, PW = 1, PH = 1, CELL = 40, camX = 0, camY = 0, time = 0;
 function fit(canvas, ctx) {
   const r = canvas.getBoundingClientRect(), dpr = Math.min(2, window.devicePixelRatio || 1);
   canvas.width = Math.max(1, Math.round(r.width * dpr)); canvas.height = Math.max(1, Math.round(r.height * dpr));
@@ -36,8 +36,12 @@ function fit(canvas, ctx) {
 }
 function resize() {
   [VW, VH] = fit(cv, g); [PW, PH] = fit(pcv, pg);
+  // the HUD (top) and controls (bottom) sit over the canvas; the town is fitted between them
+  const sr = stage.getBoundingClientRect(), hud = document.querySelector('.hud').getBoundingClientRect();
+  const ctl = document.querySelector('.controls').getBoundingClientRect();
+  padTop = Math.max(0, hud.bottom - sr.top); padBot = Math.max(0, sr.bottom - ctl.top);
   // the town is shown whole; caves zoom in a little closer
-  CELL = Math.max(22, Math.floor(Math.min(VW / 15, inTown() ? VH / (C.TOWN.rows + 1.8) : VH / 9.5)));
+  CELL = Math.max(22, Math.floor(Math.min(VW / 15, inTown() ? (VH - padTop - padBot) / (C.TOWN.rows + 0.4) : VH / 9.5)));
 }
 new ResizeObserver(resize).observe(stage);
 new ResizeObserver(resize).observe($('burrowView'));
@@ -46,7 +50,7 @@ new ResizeObserver(resize).observe($('burrowView'));
 function cameraTarget() {
   const s = CELL, worldW = COLS * s;
   const tx = worldW <= VW ? (worldW - VW) / 2 : Math.max(0, Math.min(worldW - VW, P.x * s - VW / 2));
-  if (inTown()) return [tx, (ROWS * s - VH) / 2 + s * 0.1];   // the whole town fits on screen
+  if (inTown()) return [tx, -(padTop + (VH - padTop - padBot - ROWS * s) / 2) + s * 0.25];   // the whole town fits between the HUD and controls
   let ty = (ROWS - P.y) * s - VH * 0.55;
   ty = Math.min(ty, ROWS * s - VH + s * 1.4);   // room under the bottom row for the controls
   ty = Math.max(ty, -s * 1.6);                  // room above the top row for the HUD
@@ -65,6 +69,7 @@ function drawFloor(c, r, x, y, s) {
   if (t === 'chasm') return drawChasm(c, r, x, y, s);
   if (t === 'bridge' || t === 'oldbridge') { drawChasm(c, r, x, y, s); return drawBridge(c, r, x, y, s, t === 'oldbridge'); }
   const town = inTown(), hall = !town && r < BASE_ROWS, path = town && DECO[idx(c, r)] === 2;
+  if (town && DECO[idx(c, r)] === 3) return drawPlatform(c, r, x, y, s);
   g.fillStyle = town ? (path ? '#7a6248' : '#3c4a2c') : hall ? '#3a3128' : cave().floor;
   g.fillRect(x, y, s, s);
   g.fillStyle = town && !path ? 'rgba(120,150,80,.25)' : 'rgba(255,230,200,.05)';
@@ -161,6 +166,7 @@ function drawWall(t, c, r, x, y, s, W) {
   const i = idx(c, r), seen = SEEN[i];
   if (t === 'tree') return drawTree(c, r, x, y, s, W);
   if (t === 'pedestal') return drawPedestal(c, r, x, y, s, W);
+  if (t === 'rail') return drawRail(c, r, x, y, s);
   const hidden = t === 'cache' ? seen !== 2 : (ORES.has(t) || t === 'fossil' || t === 'relic' || t === 'keycache') && !seen;
   const look = hidden ? baseFor(c, r) : t;
   const base = C.BLOCKS[look].color || C.BLOCKS[baseFor(c, r)].color;
@@ -247,6 +253,7 @@ function drawTree(c, r, x, y, s, W) {
 }
 function drawPedestal(c, r, x, y, s, W) {
   const k = C.TOWN.pedestals.indexOf(c), done = k >= 0 && S.caves[k].relicDone;
+  g.fillStyle = 'rgba(0,0,0,.25)'; g.beginPath(); g.ellipse(x + s * 0.5, y + s * 0.88, s * 0.4, s * 0.1, 0, 0, 7); g.fill();
   g.fillStyle = '#5b5753'; g.fillRect(x + s * 0.2, y + s * 0.15 - W * 0.5, s * 0.6, s * 0.75);
   g.fillStyle = '#7a756f'; g.fillRect(x + s * 0.12, y + s * 0.05 - W * 0.5, s * 0.76, s * 0.18);
   if (done) {
@@ -256,6 +263,61 @@ function drawPedestal(c, r, x, y, s, W) {
   } else {
     g.fillStyle = '#2a2433'; g.fillRect(x + s * 0.38, y - W * 0.5 - s * 0.02, s * 0.24, s * 0.08);
   }
+}
+// Train station: stone platform, tracks and the parked train
+function drawPlatform(c, r, x, y, s) {
+  g.fillStyle = '#6d6862'; g.fillRect(x, y, s, s);
+  g.fillStyle = 'rgba(0,0,0,.18)'; g.fillRect(x, y, 1, s); g.fillRect(x, y + s * 0.5, s, 1);   // paving joints
+  g.fillStyle = '#d9b23b'; g.fillRect(x, y + s * 0.8, s, s * 0.06);                          // safety line by the edge
+  g.fillStyle = '#4a4642'; g.fillRect(x, y + s * 0.9, s, s * 0.1);                           // platform edge
+  if (c === C.TOWN.station.door) { // where you board
+    g.strokeStyle = 'rgba(217,129,59,.55)'; g.lineWidth = Math.max(1, s * 0.04);
+    g.strokeRect(x + s * 0.15, y + s * 0.15, s * 0.7, s * 0.55);
+  }
+}
+function drawRail(c, r, x, y, s) {
+  g.fillStyle = '#3d3630'; g.fillRect(x, y, s, s);                                           // gravel bed
+  g.fillStyle = 'rgba(255,240,220,.06)';
+  for (let k = 0; k < 6; k++) g.fillRect(x + s * hash(c, k, 50), y + s * hash(k, c, 51), 2, 2);
+  g.fillStyle = '#5a3f2a'; for (let k = 0; k < 3; k++) g.fillRect(x + s * (0.08 + k * 0.33), y + s * 0.18, s * 0.14, s * 0.64); // sleepers
+  g.fillStyle = '#9a948c'; g.fillRect(x, y + s * 0.28, s, s * 0.07); g.fillRect(x, y + s * 0.65, s, s * 0.07); // rails
+}
+function drawTrain(X, Y, s, W) {
+  const ST = C.TOWN.station, [c0, c1] = ST.train, row = ST.railRow;
+  const top = Y(row + 1) + s * 0.12 - W * 1.6, roofH = s * 0.5, bottom = Y(row + 1) + s * 0.85;
+  const cars = [[c0, c0 + 2, true], [c0 + 3, c0 + 5, false], [c0 + 6, c1, false]];   // locomotive, then two coaches
+  cars.forEach(([a, b, loco]) => {
+    const x = X(a) + s * 0.06, w = (b - a + 1) * s - s * 0.12;
+    g.fillStyle = 'rgba(0,0,0,.3)'; g.fillRect(x + s * 0.05, bottom - s * 0.02, w, s * 0.08);   // shadow
+    g.fillStyle = loco ? '#5b3a24' : '#3f4a52'; rr2(g, x, top, w, roofH, s * 0.12); g.fill();    // roof
+    g.fillStyle = 'rgba(255,255,255,.08)'; g.fillRect(x + s * 0.1, top + roofH * 0.35, w - s * 0.2, roofH * 0.12);
+    g.fillStyle = loco ? '#c9692a' : '#2f3940'; g.fillRect(x, top + roofH, w, bottom - top - roofH); // side
+    g.fillStyle = '#d9813b'; g.fillRect(x, bottom - s * 0.16, w, s * 0.05);                     // stripe
+    const winY = top + roofH + s * 0.08, winH = Math.max(3, (bottom - top - roofH) * 0.35);
+    if (loco) {
+      g.fillStyle = '#16110d'; g.fillRect(x + w - s * 0.9, winY, s * 0.6, winH);                // cab window
+      g.fillStyle = '#ffd98a'; g.beginPath(); g.arc(x + s * 0.12, top + roofH + s * 0.12, s * 0.07, 0, 7); g.fill(); // headlight
+      g.fillStyle = '#3a2b20'; g.fillRect(x + s * 0.4, top - s * 0.12, s * 0.22, s * 0.2);      // stack
+    } else {
+      for (let k = 0; k < b - a + 1; k++) {
+        const wx = x + k * s + s * 0.2;
+        const door = a + k === ST.door;
+        g.fillStyle = door ? '#1b1410' : 'rgba(255,217,138,.75)';
+        g.fillRect(wx, door ? winY - s * 0.02 : winY, s * 0.5, door ? bottom - winY - s * 0.17 : winH);
+      }
+    }
+  });
+  // couplings
+  g.fillStyle = '#2a1f17';
+  for (const c of [c0 + 3, c0 + 6]) g.fillRect(X(c) - s * 0.08, bottom - s * 0.3, s * 0.16, s * 0.08);
+  // station sign on the platform's left end
+  const sx = X(2), sy = Y(ST.platformRow + 1) - s * 0.15;
+  g.fillStyle = '#2a1f17'; g.fillRect(sx + s * 0.45, sy + s * 0.3, s * 0.1, s * 0.55);
+  g.fillStyle = '#3a2b20'; rr2(g, sx - s * 0.6, sy - s * 0.1, s * 2.2, s * 0.48, 3); g.fill();
+  g.textAlign = 'center'; g.fillStyle = '#efe3d3'; g.font = '700 ' + Math.round(s * 0.2) + 'px "Pixelify Sans", monospace';
+  g.fillText('STATION', sx + s * 0.5, sy + s * 0.12);
+  g.fillStyle = '#d9813b'; g.font = '500 ' + Math.round(s * 0.13) + 'px "IBM Plex Mono", monospace';
+  g.fillText('NEXT TOWN SOON', sx + s * 0.5, sy + s * 0.3);
 }
 // A sealed cave gate: a heavy door with a relic-shaped slot
 function drawLockedGate(c, r, x, ty, s) {
@@ -324,7 +386,7 @@ function render(dt) {
   const blocked = new Set(beltBlocked());
 
   // Pass 1: all floor tiles first, so floor never paints over the walker's feet
-  for (let r = rTop; r >= rBot; r--) for (let c = c0; c <= c1; c++) { const t = at(c, r); if (isFloor(t) || t === 'chasm') drawFloor(c, r, X(c), Y(r + 1), s); }
+  for (let r = rTop; r >= rBot; r--) for (let c = c0; c <= c1; c++) { const t = at(c, r); if (isFloor(t) || t === 'chasm' || t === 'tree' || t === 'pedestal') drawFloor(c, r, X(c), Y(r + 1), s); }
   // Pass 2: walls, buildings and the walker, top of screen to bottom.
   // The walker is drawn with the row its feet stand in, so only walls in front of it overlap it.
   const walkerRow = Math.floor(P.y - HB + 0.01);
@@ -345,6 +407,7 @@ function render(dt) {
     if (inTown()) {
       if (r === C.TOWN.shop.rows[0]) { drawBaseBuilding(X, Y, s, W, C.TOWN.shop, 'SHOP'); drawBaseBuilding(X, Y, s, W, C.TOWN.burrow, 'BURROW'); }
       if (r === C.TOWN.gateRow) drawGates(X, Y, s, W);
+      if (r === C.TOWN.station.railRow) drawTrain(X, Y, s, W);
     } else {
       if (r === C.BASE_BUILDING.rows[0]) drawBaseBuilding(X, Y, s, W);
       if (r === BASE_ROWS - 1) drawCaveSign(X, Y, s);

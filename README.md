@@ -83,7 +83,8 @@ A browser mining game: steer a robot with swappable parts down through the earth
 
 ## v0.7 – the town
 - You now start in a town with three cave gates. Walk into an open gate to enter that cave; walk out a cave's TOWN door to return
-- Gates are sealed until you bring home the previous cave's relic, which then sits on its pedestal in town
+- Gates are sealed until you bring home the previous cave's relic, which then sits on the pedestal beside that cave's gate
+- A train station along the bottom of town (the line to other towns isn't open yet)
 - Each cave has a free outpost at its entrance, plus the halfway outpost you build with the conveyor. Fast travel works between them
 - Relic rewards are smaller (300 / 800 / 2,000 coins) now that relics are keys
 - Bridge pads use cave-specific bridge keys instead of coins. Each cave hides one marked key cache per bridge pad before the chasm (visible once your light reaches it)
@@ -118,3 +119,4 @@ A browser mining game: steer a robot with swappable parts down through the earth
 - Combat: split the arms into two slots, one arm for digging and one for combat
 - Contracts from the town (e.g. bring back 10 silver)
 - Pilot XP: the pilot levels up separately from the mech, with small perks
+- More towns, each with its own caves, linked by the train

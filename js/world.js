@@ -168,8 +168,12 @@ function genTown() {
     for (let r = b.rows[0]; r <= b.rows[1]; r++) for (let c = b.cols[0]; c <= b.cols[1]; c++) T[idx(c, r)] = 'found';
   TW.trees.forEach(([c, r]) => { T[idx(c, r)] = 'tree'; });
   TW.pedestals.forEach(c => { T[idx(c, TW.pedestalRow)] = 'pedestal'; });
-  // a dirt path from the spawn point up to each gate (decoration)
-  for (let r = TW.spawn.row; r < TW.gateRow; r++) DECO[idx(TW.spawn.col, r)] = 2;
+  // train station: tracks across the bottom row, a stone platform above them (DECO 3)
+  const ST = TW.station;
+  for (let c = 0; c < COLS; c++) T[idx(c, ST.railRow)] = 'rail';
+  for (let c = 1; c < COLS - 1; c++) DECO[idx(c, ST.platformRow)] = 3;
+  // a dirt path from the platform up to each gate (decoration)
+  for (let r = ST.platformRow + 1; r < TW.gateRow; r++) DECO[idx(TW.spawn.col, r)] = 2;
   const pathRow = TW.gateRow - 2;
   for (let c = TW.gates[0]; c <= TW.gates[2]; c++) DECO[idx(c, pathRow)] = 2;
   TW.gates.forEach(g => { for (let r = pathRow; r < TW.gateRow; r++) DECO[idx(g, r)] = 2; });

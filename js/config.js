@@ -17,14 +17,17 @@ const CONFIG = {
   // Walk into an open gate to enter that cave. A cave's gate opens once you bring home
   // the previous cave's relic, which then sits on its pedestal in town.
   TOWN: {
-    rows: 10,
+    rows: 12,
     gates: [5, 12, 19],                          // gate columns for caves 1, 2, 3 (in the cliff at gateRow)
-    gateRow: 8,
-    shop: { cols: [2, 6], rows: [1, 2], label: 'SHOP' },
-    burrow: { cols: [18, 21], rows: [1, 2], label: 'BURROW' },
-    pedestals: [3, 5, 7], pedestalRow: 4,        // a relic pedestal for each cave, beside the shop
-    trees: [[1, 6], [23, 6], [9, 5], [15, 5], [23, 3]],
-    spawn: { col: 12, row: 3 },
+    gateRow: 10,
+    shop: { cols: [2, 6], rows: [3, 4], label: 'SHOP' },
+    burrow: { cols: [18, 21], rows: [3, 4], label: 'BURROW' },
+    pedestals: [4, 11, 18], pedestalRow: 9,      // a relic pedestal beside each cave's gate (left side)
+    trees: [[1, 8], [23, 8], [8, 7], [16, 7], [23, 5], [1, 5]],
+    spawn: { col: 12, row: 5 },
+    // Train station along the bottom: tracks in row 0, a platform in row 1, the train parked on the tracks.
+    // Other towns aren't built yet, so boarding just says the line is coming.
+    station: { railRow: 0, platformRow: 1, train: [8, 16], door: 12 },
   },
 
   // ----- The caves (levels) -----
@@ -69,7 +72,8 @@ const CONFIG = {
     gatelocked: { hp: Infinity },               // a sealed cave gate
     cliff:   { hp: Infinity, color: '#4a4038' },// the town's cliffs
     tree:    { hp: Infinity },                  // town decoration
-    pedestal: { hp: Infinity },                 // a relic pedestal in town
+    pedestal: { hp: Infinity },
+    rail: { hp: Infinity },                     // train tracks in town                 // a relic pedestal in town
     loose:   { hp: 3,   color: '#7a6d5e' },  // unstable rock (hazard)
     rubble:  { hp: 1,   color: '#5d544b' },  // left behind by a cave-in
     copper:  { hp: 3,   value: 5,  ore: '#e08a42', label: 'copper' },

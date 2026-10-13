@@ -273,6 +273,10 @@ function markSeen() {
 }
 // The action button: deploy a bridge when standing on a ready bridge pad
 function actionHere() {
+  const ST = C.TOWN.station;
+  if (inTown() && pRow() === ST.platformRow && Math.abs(P.x - (ST.door + 0.5)) < 1.6) return { label: 'Board train', run: () => {
+    toast('Train station', 'The line to the next town opens in a future update. For now, every track leads home.');
+  } };
   if (padReady(pCol(), pRow())) return { label: 'Deploy bridge · ' + S.keys[S.cave] + ' key' + (S.keys[S.cave] === 1 ? '' : 's'), run: () => {
     if (!S.keys[S.cave]) return toast(null, 'You need a ' + keyName(S.cave) + '. Marked caches before the chasm hold them.');
     S.keys[S.cave]--; deployBridge(pCol(), pRow());
