@@ -15,6 +15,7 @@
     <canvas id="world" aria-label="The cave, seen from above. Your base is at the bottom. Use the arrow keys or the touch joystick to move and dig."></canvas>
     <div class="joy" id="joy" hidden><i id="joyKnob"></i></div>
     <canvas class="minimap" id="minimap" aria-label="Map of what you've explored in this cave"></canvas>
+    <div class="bossbar" id="bossBar" hidden><span id="bossName">Boss</span><div><i id="bossHp"></i></div></div>
     <div class="hud">
       <div class="readout">
         <small>Depth</small>
@@ -23,6 +24,7 @@
       </div>
       <div class="meters">
         <div class="meter"><span>Battery</span><div class="bar"><i id="batBar"></i><u id="batMark" hidden></u></div><em id="batTxt">80</em></div>
+        <div class="meter"><span>Hull</span><div class="bar hull"><i id="hullBar"></i></div><em id="hullTxt">60</em></div>
         <div class="meter"><span>Cargo</span><div class="bar cargo"><i id="cargoBar"></i></div><em id="cargoTxt">0/8</em></div>
         <p class="warn" id="batWarn" hidden>Low battery · head back to the conveyor</p>
       </div>
@@ -33,10 +35,11 @@
       </div>
     </div>
     <div class="controls">
-      <p class="keys">Arrows or WASD: move · push into blocks to dig · Up goes deeper · E: use pads and stands · Space/Q: skill · 1–4: tools · walk into a gate to enter a cave · ride the conveyor by holding Up or Down on it</p>
+      <p class="keys">Arrows or WASD: move · push into blocks to dig · Up goes deeper · E: use pads and stands · F/J or click: attack · Space/Q: skill · 1–4: tools · walk into a gate to enter a cave · ride the conveyor by holding Up or Down on it</p>
       <p class="touch">Touch and drag anywhere for the joystick · push into blocks to dig</p>
       <div class="btns">
         <div class="belt" id="belt"></div>
+        <button id="attack" type="button" hidden>Attack</button>
         <button id="skill" type="button" hidden><span id="skillName">Skill</span><i><b id="skillBar"></b></i></button>
         <button id="action" type="button" hidden>Action</button>
         <button id="recall" type="button">Recall</button>
@@ -80,6 +83,7 @@
 <script src="js/hazards.js"></script> <!-- unstable rock, sand, boulders, water, gas -->
 <script src="js/gear.js"></script>    <!-- tool belt and active skills -->
 <script src="js/trip.js"></script>    <!-- riding the train between towns -->
+<script src="js/combat.js"></script>  <!-- weapon arm, enemies, bosses, hull -->
 <script src="js/walker.js"></script>  <!-- the Canopy Walker mech -->
 <script src="js/render.js"></script>  <!-- drawing -->
 <script src="js/ui.js"></script>      <!-- HUD, workshop, inventory -->

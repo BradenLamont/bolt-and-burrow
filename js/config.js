@@ -56,7 +56,7 @@ const CONFIG = {
   SHOP: {
     rows: 9, cols: [7, 17], door: 12, doorW: 2, counterRow: 6, pipRow: 7,
     stands: [ { slot: 'head', col: 7, row: 4 }, { slot: 'arms', col: 7, row: 2 },
-              { slot: 'body', col: 17, row: 4 }, { slot: 'legs', col: 17, row: 2 } ],
+              { slot: 'body', col: 17, row: 4 }, { slot: 'legs', col: 17, row: 2 }, { slot: 'weapon', col: 7, row: 5 } ],
   },
 
   // ----- The caves (levels) -----
@@ -72,20 +72,23 @@ const CONFIG = {
     { id: 'hollow', name: 'Topsoil Hollow', rock: ['dirt', 'clay'], floor: '#2a1e15',
       ores: { copper: 0.06, silver: 0.025 }, granite: 0.04, obsidian: 0, chasms: [], pits: 0, unstable: 0, caverns: 2,
       valueMult: 1, relic: { name: 'Ember Idol', reward: 300, wall: null }, keyName: 'Hollow bridge key', coinMult: 1, sand: 9,
+      foes: { grub: 6, bat: 3 }, miniBoss: 'grubmother',
       note: 'Soft soil and copper. Pale sand slides toward the entrance when you dig the block in front of it. Rock Claws can\'t break granite.' },
     { id: 'rift', name: 'Granite Rift', rock: ['stone'], floor: '#211d1f',
       ores: { silver: 0.05, gold: 0.03 }, granite: 0.1, obsidian: 0.02, chasms: [{ row: 38, oldBridge: true, pads: 1 }], pits: 0, unstable: 0, caverns: 3,
       valueMult: 2, relic: { name: 'Storm Lens', reward: 800, wall: 'granite' }, keyName: 'Rift bridge key', coinMult: 1.5, boulders: 0.02, aquifers: 5,
+      foes: { grub: 3, bat: 5, spitter: 4 }, miniBoss: 'warden',
       note: 'A chasm splits this cave. Boulders roll toward the entrance, and dark wet rock hides water that floods your tunnels. Push boulders by walking into them.' },
     { id: 'deeps', name: 'Basalt Deeps', rock: ['basalt'], floor: '#1b1820',
       ores: { gold: 0.05, crystal: 0.025 }, granite: 0.06, obsidian: 0.07, chasms: [{ row: 36, oldBridge: false, pads: 2 }], pits: 3, unstable: 0.08, caverns: 3,
       valueMult: 3.5, relic: { name: 'Core Heart', reward: 2000, wall: 'obsidian' }, keyName: 'Deeps bridge key', coinMult: 2, gas: 8,
+      foes: { grub: 4, bat: 5, spitter: 6 }, boss: 'golem',
       note: 'No old bridge here: find this cave\'s bridge keys before the chasm. Unstable rock collapses as you pass, and green gas pockets explode if you dig next to them.' },
     // Rustvale's test cave: a mix of everything, to try the town-to-town loop
     { id: 'test', name: 'Test Cavern', town: 1, label: 'Test cave', rock: ['stone'], floor: '#1d2129',
       ores: { copper: 0.05, silver: 0.04, gold: 0.02 }, granite: 0.05, obsidian: 0, chasms: [], pits: 1, unstable: 0.03, caverns: 3,
       valueMult: 1.5, relic: { name: 'Test Shard', reward: 100, wall: null }, keyName: 'Test bridge key', coinMult: 1.5,
-      sand: 3, boulders: 0.008, aquifers: 2, gas: 3,
+      sand: 3, boulders: 0.008, aquifers: 2, gas: 3, foes: { crab: 5, mite: 3 },
       note: 'A placeholder cave for testing: a little of everything from Hollowmouth\'s three caves.' },
   ],
 
@@ -145,15 +148,17 @@ const CONFIG = {
       { id: 'dome',    name: 'Armored Visor', cost: 120,  val: { light: 4,   scan: 3 } },
       { id: 'quantum', name: 'Sensor Dome',  cost: 1000, val: { light: 6,   scan: 6 } },
     ]},
-    arms: { label: 'Arms', stat: 'Dig power', fmt: v => '×' + v, tiers: [
+    // The dig arm hits a cone in front of you: the block ahead takes full damage, the blocks beside it 40%,
+    // and (Drill Arms and up) the block behind it 30%. Hard rock still needs the right tier.
+    arms: { label: 'Dig arm', stat: 'Dig power', fmt: v => '×' + v + ' (' + v * 4 + ' damage a second)', tiers: [
       { id: 'pincers', name: 'Rock Claws',        cost: 0,   val: 1 },
       { id: 'drills',  name: 'Drill Arms',     cost: 60,  val: 3 },
       { id: 'plasma',  name: 'Plasma Cutters', cost: 900, val: 8 },
     ]},
-    body: { label: 'Tank', stat: 'Battery · cargo', fmt: v => v.battery + ' power · ' + v.cargo + ' ore', tiers: [
-      { id: 'tin',     name: 'Small Tank',   cost: 0,    val: { battery: 80,  cargo: 8 } },
-      { id: 'iron',    name: 'Twin Tanks', cost: 150,  val: { battery: 140, cargo: 16 } },
-      { id: 'reactor', name: 'Reactor Tank',   cost: 1400, val: { battery: 240, cargo: 30 } },
+    body: { label: 'Tank', stat: 'Battery · hull · cargo', fmt: v => v.battery + ' power · ' + v.hull + ' hull · ' + v.cargo + ' ore', tiers: [
+      { id: 'tin',     name: 'Small Tank',   cost: 0,    val: { battery: 80,  cargo: 8,  hull: 60 } },
+      { id: 'iron',    name: 'Twin Tanks', cost: 150,  val: { battery: 140, cargo: 16, hull: 100 } },
+      { id: 'reactor', name: 'Reactor Tank',   cost: 1400, val: { battery: 240, cargo: 30, hull: 160 } },
     ]},
     // speed in blocks per second; eff = share of the normal battery cost of moving
     legs: { label: 'Legs', stat: 'Speed · efficiency', fmt: v => v.speed + ' blocks/s · ' + Math.round(v.eff * 100) + '% move cost', tiers: [
@@ -222,6 +227,44 @@ const CONFIG = {
     grapple: { name: 'Grapple',      cost: 60, max: 2, key: '4', text: 'Face a chasm and swing across it (up to 3 blocks)' },
   },
   BELT_SLOTS: 3,
+
+  // ----- Weapon arm -----
+  // Fire with F or J (or click to aim, or the ATTACK button). Each weapon also chips at blocks: blockHit is
+  // the share of its damage that blocks take, and tier is the hardest rock it can break (like dig arms).
+  // Mk II and Mk III multiply damage (dmg) and shorten the cooldown (cd).
+  //   kind: melee = an arc in front · shot = a projectile · pull = a bash that drags enemies together and stuns
+  //         pulse = a ring that stuns and marks enemies (marked enemies take +50% and lose their armour)
+  WEAPONS: {
+    wrench:  { name: 'Wrench',          cls: 'Melee',     kind: 'melee', cost: 0,   dmg: 3, cd: 0.45, range: 1.3, arc: 100, blockHit: 0.5, tier: 0,
+               text: 'A free starter swing. Hits everything in a small arc.' },
+    hammer:  { name: 'Rock Hammer',     cls: 'Melee',     kind: 'melee', cost: 180, dmg: 8, cd: 0.7, range: 1.45, arc: 130, blockHit: 0.9, tier: 1, armorBreak: true,
+               text: 'Heavy arc swing. Cracks armour, mines better than any weapon and can break granite.' },
+    rivet:   { name: 'Rivet Gun',       cls: 'Ranged',    kind: 'shot',  cost: 220, dmg: 3, cd: 0.3, range: 7, speed: 13, blockHit: 0.25, tier: 0,
+               text: 'Fires rivets in a straight line. Less damage, but you stay out of reach.' },
+    bulwark: { name: 'Gravity Bulwark', cls: 'Defensive', kind: 'pull',  cost: 260, dmg: 2, cd: 1.6, range: 3.2, stun: 0.9, blockHit: 0.2, tier: 0, guard: 0.5,
+               text: 'Shield bash that pulls nearby enemies together in front of you and stuns them. Halves damage from the front.' },
+    stun:    { name: 'Stun Pulse',      cls: 'Support',   kind: 'pulse', cost: 300, dmg: 1, cd: 2.5, range: 3, stun: 1.5, mark: 4, blockHit: 0, tier: 0,
+               text: 'A ring that stuns everything around you and marks enemies to take +50% damage.' },
+  },
+  WEAPON_MK: { dmg: [1, 1.5, 2.2], cd: [1, 0.9, 0.8], cost: [{ coins: 150, circuits: 2 }, { coins: 400, conductors: 2 }] },
+  HULL: { repair: 30, invuln: 0.5 },   // hull repaired per second at stations; seconds of safety after a hit
+
+  // ----- Enemies -----
+  // hp, speed (blocks/s), dmg (to hull), r (size), aggro (how close before they notice you), coins when beaten.
+  // armor: share of damage blocked unless the hit cracks armour (Rock Hammer) or the enemy is marked/stunned.
+  FOES: {
+    grub:    { name: 'Grub',       hp: 10,  speed: 1.2, dmg: 6,  r: 0.3,  aggro: 5,  coins: 3,  color: '#c9b07a' },
+    bat:     { name: 'Cave Bat',   hp: 5,   speed: 3.6, dmg: 4,  r: 0.25, aggro: 7,  coins: 2,  color: '#6b5a7a', fly: true },
+    spitter: { name: 'Spitter',    hp: 14,  speed: 0,   dmg: 8,  r: 0.35, aggro: 6,  coins: 6,  color: '#7fae4a', range: 6, fire: 2.2, shot: 5 },
+    crab:    { name: 'Rock Crab',  hp: 22,  speed: 1.6, dmg: 10, r: 0.38, aggro: 5,  coins: 8,  color: '#8c8286', armor: 0.7 },
+    mite:    { name: 'Magma Mite', hp: 3,   speed: 3,   dmg: 3,  r: 0.2,  aggro: 6,  coins: 1,  color: '#e2705a', group: 4 },
+    // mini-bosses guard the hall before the relic; the big boss holds Cave 3's Core Heart
+    grubmother: { name: 'Grub Mother',   hp: 70,  speed: 0.8, dmg: 7,  r: 0.7, aggro: 7, coins: 150, flux: 20, color: '#d9b77a', boss: 'mini', spawn: 'grub', every: 6 },
+    warden:     { name: 'Crystal Warden', hp: 160, speed: 1.4, dmg: 15, r: 0.65, aggro: 7, coins: 300, flux: 40, color: '#9fe3f0', boss: 'mini', armor: 0.5, charge: 4 },
+    golem:      { name: 'Basalt Golem',  hp: 450, speed: 1.0, dmg: 18, r: 1.0, aggro: 9, coins: 500, flux: 60, color: '#3e3c44', boss: 'big', slam: 5, slamRadius: 3.2, slamDmg: 20, spawn: 'bat', every: 8 },
+  },
+  BOSS_HALL: { rows: [50, 53], cols: [6, 18] },     // the mini-boss hall, just before the relic chamber
+  BOSS_ARENA: { rows: [50, 59], cols: [2, 22] },    // Cave 3's boss room, walled in obsidian
 
   // ----- Unstable rock hazard (only in caves with an `unstable` chance) -----
   // It starts shaking once two sides are dug open, or as soon as you pass within triggerRadius of

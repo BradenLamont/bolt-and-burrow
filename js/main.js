@@ -8,6 +8,7 @@ function frame(now) {
     depositAndCharge(dt);
     updatePlayer(dt);
     updateRocks(dt);
+    updateCombat(dt);
   }
   updateBots(dt);
   updateSkills(dt);
@@ -24,6 +25,7 @@ function frame(now) {
 loadArea();
 resizeMinimap();
 placePlayerFromSave();
+spawnFoes();
 markSeen();
 resize();
 [camX, camY] = cameraTarget();

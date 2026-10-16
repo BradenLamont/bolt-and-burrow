@@ -7,6 +7,7 @@ A browser mining game: steer a robot with swappable parts down through the earth
 ## Controls
 - Desktop: arrow keys or WASD to move. Push into blocks to dig them (standing between two blocks digs both). Up goes deeper into the cave. Stand on the conveyor and hold Up or Down to ride it. E (or the action button) uses a bridge pad or boards the train. Walk into an open gate in town to enter a cave; walk out the TOWN door to leave. In town, walk through the SHOP door to go inside, or stand at a train car's door to use it.
 - Computer (Lab car): tap a mod, then tap a cell. With a mouse you can also drag mods onto the grid.
+- F or J: attack with your weapon arm the way you face (or click the cave with a mouse to aim; ATTACK button on phones). Hold to keep attacking.
 - Space or Q: use your active skill. 1–4: use tools from your belt (or tap the buttons by Recall).
 - Sound on/off button by Recall. Backup button at the bottom of the left panel.
 - Phone: touch and drag anywhere on the cave for a joystick.
@@ -23,6 +24,7 @@ A browser mining game: steer a robot with swappable parts down through the earth
 - `js/hazards.js` – unstable rock, sand, boulders, flood water and gas pockets
 - `js/gear.js` – the tool belt and active skills
 - `js/trip.js` – riding the train between towns (boarding, the drilling scene, unloading)
+- `js/combat.js` – the weapon arm, enemies, bosses and the hull
 - `js/base.js` – the train base: storage, shop, forge, computer and mods, nano-bots
 - `js/walker.js` – the Canopy Walker mech (every part, every facing, walk and dig animation)
 - `js/render.js` – drawing the cave, town, train, effects, the minimap and the nano-bot window
@@ -136,6 +138,21 @@ A browser mining game: steer a robot with swappable parts down through the earth
 - Rustvale, a placeholder Town 2: its own colours and name sign, a closed shop, and a test cave behind its first gate (a mix of every hazard). The other two gates say "coming soon"
 - Your whole train comes with you, so the forge, lab and storage work in both towns
 - New sounds for the doors, the crane, the drill and arriving; town names on the platform sign and in the HUD
+
+## v0.11 – two arms, enemies and bosses
+- The mech now has a dig arm and a weapon arm. The dig arm hits a cone: the block ahead takes full damage, the blocks beside it 40%, and with Drill Arms or better the block behind it 30%. Hard rock still needs the right tier
+- Weapon arm (F / J, click to aim, or the ATTACK button). Five weapons from the new weapon rack in Pip's shops, each upgradable to Mk II and Mk III with coins and materials:
+  - Melee: Wrench (free starter), Rock Hammer (cracks armour, best at mining, breaks granite)
+  - Ranged: Rivet Gun
+  - Defensive: Gravity Bulwark (pulls enemies together and stuns them; halves frontal damage)
+  - Support: Stun Pulse (stuns everything nearby and marks enemies to take +50% damage)
+- Weapons also chip at blocks, less than the dig arm
+- New Hull bar: enemies damage it, Tank upgrades raise it, outposts repair it. At zero a drone recalls you (you keep half your ore)
+- Enemies: Hollowmouth has Grubs, Cave Bats and Spitters; Rustvale's test cave has Rock Crabs and Magma Mites. They reset each time you enter a cave and drop coins
+- Mini-bosses guard a hall before the relic: the Grub Mother (Cave 1) and the Crystal Warden (Cave 2)
+- Cave 3 ends in an obsidian-walled boss room: the Basalt Golem slams shockwaves, calls bats when hurt, and drops the Core Heart
+- Boss health bar; cave layouts rebuild once for the boss halls (progress kept)
+- Balancing sheet: new Weapons and Enemies tabs
 
 ## v0.10.1 – Pip's two shops
 - Hollowmouth: the Burrow Workshop, a grassy mound with a round 2-block double door, chimney, round window and lanterns. Inside: a dirt floor, a round rug, lanterns, pegboard displays and a tree-stump counter

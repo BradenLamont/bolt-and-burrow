@@ -20,7 +20,7 @@ const ORES = new Set(['copper', 'silver', 'gold', 'crystal']);
 // Tiles you can walk on even though they aren't empty
 const WALKABLE = new Set(['bridge', 'oldbridge', 'pad', 'exit', 'gate', 'shopdoor', 'water', 'beam']);
 
-const freshCave = () => ({ world: null, seen: null, deco: null, outposts: 0, relicDone: false });
+const freshCave = () => ({ world: null, seen: null, deco: null, outposts: 0, relicDone: false, bossDone: false });
 const ORE_LIST = ['copper', 'silver', 'gold', 'crystal'];
 const MAT_LIST = Object.keys(C.MATERIALS);
 const freshState = () => ({
@@ -35,9 +35,11 @@ const freshState = () => ({
   flux: 0,
   bots: 0,                      // nano-bots (the first comes with the Ember Idol)
   tools: {},                    // tools on your belt: { blast: 2 }
+  weapon: 'wrench',             // the weapon on your weapon arm
+  weapons: { wrench: 1 },       // weapons you own and their Mk (1–3)
   skillCharge: 0,               // 0–1: how charged your active skill is
   hints: [],                    // first-time hints already shown
-  ver: 9,                       // save layout version
+  ver: 11,                      // save layout version
   cave: -1,                     // where you are: -1 = town, -2 = inside Pip's shop, 0+ = a cave
   town: 0,                      // which town on the train line you're in (or whose cave you're in)
   lineOpen: false,              // the test unlock for the train line (it also opens with the Core Heart)
@@ -62,6 +64,8 @@ try {
     S = Object.assign(freshState(), JSON.parse(raw)); isNewGame = false;
     // v0.9 added sand, boulders, water and gas: rebuild cave layouts once (progress is kept)
     if ((S.ver || 8) < 9) { S.caves.forEach(c => { c.world = c.seen = c.deco = null; }); S.ver = 9; S.pos = null; }
+    // v0.11 added boss halls and Cave 3's boss room: rebuild cave layouts once more (progress is kept)
+    if (S.ver < 11) { S.caves.forEach(c => { c.world = c.seen = c.deco = null; if (c.relicDone) c.bossDone = true; }); S.ver = 11; S.pos = null; }
   }
 } catch (e) { /* storage unavailable: play without saving */ }
 while (S.caves.length < C.CAVES.length) S.caves.push(freshCave());
@@ -90,7 +94,7 @@ function save() {
   if (noSave) return;
   S.last = Date.now();
   stashCave();
-  S.pos = { x: P.x, y: P.y, battery: P.battery };
+  S.pos = { x: P.x, y: P.y, battery: P.battery, hull: P.hull };
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(S)); } catch (e) {}
 }
 

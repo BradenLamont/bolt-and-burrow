@@ -59,6 +59,12 @@ const SFX = {
   crane:  () => { tone(140, 1.2, 'sawtooth', 0.06, 260); noise(1.2, 0.05, 900, 3); },
   drill:  () => { noise(0.35, 0.18, 220 + Math.random() * 120, 1); tone(70, 0.3, 'square', 0.05, 60); },
   arrive: () => { [784, 659, 988].forEach((f, k) => tone(f, 0.2, 'triangle', 0.12, f, k * 0.1)); },
+  swing:  () => noise(0.12, 0.15, 2600, 0.8),
+  hit2:   () => { noise(0.1, 0.3, 700, 1); tone(180, 0.08, 'square', 0.12, 110); },
+  shoot:  () => { tone(900, 0.06, 'square', 0.08, 400); noise(0.05, 0.12, 3000, 1); },
+  pull:   () => { tone(120, 0.35, 'sine', 0.2, 300); noise(0.3, 0.1, 400, 1); },
+  pop:    () => { tone(500, 0.08, 'triangle', 0.12, 200); noise(0.08, 0.15, 1500, 1); },
+  spit:   () => { noise(0.15, 0.12, 1800, 2); tone(300, 0.1, 'sine', 0.06, 500); },
   relic:  () => { [523, 659, 784, 1047].forEach((f, k) => tone(f, 0.25, 'triangle', 0.15, f, k * 0.12)); },
 };
 let lastDig = 0;

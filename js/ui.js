@@ -48,6 +48,22 @@ function standRows(slot) {
     return `<div class="row${k === S.tiers[slot] ? ' here' : ''}"><div><small>Tier ${k + 1}${next ? ' · next' : ''}</small><strong>${t.name}</strong><span>${P_.fmt(t.val)}</span></div>${btn}</div>`;
   }).join('') + '</div>';
 }
+// The weapon rack: buy, fit and upgrade weapons for the weapon arm
+function weaponRows() {
+  const roman = ['I', 'II', 'III'];
+  return '<p class="note">Your weapon arm fires with <b>F</b> or <b>J</b> the way you face (or click to aim, or tap ATTACK). Weapons also chip at blocks.</p><div class="rows one">' + Object.keys(C.WEAPONS).map(id => {
+    const W = C.WEAPONS[id], mk = weaponMk(id), on = S.weapon === id;
+    let btn;
+    if (!mk) btn = `<button type="button" data-act="wbuy" data-id="${id}" ${S.coins < W.cost ? 'disabled' : ''}>Buy · ${fmt(W.cost)}</button>`;
+    else {
+      btn = on ? '<button type="button" disabled>Fitted</button>' : `<button type="button" data-act="wequip" data-id="${id}">Fit</button>`;
+      const c = mkCost(id);
+      btn += mk < 3 ? `<button type="button" data-act="wup" data-id="${id}" ${mkAfford(id) ? '' : 'disabled'}>Mk ${roman[mk]} · ${Object.entries(c).map(([k, n]) => (k === 'coins' ? fmt(n) : n + ' ' + k)).join(' + ')}</button>` : '<button type="button" disabled>Mk III</button>';
+    }
+    const stats = W.kind === 'pulse' ? 'stuns ' + W.stun + ' s, marks for ' + W.mark + ' s' : W.kind === 'pull' ? 'pulls and stuns, halves frontal damage' : Math.round(wDmg(id) * 10) / 10 + ' damage every ' + Math.round(wCd(id) * 100) / 100 + ' s';
+    return `<div class="row${on ? ' here' : ''}"><div><small>${W.cls}${mk ? ' · Mk ' + roman[mk - 1] : ''}</small><strong>${W.name}</strong><span>${W.text} (${stats})</span></div><div class="mod-btns">${btn}</div></div>`;
+  }).join('') + '</div>';
+}
 // What's on each stand at a glance (shown when you're inside but not at a stand)
 function partsSummary() {
   return '<div class="rows">' + SLOTS.map(s => {
@@ -163,7 +179,7 @@ const PANEL = {
   town: () => [TOWN().name, 'Town ' + (S.town + 1), `<p class="note">${TOWN().shop ? 'Walk through the big door of <b>Pip\'s shop</b> to buy parts and sell.' : 'Pip hasn\'t opened a shop here yet: buy and sell back in Hollowmouth.'} Stand at a train car's door (the marked platform tiles) to use the <b>Forge</b>, <b>Lab</b> or <b>Storage</b>.</p>` +
     '<small class="sub">In storage</small>' + itemList([...ORE_LIST, ...MAT_LIST], { empty: 'Storage is empty. Ore you bring to any outpost ends up here.' })],
   shopfloor: () => ['Pip\'s shop', 'Inside', '<p class="note">Walk up to a <b>display stand</b> to look at a part, or to <b>Pip</b> at the counter to sell. The door at the bottom leads back to town.</p>' + partsSummary()],
-  stand: () => { const slot = shopSpot().slice(6); return [C.PARTS[slot].label + ' stand', C.PARTS[slot].stat, standRows(slot)]; },
+  stand: () => { const slot = shopSpot().slice(6); if (slot === 'weapon') return ['Weapon rack', 'Weapon arm', weaponRows()]; return [C.PARTS[slot].label + ' stand', C.PARTS[slot].stat, standRows(slot)]; },
   counter: () => ['Pip\'s counter', 'Tools and trading', '<p class="note pip">Pip: "Tools for the road, and I\'ll buy whatever you dug up!"</p>' +
     '<small class="sub">Tool belt · ' + beltTypes().length + '/' + beltSlots() + ' slots</small>' + toolRows() +
     '<small class="sub">Sell from storage</small>' +
@@ -197,6 +213,9 @@ $('panelBody').addEventListener('click', e => {
   const b = e.target.closest('[data-act]'); if (!b || b.disabled) return;
   const id = b.dataset.id, act = b.dataset.act;
   if (act === 'buy') buyPart(id);
+  if (act === 'wbuy') buyWeapon(id);
+  if (act === 'wequip') equipWeapon(id);
+  if (act === 'wup') upgradeWeapon(id);
   if (act === 'tool') buyTool(id);
   if (act === 'untool') returnTool(id);
   if (act === 'mkcode') { save(); backupCode = encodeSave(); }
@@ -236,6 +255,9 @@ $('panelBody').addEventListener('change', e => {
 $('backup').addEventListener('click', () => { panelOverride = panelOverride ? null : 'backup'; backupCode = ''; updateUI(); });
 $('mute').addEventListener('click', () => { toggleMute(); updateUI(); });
 $('skill').addEventListener('click', () => { useSkill(); updateUI(); });
+// ATTACK button (phones): hold to keep attacking
+$('attack').addEventListener('pointerdown', e => { e.preventDefault(); attackHeld = true; attack(); });
+for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) $('attack').addEventListener(ev, () => { attackHeld = false; });
 $('belt').addEventListener('click', e => { const b = e.target.closest('[data-tool]'); if (b) { useTool(b.dataset.tool); updateUI(); } });
 
 // Drag and drop (mouse): drag a mod onto a cell
@@ -294,6 +316,12 @@ function updateUI() {
   $('batWarn').hidden = !low;
   const cn = cargoCount();
   $('cargoBar').style.width = (cn / cargoMax() * 100) + '%';
+  $('hullBar').style.width = (Math.max(0, P.hull) / hullMax() * 100) + '%';
+  $('hullTxt').textContent = Math.ceil(Math.max(0, P.hull));
+  $('attack').hidden = inTown();
+  const boss = activeBoss();
+  $('bossBar').hidden = !boss;
+  if (boss) { $('bossName').textContent = C.FOES[boss.type].name; $('bossHp').style.width = (Math.max(0, boss.hp) / boss.max * 100) + '%'; }
   $('cargoTxt').textContent = cn + '/' + cargoMax();
   $('recall').hidden = st === 'town' || st === 'entrance';
   stage.classList.toggle('tripping', !!trip);   // hide the control hints during the train ride
@@ -307,7 +335,7 @@ function updateUI() {
     lab: ['Lab car', 'Build mods with materials and coins, then place them in the computer. Each mod has a fixed shape.'],
     storage: ['Storage car', 'Everything you send home ends up here. Sell it at Pip\'s counter or refine it in the Forge car.'],
     engine: ['Engine car', 'Board here to ride the train to another town. The line opens with the Core Heart.'],
-    stand: ['Display stand', 'Each stand shows every tier of one part. Buy the next tier with the button or press E.'],
+    stand: ['Display stand', 'Each stand shows every tier of one part. Buy the next tier with the button or press E. The weapon rack sells weapons for your weapon arm.'],
     counter: ['Pip\'s counter', 'Buy tools for your belt and sell ore and materials from storage.'],
   };
   if (FIRST[spot]) hintOnce('visit-' + spot, ...FIRST[spot]);

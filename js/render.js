@@ -583,10 +583,22 @@ function drawShopFloor(c, r, x, y, s) {
   const st = C.SHOP.stands.find(k => k.row === r && Math.abs(k.col - c) === 1);
   if (st && shopSpot() === 'stand-' + st.slot) { g.strokeStyle = 'rgba(239,227,211,.6)'; g.lineWidth = 1.5; g.strokeRect(x + 3, y + 3, s - 6, s - 6); }
 }
+// The weapon rack: a hammer, a rivet gun and a little shield on hooks
+function drawWeaponRack(x, y, s, W) {
+  const ty = y - W, gar = garageShop();
+  g.fillStyle = gar ? '#2f3238' : '#2a1f17'; g.fillRect(x + s * 0.08, y + s - W, s * 0.84, W);
+  g.fillStyle = gar ? '#5D646E' : '#7a5538'; g.fillRect(x + s * 0.08, ty + s * 0.1, s * 0.84, s * 0.8);
+  g.fillStyle = '#8E96A0'; g.fillRect(x + s * 0.2, ty + s * 0.2, s * 0.06, s * 0.45); g.fillRect(x + s * 0.13, ty + s * 0.2, s * 0.2, s * 0.12);   // hammer
+  g.fillStyle = '#5D646E'; g.fillRect(x + s * 0.42, ty + s * 0.3, s * 0.2, s * 0.08); g.fillRect(x + s * 0.42, ty + s * 0.3, s * 0.06, s * 0.22);   // rivet gun
+  g.fillStyle = 'rgba(134,207,220,.8)'; g.beginPath(); g.ellipse(x + s * 0.76, ty + s * 0.42, s * 0.1, s * 0.18, 0, 0, 7); g.fill();               // shield
+  g.fillStyle = '#efe3d3'; g.font = '700 ' + Math.round(s * 0.15) + 'px "Pixelify Sans", monospace'; g.textAlign = 'center';
+  g.fillText('WEAPONS', x + s * 0.5, ty + s * 0.86);
+}
 // A display stand with its part on top
 const STAND_ICON = { head: '#86cfdc', arms: '#a8a39c', body: '#d9813b', legs: '#7a756f' };
 function drawStand(c, r, x, y, s, W) {
   const st = C.SHOP.stands.find(k => k.col === c && k.row === r), slot = st.slot, ty = y - W;
+  if (slot === 'weapon') return drawWeaponRack(x, y, s, W);
   const gar = garageShop();
   g.fillStyle = gar ? '#2f3238' : '#2a1f17'; g.fillRect(x + s * 0.08, y + s - W, s * 0.84, W);            // front
   g.fillStyle = gar ? '#5D646E' : '#7a5538'; g.fillRect(x + s * 0.08, ty + s * 0.1, s * 0.84, s * 0.8);   // steel shelf or pegboard
@@ -814,7 +826,7 @@ function render(dt) {
       }
     }
     // the block(s) you're digging get a thin outline
-    P.digging.forEach(d => { if (d.r === r) { g.strokeStyle = 'rgba(239,227,211,.55)'; g.lineWidth = 1.5; g.strokeRect(X(d.c) + 1.5, y - W + 1.5, s - 3, s - 3); } });
+    P.digging.forEach(d => { if (d.r === r) { g.strokeStyle = d.cone ? 'rgba(239,227,211,.25)' : 'rgba(239,227,211,.55)'; g.lineWidth = 1.5; g.strokeRect(X(d.c) + 1.5, y - W + 1.5, s - 3, s - 3); } });
     if (inShop()) {
       if (r === C.SHOP.pipRow) { drawPip(X(C.SHOP.door) + s * 0.5, Y(r + 1), s, W); drawShopDecor(X, Y, s); }
     } else if (inTown()) {
@@ -832,10 +844,14 @@ function render(dt) {
       // arms swing up over the shoulders while digging deeper into the cave
       const raiseTarget = view === 'back' && P.digging.length > 0 ? 1 : 0;
       P.armRaise = (P.armRaise || 0) + (raiseTarget - (P.armRaise || 0)) * Math.min(1, dt * 14);
+      if (P.hitFlash > 0 && Math.sin(time * 60) > 0) g.globalAlpha = 0.5;
       drawWalker(g, X(P.x), Y(P.y) + s * 0.4, s * 1.15 / 64, view, P.face, time, ids, { moving, digging: P.digging.length > 0, raise: P.armRaise });
+      g.globalAlpha = 1;
+      if (!inTown()) drawWeaponArm(X(P.x), Y(P.y), s);
     }
   }
 
+  if (!inTown()) drawFoes(X, Y, s, false);
   particles.forEach(p => { g.globalAlpha = Math.max(0, p.life * 2); g.fillStyle = p.col; const q = Math.max(2, s * 0.07); g.fillRect(X(p.x) - q / 2, Y(p.y) - W - q / 2, q, q); });
   g.globalAlpha = 1;
 
@@ -891,6 +907,7 @@ function render(dt) {
     g.restore();
   }
 
+  if (!inTown()) { drawFoes(X, Y, s, true); drawCombatFx(X, Y, s); }
   // skill effects: scan pulse rings, the shield bubble and the drill-burst glow
   pulses.forEach(pl => {
     g.strokeStyle = 'rgba(134,207,220,' + (1 - pl.t) + ')'; g.lineWidth = 3;

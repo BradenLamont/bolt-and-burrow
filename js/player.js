@@ -16,8 +16,9 @@ function boxSolid(x, y) {
 }
 function placePlayerFromSave() {
   const p = S.pos;
-  if (p && typeof p.x === 'number' && !boxSolid(p.x, p.y)) { P.x = p.x; P.y = p.y; P.battery = Math.min(p.battery, batteryMax()); }
+  if (p && typeof p.x === 'number' && !boxSolid(p.x, p.y)) { P.x = p.x; P.y = p.y; P.battery = Math.min(p.battery, batteryMax()); P.hull = Math.min(p.hull == null ? hullMax() : p.hull, hullMax()); }
   else {
+    P.hull = hullMax();
     const sp = inShop() ? { col: C.SHOP.door + C.SHOP.doorW / 2 - 0.5, row: 1 } : inTown() ? C.TOWN.spawn : C.SPAWN;
     P.x = sp.col + 0.5; P.y = sp.row + 0.5; P.battery = batteryMax();
   }
@@ -58,10 +59,13 @@ function returnCost() {
 const moveCost = () => C.BATTERY.move * legs().eff * (1 - modVal('saver')) * drainMult();   // battery per block walked
 const lowBattery = () => !station() && P.battery < returnCost() + C.LOW_BATTERY.buffer;
 
-function recall(kind) {
+function recall(kind, what) {
   const n = cargoCount();
   let msg;
-  if (kind === 'dead') {
+  if (kind === 'wrecked') {
+    const lost = cargoRemove(n - Math.floor(n * C.RECALL.keepCargo));
+    msg = (what ? 'The ' + what + ' wrecked your hull. ' : 'Your hull gave out. ') + 'A recovery drone hauled you back to the entrance' + (lost ? ' and dropped ' + lost + ' ore on the way.' : '.');
+  } else if (kind === 'dead') {
     S.cargo.items = {};
     msg = n ? 'A recovery drone hauled you back to the entrance. Your ' + n + ' ore was lost.' : 'A recovery drone hauled you back to the entrance.';
   } else {
@@ -69,8 +73,8 @@ function recall(kind) {
     msg = n ? 'The drone dropped ' + lost + ' ore on the way. You kept ' + (n - lost) + '.' : 'A drone carried you back to the entrance.';
   }
   if (S.relicHeld) msg += ' The ' + C.CAVES[S.relicHeld - 1].relic.name + ' made it back safely.';
-  P.x = C.SPAWN.col + 0.5; P.y = C.SPAWN.row + 0.5; P.battery = batteryMax(); P.digging = [];
-  toast(kind === 'dead' ? 'Battery dead' : 'Recalled', msg);
+  P.x = C.SPAWN.col + 0.5; P.y = C.SPAWN.row + 0.5; P.battery = batteryMax(); P.hull = hullMax(); P.digging = [];
+  toast(kind === 'dead' ? 'Battery dead' : kind === 'wrecked' ? 'Hull wrecked' : 'Recalled', msg);
 }
 
 // At a station: send ore home to train storage, claim the relic, recharge
@@ -78,6 +82,7 @@ function depositAndCharge(dt) {
   const here = station();
   if (!here) return;
   P.warned = false;
+  repairHull(dt);
   depositCargo();
   if (S.relicHeld) claimRelic();
   P.battery = Math.min(batteryMax(), P.battery + C.CHARGE_RATE * dt);
@@ -193,6 +198,16 @@ function digEdge(axis, dir, dt) {
   }
 }
 
+// The dig arm hits a cone: the blocks beside the one ahead take 40%, and with Drill Arms or better the
+// block behind it takes 30%. (The block ahead is dug by digEdge above.)
+function digCone(dx, dy, dt) {
+  const c0 = pCol() + dx, r0 = pRow() + dy;
+  if (!solidAt(c0, r0)) return;
+  const hit = (c, r, k) => { const t = at(c, r); if (t && !isFloor(t) && t !== 'chasm' && C.BLOCKS[t].hp !== Infinity && t !== 'boulder' && (C.BLOCKS[t].needs || 0) <= S.tiers.arms && !P.digging.some(d => d.c === c && d.r === r)) { dig(c, r, dt * k); P.digging[P.digging.length - 1] && (P.digging[P.digging.length - 1].cone = true); } };
+  hit(c0 + dy, r0 + dx, 0.4); hit(c0 - dy, r0 - dx, 0.4);
+  if (S.tiers.arms >= 1) hit(c0 + dx, r0 + dy, 0.3);
+}
+
 // ---------- Movement ----------
 // Move along one axis; returns true if a block stopped the move.
 function moveAxis(dx, dy) {
@@ -248,8 +263,8 @@ function updatePlayer(dt) {
   const moved = Math.hypot(P.x - x0, P.y - y0);
   if (moved && drain(moved * moveCost())) return;
 
-  if (hitX) digEdge('x', dx, dt);
-  if (hitY) digEdge('y', dy, dt);
+  if (hitX) { digEdge('x', dx, dt); digCone(dx, 0, dt); }
+  if (hitY) { digEdge('y', dy, dt); digCone(0, dy, dt); }
   finishMove();
 }
 
@@ -289,7 +304,7 @@ function markSeen() {
 // The action button: deploy a bridge when standing on a ready bridge pad
 function actionHere() {
   const sp = shopSpot();
-  if (sp && sp.startsWith('stand-')) {
+  if (sp && sp.startsWith('stand-') && sp !== 'stand-weapon') {
     const slot = sp.slice(6), next = C.PARTS[slot].tiers[S.tiers[slot] + 1];
     if (next) return { label: 'Buy ' + next.name + ' · ' + fmt(next.cost), run: () => buyPart(slot) };
   }

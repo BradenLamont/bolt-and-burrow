@@ -161,7 +161,25 @@ function genCave() {
   for (let r = B.rows[0]; r <= B.rows[1]; r++) for (let c = B.cols[0]; c <= B.cols[1]; c++) T[idx(c, r)] = 'found';
   T[idx(C.EXIT.col, C.EXIT.row)] = 'exit';
   for (let k = 1; k <= cs.outposts; k++) buildOutpost(k);
-  if (!cs.relicDone && S.relicHeld !== S.cave + 1) placeRelic();
+  // 7. Bosses: a hall before the relic chamber for a mini-boss, or (Cave 3) a boss room that replaces it.
+  //    The big boss carries the relic, so it isn't placed in the rock.
+  if (cv.boss) {
+    const A = C.BOSS_ARENA;
+    for (let r = A.rows[0] - 1; r <= A.rows[1] + 1; r++) for (let c = A.cols[0] - 1; c <= A.cols[1] + 1; c++) {
+      if (!inBounds(c, r) || r >= ROWS - 1 || c < 1 || c > COLS - 2) continue;
+      const wall = r < A.rows[0] || r > A.rows[1] || c < A.cols[0] || c > A.cols[1];
+      T[idx(c, r)] = wall ? 'obsidian' : null; DECO[idx(c, r)] = wall ? 0 : 1;
+    }
+  } else {
+    if (cv.miniBoss) {
+      const H = C.BOSS_HALL;
+      for (let r = H.rows[0]; r <= H.rows[1]; r++) for (let c = H.cols[0]; c <= H.cols[1]; c++) {
+        const edge = (r === H.rows[0] || r === H.rows[1]) && (c === H.cols[0] || c === H.cols[1]);
+        if (!edge) { T[idx(c, r)] = null; DECO[idx(c, r)] = 1; }
+      }
+    }
+    if (!cs.relicDone && S.relicHeld !== S.cave + 1) placeRelic();
+  }
 }
 
 // ---------- The town ----------
@@ -231,7 +249,7 @@ function loadArea() {
 }
 function arrive(x, y, dir) {
   P.x = x; P.y = y; P.dir = dir; P.digging = [];
-  clearHazards(); flares.length = 0; lastCell = -1; markSeen();
+  clearHazards(); flares.length = 0; lastCell = -1; markSeen(); spawnFoes();
   resizeMinimap(); resize();
   [camX, camY] = cameraTarget();
   save(); updateUI();
