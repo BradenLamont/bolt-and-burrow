@@ -50,6 +50,7 @@ function useTool(id) {
     burst(P.x, P.y, '#a8a39c', 12); sfx('dash');
   }
   S.tools[id]--;
+  contractEvent('tools');
   save();
 }
 function updateFlares(dt) {

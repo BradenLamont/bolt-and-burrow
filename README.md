@@ -31,6 +31,8 @@ A browser mining game: steer a robot with swappable parts down through the earth
 - `js/render.js` – drawing the cave, town, train, effects, the minimap and the nano-bot window
 - `js/ui.js` – HUD, the tip line, key cues, and the pop-ups for train cars, shop stands, the counter and outposts
 - `js/menu.js` – the pause menu tabs, settings, full screen and the nano-bot box
+- `js/contracts.js` – the daily contracts board
+- `js/tutorial.js` – Scout's first-run tutorial in Cave 1
 - `js/input.js` – keyboard and touch joystick
 - `js/main.js` – start-up and the main loop
 - `docs/balancing.xlsx` – planning copy of the numbers (doesn't change the game)
@@ -195,6 +197,19 @@ A browser mining game: steer a robot with swappable parts down through the earth
 - In town, the tip line says when your hull is being repaired
 - Balancing sheet: the two new upgrades on the Flux upgrades tab
 
+## v0.13 – Rustvale for real
+- Rustvale's placeholder test cave is replaced by three caves in old industrial mines. Each relic opens the next gate, and the relics sit on pedestals in town like Hollowmouth's:
+  - Cave 4 · Scrap Tunnels: rust-stained rock, scrap machinery blocks that pay extra coins, and steam vents that hiss, then burst. Mini-boss: the Scrap Hauler, a runaway ore cart that charges and is stunned when it crashes into rock
+  - Cave 5 · Slag Works: glowing slag, hidden lava pockets (the rock around them glows orange) that spill lava into your tunnels. Lava burns your hull and cools to a walkable crust. Mini-boss: the Slag Golem, which slams and calls Magma Mites
+  - Cave 6 · The Crucible: burnt cinder rock with hot seams and two lava rivers to cross. Boss: the Foundry Titan, which fires fans of molten slag, slams anything close and calls Magma Mites when hurt; it drops the Foundry Heart
+- Rustvale has its own look: gravel and steel deck plates, scrap heaps and lamp posts, girder-braced cliffs and steel mine-head gates. Its caverns have rusted pipes and old rails instead of stalagmites
+- Daily contracts: a board in each town shows three contracts picked at random each day (dig, collect an ore, beat enemies, send ore home, refine, sell, open caches, reach a depth, use tools). Claim coins and Flux at the board, plus a bonus for all three. Sizes and rewards grow with your progress
+- First-run tutorial: Scout, a little guide drone, flies beside you in Cave 1 and points the way through moving, digging, ore, fighting and sending ore home, then flies back to the train. Skip it any time
+- Digging feel: cracks spread across a block as it weakens, blocks break into chunks that bounce and tumble, and hard rock judders the screen a little
+- Enemy polish: a squash and sparks when hit, a burst ring and flying pieces when beaten (bigger for bosses), and a boss intro card the first time you meet a boss on each visit
+- Saves: Rustvale's old test cave is reset; Hollowmouth progress is kept. Players who've already found a relic skip the tutorial
+- Balancing sheet: Rustvale caves and bosses, and a new Contracts tab
+
 ## The plan (agreed October 2026)
 
 ### v0.8 – the train base, materials and the computer (done)
@@ -225,45 +240,42 @@ A browser mining game: steer a robot with swappable parts down through the earth
 - Cave events: tremors, gas leaks
 - Active skills (1 at a time): dash, drill burst, scan pulse, shield, charged attack. The nano-bots recharge them; some also cost battery
 
-### v0.10 – blueprints and better parts
-- Blueprints drop from caches, contracts and relic rooms and unlock upgraded mech parts
-- Parts as loot with rarities and perks
+### Done since
+- v0.10 the Drill Liner and Town 2 · v0.11 split dig and weapon arms, enemies and bosses · v0.12 ore drops and Flux upgrades · v0.12.1 full screen · v0.13 Rustvale, daily contracts, the tutorial, lava hazards hinted by glow
 
-### After that
-- Contracts board, repairing the train, Town 2
-- End of each town: a computer expansion (+2 cells) that costs Flux to install
-- Combat with split dig and combat arms; creatures
-- Hand-built rooms and small puzzles inside caves
-- More nano-bots and nano-bot jobs (Refine, Repair, Scout), with an offline cap
-- First-time hints for each new system, and sounds
-- Nano-Bots: rework pets into nano-bots that live inside the robot, still giving bonuses and passive coins
-- Ways for pets / nano-bots to interact with the player
-- More pets with their own movement patterns (bat, worm, drone)
-- Lava and gas hazards, hidden but hinted by a glow in nearby blocks
-- More biomes
-- A relic at the bottom of each biome
-- Prestige (rebuild the bot for a permanent bonus)
-- Separate game modes: timed or challenge runs
-- Store release (mobile and PC)
-- New artwork for the 2.5D style, including up and down facing for the robot (next, after v0.5)
-- Replace the base shop with a town (cosmetic at first, still gives shop access)
-- Unique caves alongside the biomes, and a way to travel between them
-- Sound effects and a mute button
-- Save backup (export / import)
-- Tutorial for new players
+### Saved for later (grouped)
+Ideas we've talked about but held off on, in one place.
+
+**Next major update**
+- Pilot customization (the pilot robot is separate from the mech): colours, antenna or hat
+
+**Gear and loot**
+- Parts as loot with rarities and perks; blueprints from caches, contracts and relic rooms
+- Interchangeable parts you collect and swap, each with its own stats and abilities
 - More upgrade tiers per part
-- Redesign the pet view if pets start helping in the player's cave
-- Art direction chosen: the Canopy Walker (orange mech with a glass canopy, piloted by the mono-eye robot). Concept board is a Claude artifact
-- Interchangeable parts system: parts become items you collect and swap, each with its own stats and abilities
-- Possibly a gacha-style system later: summon parts with different rarities, stats and abilities
-- Pilot customization (the pilot robot is separate from the mech)
-- RPG / adventure direction: each cave is its own level (started in v0.6)
-- Player-made custom caves, plus procedurally generated caves to keep things fresh
-- Combat: split the arms into two slots, one arm for digging and one for combat
-- Contracts from the town (e.g. bring back 10 silver)
-- Pilot XP: the pilot levels up separately from the mech, with small perks
-- More towns, each with its own caves, linked by the train
-- More nano-bots with their own movement patterns, and interactions between them
-- Spend Flux to speed up the nano-bot's paths between chips, or to upgrade the chips themselves
-- Train upgrades per car: engine reaches new biomes, storage size limit, faster forge, bigger lab
+- Possibly a gacha-style summon for parts (rarities, stats, abilities)
+
+**The train**
+- Car upgrades: storage size limit, faster forge, bigger lab, an engine that reaches new biomes
+- Repairing the train
+- A computer expansion (+2 cells) at the end of each town, installed with Flux
+
+**Nano-bots**
+- Nano-bot jobs: Refine, Repair, Scout (with an offline cap)
+- More nano-bots with their own movement patterns, and ways for them to interact with each other and the player
+- Spend Flux to speed up the nano-bot's paths or upgrade the chips
 - A nano-bot widget outside the game (much later)
+
+**Caves (left over from v0.9)**
+- Fragile and special ore: crystal that shatters with strong tools, "hot" ore that has to get home fast, heavy cargo
+- Cave events: tremors, spreading gas leaks
+- Hand-built rooms and small puzzles inside caves
+- More biomes and unique caves; player-made and procedurally generated caves
+
+**Pilot and progression**
+- Pilot XP: the pilot levels up separately from the mech, with small perks
+- Prestige (rebuild the bot for a permanent bonus)
+
+**Modes and release**
+- Timed or challenge runs
+- Store release (mobile and PC)

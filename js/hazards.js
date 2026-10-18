@@ -5,6 +5,8 @@
 //   boulders (Cave 2) roll toward the entrance until something stops them; walk into one to push it
 //   aquifers (Cave 2) are wet rock that floods your tunnels once you open them up
 //   gas pockets (Cave 3) explode a moment after you dig next to them
+//   magma pockets (Rustvale) spill lava into open floor when opened; lava burns your hull and cools to crust
+//   steam vents (Rustvale) hiss, then burst on a timer: don't stand on one when it goes
 // A support beam blocks sand and boulders and keeps nearby unstable rock still. The Shield skill
 // blocks the next hit.
 'use strict';
@@ -13,7 +15,10 @@ const wobble = new Map();   // cell index → seconds unstable rock has been sha
 const moveT = new Map();    // cell index → seconds a sand block or boulder has been waiting to move
 const fuses = new Map();    // cell index → seconds until a gas pocket explodes
 const rolling = new Set();  // boulders already rolling (they hit you; a boulder that just came loose rumbles first)
-let floods = [];            // water spreading out of opened aquifers
+let floods = [];            // water (or lava) spreading out of opened pockets: { cells, left, t, kind }
+const lavaAge = new Map();  // lava cell → seconds since it spilled (it cools to crust)
+const ventOn = new Map();   // vent cell → bursting right now?
+let burnT = 0;
 let hurtCool = 0;
 
 function exposed(c, r) {
@@ -26,7 +31,12 @@ function nearBeam(c, r, rad) {
   for (let rr = r - rad; rr <= r + rad; rr++) for (let cc = c - rad; cc <= c + rad; cc++) if (at(cc, rr) === 'beam') return true;
   return false;
 }
-function clearHazards() { wobble.clear(); moveT.clear(); fuses.clear(); rolling.clear(); floods = []; }
+function clearHazards() { wobble.clear(); moveT.clear(); fuses.clear(); rolling.clear(); floods = []; lavaAge.clear(); ventOn.clear(); }
+// Where a steam vent is in its cycle: 'idle', 'warn' (hissing) or 'burst'
+function ventPhase(c, r) {
+  const X = C.REACT, ph = (time + hash(c, r, 5) * X.ventCycle) % X.ventCycle;
+  return ph > X.ventCycle - X.ventBurst ? 'burst' : ph > X.ventCycle - X.ventBurst - X.ventWarn ? 'warn' : 'idle';
+}
 
 // Something hit the walker. Returns false if the Shield blocked it.
 function hurt(kind, title, msg) {
@@ -94,14 +104,34 @@ function updateRocks(dt) {
     }
     if (t === 'aquifer') {
       for (const [a, b] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (at(c + a, r + b) === null) {
-        T[i] = 'water'; floods.push({ cells: [i], left: X.floodVolume, t: 0 }); sfx('splash');
+        T[i] = 'water'; floods.push({ cells: [i], left: X.floodVolume, t: 0, kind: 'water' }); sfx('splash');
         hintOnce('water', 'Water!', 'You opened a water pocket. Wading slows you down and drains your battery.');
         break;
       }
     }
+    if (t === 'magma') {
+      for (const [a, b] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (at(c + a, r + b) === null) {
+        T[i] = 'lava'; lavaAge.set(i, 0); floods.push({ cells: [i], left: X.lavaVolume, t: 0, kind: 'lava' }); sfx('hiss');
+        burst(c + 0.5, r + 0.5, '#ff8c3c', 12); SEEN[i] = 1;
+        hintOnce('lava', 'Lava!', 'You opened a lava pocket. Lava burns your hull while you stand in it, and cools into a walkable crust after a while.');
+        break;
+      }
+    }
+    if (t === 'lava') {   // spilled lava cools into crust
+      const a = (lavaAge.get(i) || 0) + dt;
+      if (a >= X.lavaCool) { T[i] = 'crust'; lavaAge.delete(i); burst(c + 0.5, r + 0.5, '#6a5a52', 4); } else lavaAge.set(i, a);
+    }
+    if (t === 'vent') {   // steam vents burst on a timer
+      const ph = ventPhase(c, r), on = ph === 'burst', near = Math.hypot(c + 0.5 - P.x, r + 0.5 - P.y);
+      if (on && !ventOn.get(i)) { if (near < 7) sfx('hiss'); burst(c + 0.5, r + 0.5, '#d8d0c8', 10); }
+      ventOn.set(i, on);
+      if (on && near < 0.85) { hurtHull(X.ventDmg, c + 0.5, r + 0.5, 'steam vent'); hintOnce('vent', 'Steam vent', 'Vents hiss for a moment before they burst. Step off them when you hear it.'); }
+    }
   }
   updateFloods(dt);
   updateFuses(dt);
+  // standing in lava burns your hull
+  if (at(pCol(), pRow()) === 'lava') { burnT += dt; if (burnT >= 0.5) { burnT = 0; hurtHull(X.lavaBurn * 0.5, null, null, 'lava'); } } else burnT = 0;
 }
 
 // Water pours out one block at a time into open floor next to it
@@ -109,8 +139,9 @@ function updateFloods(dt) {
   const X = C.REACT;
   for (const f of floods) {
     f.t += dt;
-    while (f.t >= X.floodStep && f.left > 0) {
-      f.t -= X.floodStep;
+    const step = f.kind === 'lava' ? X.lavaStep : X.floodStep;
+    while (f.t >= step && f.left > 0) {
+      f.t -= step;
       let spot = -1;
       for (const i of f.cells) {
         const c = i % COLS, r = (i - c) / COLS;
@@ -121,7 +152,8 @@ function updateFloods(dt) {
         if (spot >= 0) break;
       }
       if (spot < 0) { f.left = 0; break; }
-      T[spot] = 'water'; f.cells.push(spot); f.left--;
+      T[spot] = f.kind || 'water'; f.cells.push(spot); f.left--;
+      if (f.kind === 'lava') lavaAge.set(spot, 0);
     }
   }
   floods = floods.filter(f => f.left > 0);

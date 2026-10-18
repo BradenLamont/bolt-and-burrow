@@ -16,8 +16,24 @@ function burst(x, y, col, n) {
   }
 }
 function floatText(x, y, text, col) { const f = { x, y, text, col, life: 1.1 }; floats.push(f); return f; }
+// Chunks: bigger pieces of rock (or enemy) that pop up, tumble and bounce on the floor before fading
+function chunks(x, y, col, n, power = 1) {
+  if (reduceMotion) n = Math.ceil(n / 3);
+  for (let k = 0; k < n && particles.length < 300; k++) {
+    const a = Math.random() * Math.PI * 2, sp = (1 + Math.random() * 2.2) * power;
+    particles.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, z: 0.1, vz: 2 + Math.random() * 3 * power, life: 0.7 + Math.random() * 0.5,
+      col: Math.random() < 0.35 ? shade(col.startsWith('#') ? col : '#888888', 0.7) : col, size: 0.09 + Math.random() * 0.12, rot: Math.random() * 6, vr: (Math.random() - 0.5) * 14, chunk: true });
+  }
+}
 function updateEffects(dt) {
-  particles.forEach(p => { p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 0.92; p.vy *= 0.92; p.life -= dt; });
+  particles.forEach(p => {
+    p.x += p.vx * dt; p.y += p.vy * dt; p.life -= dt;
+    if (p.chunk) {
+      p.vz -= 14 * dt; p.z += p.vz * dt; p.rot += p.vr * dt;
+      if (p.z < 0) { p.z = 0; p.vz = -p.vz * 0.35; p.vx *= 0.6; p.vy *= 0.6; p.vr *= 0.6; }
+      p.vx *= 0.97; p.vy *= 0.97;
+    } else { p.vx *= 0.92; p.vy *= 0.92; }
+  });
   particles = particles.filter(p => p.life > 0);
   floats.forEach(f => { f.y += 0.8 * dt; f.life -= dt; }); floats = floats.filter(f => f.life > 0);
   if (P.shake > 0) P.shake -= dt;
@@ -88,6 +104,20 @@ function drawFloor(c, r, x, y, s) {
   g.fillRect(x, y, s, s);
   g.fillStyle = town && !path ? TL.grassDot : 'rgba(255,230,200,.05)';
   g.fillRect(x + s * (0.2 + hash(c, r, 3) * 0.5), y + s * (0.2 + hash(c, r, 4) * 0.5), s * 0.1, s * 0.1);
+  if (town && TOWN().style === 'rust') {
+    if (path) {   // steel deck plates with rivets
+      g.fillStyle = 'rgba(0,0,0,.28)'; g.fillRect(x, y, s, 1); g.fillRect(x, y, 1, s);
+      g.fillStyle = 'rgba(255,240,220,.08)'; g.fillRect(x + 1, y + 1, s - 2, 1);
+      g.fillStyle = '#8a7a6a'; for (const [a, b] of [[0.15, 0.15], [0.85, 0.15], [0.15, 0.85], [0.85, 0.85]]) g.fillRect(x + s * a - 1, y + s * b - 1, 2, 2);
+      if (hash(c, r, 150) < 0.3) { g.fillStyle = 'rgba(190,100,50,.25)'; g.beginPath(); g.arc(x + s * (0.3 + hash(c, r, 151) * 0.4), y + s * 0.5, s * 0.15, 0, 7); g.fill(); }
+    } else {      // gravel and oil stains
+      g.fillStyle = 'rgba(255,230,200,.07)'; for (let k = 0; k < 5; k++) g.fillRect(x + s * hash(c, r, 160 + k), y + s * hash(r, c, 160 + k), 2, 2);
+      if (hash(c, r, 170) < 0.12) { g.fillStyle = 'rgba(10,8,8,.35)'; g.beginPath(); g.ellipse(x + s * 0.5, y + s * 0.5, s * 0.3, s * 0.18, 0, 0, 7); g.fill(); }
+    }
+  }
+  if (t === 'lava') drawLava(c, r, x, y, s, true);
+  if (t === 'crust') drawCrust(c, r, x, y, s);
+  if (t === 'vent') drawVent(c, r, x, y, s);
   if (t === 'exit') drawExit(x, y, s);
   if (t === 'water') drawWater(c, r, x, y, s);
   if (t === 'beam') drawBeam(x, y, s);
@@ -103,6 +133,12 @@ function drawFloor(c, r, x, y, s) {
 // A chasm: a dark drop. Where solid ground lies beyond it (up the screen) you see the far wall.
 function drawChasm(c, r, x, y, s) {
   const isGap = t => t === 'chasm' || t === 'bridge' || t === 'oldbridge';
+  if (!inTown() && cave().lava) {   // the Crucible: its chasms are rivers of lava
+    drawLava(c, r, x, y, s, false);
+    if (!isGap(at(c, r - 1))) { g.fillStyle = '#1a1210'; g.fillRect(x, y + s - Math.max(3, s * 0.1), s, Math.max(3, s * 0.1)); }
+    if (!isGap(at(c, r + 1))) { g.fillStyle = 'rgba(20,12,10,.8)'; g.fillRect(x, y, s, Math.max(3, s * 0.12)); }
+    return;
+  }
   const depth = g.createLinearGradient(0, y, 0, y + s);
   depth.addColorStop(0, '#0a0809'); depth.addColorStop(1, '#030203');
   g.fillStyle = depth; g.fillRect(x, y, s, s);
@@ -159,6 +195,13 @@ function drawExit(x, y, s) {
 // Cavern floors get stalagmites (and crystals in the Basalt Deeps). Decoration only.
 function drawStalagmite(c, r, x, y, s) {
   const cx = x + s * (0.2 + hash(c, r, 12) * 0.6), by = y + s * (0.55 + hash(c, r, 13) * 0.35), h = s * (0.25 + hash(c, r, 14) * 0.25);
+  if (caveTown(S.cave) === 1) {   // Rustvale caverns: rusted pipes, girders and old rails instead of stalagmites
+    const kind = hash(c, r, 16);
+    if (kind < 0.4) { g.fillStyle = '#6a4632'; g.fillRect(cx - s * 0.06, by - h, s * 0.12, h); g.fillStyle = '#8a5a3a'; g.fillRect(cx - s * 0.09, by - h, s * 0.18, s * 0.06); }
+    else if (kind < 0.75) { g.strokeStyle = '#5D646E'; g.lineWidth = Math.max(2, s * 0.06); g.beginPath(); g.moveTo(cx - s * 0.2, by); g.lineTo(cx + s * 0.05, by - h); g.lineTo(cx + s * 0.2, by); g.stroke(); g.fillStyle = '#c86a3a'; g.fillRect(cx, by - h * 0.6, 2, 2); }
+    else { g.fillStyle = '#3B3F46'; g.fillRect(cx - s * 0.22, by - s * 0.05, s * 0.44, s * 0.04); g.fillRect(cx - s * 0.22, by - s * 0.15, s * 0.44, s * 0.04); g.fillStyle = '#5a3f2a'; g.fillRect(cx - s * 0.15, by - s * 0.18, s * 0.05, s * 0.18); g.fillRect(cx + s * 0.1, by - s * 0.18, s * 0.05, s * 0.18); }
+    return;
+  }
   const crystal = cave().id === 'deeps' && hash(c, r, 15) < 0.5;
   g.fillStyle = crystal ? 'rgba(159,227,240,.75)' : shade(C.BLOCKS[cave().rock[0]].color, 1.05);
   g.beginPath(); g.moveTo(cx - s * 0.08, by); g.lineTo(cx, by - h); g.lineTo(cx + s * 0.08, by); g.closePath(); g.fill();
@@ -200,6 +243,81 @@ function drawWater(c, r, x, y, s) {
     g.beginPath(); g.moveTo(x + s * 0.1, yy); g.quadraticCurveTo(x + s * 0.5, yy - s * 0.08, x + s * 0.9, yy); g.stroke();
   }
 }
+// ---------- Rustvale ----------
+// Rock faces: rust-stained stone, slag with glowing flecks, burnt cinder with hot seams, old machinery, and
+// (once seen) magma pockets with a cracked crust
+function drawRustRock(look, c, r, x, ty, s) {
+  if (look === 'rust') {
+    g.fillStyle = 'rgba(200,110,50,.28)';
+    for (let k = 0; k < 2; k++) { const sx = x + s * (0.15 + hash(c, r, 200 + k) * 0.6); g.fillRect(sx, ty + s * 0.1, s * 0.06, s * (0.4 + hash(r, c, 200 + k) * 0.45)); }
+    g.fillStyle = 'rgba(40,20,10,.25)'; g.beginPath(); g.arc(x + s * (0.3 + hash(c, r, 203) * 0.4), ty + s * (0.3 + hash(r, c, 204) * 0.4), s * 0.12, 0, 7); g.fill();
+  } else if (look === 'slag') {
+    const glow = 0.45 + Math.sin(time * 2 + c * 1.7 + r) * 0.2;
+    for (let k = 0; k < 4; k++) { g.fillStyle = k % 2 ? 'rgba(255,140,60,' + glow + ')' : 'rgba(255,200,120,' + (glow * 0.6) + ')'; g.fillRect(x + s * (0.12 + hash(c, r, 210 + k) * 0.72), ty + s * (0.12 + hash(r, c, 210 + k) * 0.72), Math.max(2, s * 0.05), Math.max(2, s * 0.05)); }
+    g.fillStyle = 'rgba(0,0,0,.2)'; g.fillRect(x + s * 0.1, ty + s * (0.4 + hash(c, r, 215) * 0.3), s * 0.8, Math.max(1, s * 0.04));
+  } else if (look === 'cinder') {
+    g.strokeStyle = 'rgba(255,90,40,' + (0.3 + Math.sin(time * 1.5 + c + r * 2) * 0.15) + ')'; g.lineWidth = Math.max(1, s * 0.035);
+    g.beginPath(); g.moveTo(x + s * 0.1, ty + s * (0.3 + hash(c, r, 220) * 0.4)); g.lineTo(x + s * 0.5, ty + s * (0.35 + hash(c, r, 221) * 0.3)); g.lineTo(x + s * 0.9, ty + s * (0.2 + hash(c, r, 222) * 0.5)); g.stroke();
+  } else if (look === 'scrap') {   // a rusty machine panel: plates, rivets, a pipe and a gear
+    g.fillStyle = '#4A5059'; g.fillRect(x + s * 0.08, ty + s * 0.08, s * 0.84, s * 0.84);
+    g.fillStyle = 'rgba(0,0,0,.3)'; g.fillRect(x + s * 0.08, ty + s * 0.5, s * 0.84, 2);
+    g.fillStyle = '#8E96A0'; for (const [a, b] of [[0.15, 0.15], [0.85, 0.15], [0.15, 0.85], [0.85, 0.85], [0.15, 0.55], [0.85, 0.55]]) g.fillRect(x + s * a - 1.5, ty + s * b - 1.5, 3, 3);
+    const kind = hash(c, r, 230);
+    if (kind < 0.5) { g.fillStyle = '#6a4632'; g.fillRect(x + s * 0.2, ty + s * 0.26, s * 0.6, s * 0.12); g.fillStyle = '#8a5a3a'; g.fillRect(x + s * 0.2, ty + s * 0.24, s * 0.08, s * 0.16); g.fillRect(x + s * 0.72, ty + s * 0.24, s * 0.08, s * 0.16); }
+    else { g.strokeStyle = '#8E96A0'; g.lineWidth = Math.max(2, s * 0.07); g.beginPath(); g.arc(x + s * 0.5, ty + s * 0.3, s * 0.13, 0, 7); g.stroke(); g.fillStyle = '#8E96A0'; for (let k = 0; k < 6; k++) { const a = k * 1.05; g.fillRect(x + s * 0.5 + Math.cos(a) * s * 0.2 - 1.5, ty + s * 0.3 + Math.sin(a) * s * 0.2 - 1.5, 3, 3); } }
+    g.fillStyle = 'rgba(200,110,50,.35)'; g.beginPath(); g.arc(x + s * (0.3 + hash(c, r, 231) * 0.4), ty + s * 0.72, s * 0.12, 0, 7); g.fill();
+  } else if (look === 'magma') {
+    const glow = 0.6 + Math.sin(time * 3 + c) * 0.25;
+    g.fillStyle = '#2a1410'; g.fillRect(x + s * 0.1, ty + s * 0.1, s * 0.8, s * 0.8);
+    g.strokeStyle = 'rgba(255,120,40,' + glow + ')'; g.lineWidth = Math.max(2, s * 0.06);
+    g.beginPath(); g.moveTo(x + s * 0.2, ty + s * 0.3); g.lineTo(x + s * 0.45, ty + s * 0.5); g.lineTo(x + s * 0.35, ty + s * 0.8); g.moveTo(x + s * 0.45, ty + s * 0.5); g.lineTo(x + s * 0.8, ty + s * 0.4); g.stroke();
+  }
+}
+// Lava: a bright, slowly churning surface with dark crust drifting on it. Spilled lava dims as it cools.
+function drawLava(c, r, x, y, s, spilled) {
+  const age = spilled ? (lavaAge.get(idx(c, r)) || 0) / C.REACT.lavaCool : 0;
+  const gr = g.createLinearGradient(x, y, x + s, y + s);
+  gr.addColorStop(0, shade('#ff7a2a', 1 - age * 0.45)); gr.addColorStop(1, shade('#c23a14', 1 - age * 0.45));
+  g.fillStyle = gr; g.fillRect(x, y, s, s);
+  for (let k = 0; k < 3; k++) {
+    const ph = (time * 0.15 + hash(c, r, 240 + k)) % 1;
+    g.fillStyle = 'rgba(60,20,10,' + (0.35 + age * 0.4) + ')'; g.beginPath();
+    g.ellipse(x + s * ((hash(c, k, 241) + ph) % 1), y + s * (0.2 + hash(r, k, 242) * 0.6), s * 0.16, s * 0.08, 0, 0, 7); g.fill();
+  }
+  const b = (time * 0.8 + hash(c, r, 243)) % 1;   // a bubble
+  g.strokeStyle = 'rgba(255,220,140,' + (0.6 * (1 - b)) + ')'; g.lineWidth = 1; g.beginPath(); g.arc(x + s * (0.3 + hash(c, r, 244) * 0.4), y + s * 0.5, s * 0.05 + b * s * 0.12, 0, 7); g.stroke();
+}
+function drawCrust(c, r, x, y, s) {
+  g.fillStyle = '#2a2220'; g.fillRect(x, y, s, s);
+  g.strokeStyle = 'rgba(150,60,30,.35)'; g.lineWidth = 1;
+  g.beginPath(); g.moveTo(x + s * 0.1, y + s * (0.3 + hash(c, r, 250) * 0.4)); g.lineTo(x + s * 0.5, y + s * 0.5); g.lineTo(x + s * 0.9, y + s * (0.3 + hash(c, r, 251) * 0.4)); g.stroke();
+}
+// A steam vent: an iron grate in the floor. It wisps while it's about to burst, then blasts a column of steam.
+function drawVent(c, r, x, y, s) {
+  const ph = ventPhase(c, r), cx = x + s * 0.5, cy = y + s * 0.5;
+  g.fillStyle = '#2B2A2E'; g.beginPath(); g.arc(cx, cy, s * 0.36, 0, 7); g.fill();
+  g.strokeStyle = ph === 'warn' ? '#e8b33a' : '#5D646E'; g.lineWidth = Math.max(2, s * 0.05); g.stroke();
+  g.fillStyle = '#5D646E'; for (let k = -1; k <= 1; k++) g.fillRect(cx - s * 0.26, cy + k * s * 0.12 - 1, s * 0.52, 2);
+  if (ph === 'warn') for (let k = 0; k < 3; k++) { const p = (time * 1.5 + k / 3) % 1; g.fillStyle = 'rgba(230,225,215,' + (0.4 * (1 - p)) + ')'; g.beginPath(); g.arc(cx + Math.sin(p * 6 + k) * s * 0.1, cy - p * s * 0.5, s * (0.05 + p * 0.08), 0, 7); g.fill(); }
+  if (ph === 'burst') for (let k = 0; k < 6; k++) { const p = (time * 3 + k / 6) % 1; g.fillStyle = 'rgba(240,236,230,' + (0.55 * (1 - p)) + ')'; g.beginPath(); g.arc(cx + Math.sin(p * 9 + k) * s * 0.15, cy - p * s * 1.4, s * (0.12 + p * 0.25), 0, 7); g.fill(); }
+}
+// The contracts board in town: a notice board on two posts, with a note for each contract (a gold pin = ready to claim)
+function drawBoard(c, r, x, y, s, W) {
+  const rust = TOWN().style === 'rust', ty = y - W;
+  g.fillStyle = 'rgba(0,0,0,.25)'; g.beginPath(); g.ellipse(x + s * 0.5, y + s * 0.9, s * 0.5, s * 0.1, 0, 0, 7); g.fill();
+  g.fillStyle = rust ? '#3B3F46' : '#5a3d26'; g.fillRect(x + s * 0.12, ty + s * 0.4, s * 0.08, s * 0.6 + W); g.fillRect(x + s * 0.8, ty + s * 0.4, s * 0.08, s * 0.6 + W);
+  g.fillStyle = rust ? '#4A5059' : '#7a5230'; rr2(g, x - s * 0.05, ty - s * 0.15, s * 1.1, s * 0.75, 3); g.fill();
+  g.strokeStyle = rust ? '#E8B33A' : '#3a2b20'; g.lineWidth = 2; rr2(g, x - s * 0.05, ty - s * 0.15, s * 1.1, s * 0.75, 3); g.stroke();
+  const list = (S.contracts && S.contracts.list) || [];
+  for (let k = 0; k < 3; k++) {
+    const ct = list[k], nx = x + s * (0.06 + k * 0.32), ny = ty - s * 0.05 + (k % 2) * s * 0.06;
+    g.fillStyle = ct && ct.claimed ? '#8a8070' : '#efe3d3'; g.fillRect(nx, ny, s * 0.26, s * 0.4);
+    g.fillStyle = 'rgba(60,40,30,.6)'; for (let l = 0; l < 3; l++) g.fillRect(nx + s * 0.04, ny + s * (0.1 + l * 0.09), s * 0.18, 1);
+    const ready = ct && !ct.claimed && ct.have >= ct.n;
+    g.fillStyle = ready ? '#f2c94c' : ct && ct.claimed ? '#7fd17a' : '#e2705a'; g.beginPath(); g.arc(nx + s * 0.13, ny + s * 0.03, s * 0.04, 0, 7); g.fill();
+  }
+  if (contractsReady()) { g.fillStyle = '#f2c94c'; g.font = '700 ' + Math.round(s * 0.4) + 'px "Pixelify Sans", monospace'; g.textAlign = 'center'; g.fillText('!', x + s * 0.5, ty - s * 0.25 + Math.sin(time * 5) * s * 0.05); }
+}
 function drawBeam(x, y, s) {
   g.strokeStyle = '#8a6a44'; g.lineWidth = Math.max(3, s * 0.12); g.lineCap = 'round';
   g.beginPath(); g.moveTo(x + s * 0.15, y + s * 0.15); g.lineTo(x + s * 0.85, y + s * 0.85); g.moveTo(x + s * 0.85, y + s * 0.15); g.lineTo(x + s * 0.15, y + s * 0.85); g.stroke();
@@ -214,7 +332,8 @@ function drawWall(t, c, r, x, y, s, W) {
   if (t === 'stand') return drawStand(c, r, x, y, s, W);
   if (t === 'counter') return drawCounter(c, r, x, y, s, W);
   if (t === 'boulder') return drawBoulder(c, r, x, y, s, W);
-  const hidden = t === 'cache' ? seen !== 2 : (ORES.has(t) || t === 'fossil' || t === 'relic' || t === 'keycache' || t === 'gas' || t === 'aquifer') && !seen;
+  if (t === 'board') return drawBoard(c, r, x, y, s, W);
+  const hidden = t === 'cache' ? seen !== 2 : (ORES.has(t) || t === 'fossil' || t === 'relic' || t === 'keycache' || t === 'gas' || t === 'aquifer' || t === 'magma') && !seen;
   const look = hidden ? baseFor(c, r) : t;
   const base = look === 'shopwall' ? (garageShop() ? '#3B3F46' : '#3d2b1f') : look === 'cliff' && inTown() ? TOWN().look.cliff : C.BLOCKS[look].color || C.BLOCKS[baseFor(c, r)].color;
   const ty = y - W; // top face
@@ -244,6 +363,13 @@ function drawWall(t, c, r, x, y, s, W) {
     g.fillStyle = 'rgba(255,240,220,.08)'; g.fillRect(x, ty, s, bev); g.fillRect(x, ty, bev, s);
     g.fillStyle = 'rgba(0,0,0,.18)'; g.fillRect(x + s - bev, ty, bev, s);
     if (look === 'basalt') { g.fillStyle = 'rgba(255,255,255,.05)'; g.fillRect(x + s * (0.15 + hash(c, r, 1) * 0.4), ty + s * (0.25 + hash(c, r, 2) * 0.4), s * 0.3, s * 0.07); }
+    if (look === 'rust' || look === 'slag' || look === 'cinder' || look === 'scrap' || look === 'magma') drawRustRock(look, c, r, x, ty, s);
+    if (look === 'cliff' && inTown() && TOWN().style === 'rust') {   // Rustvale's cliffs: steel girders bolted to the rock
+      g.fillStyle = 'rgba(30,22,18,.5)'; g.fillRect(x, ty + s * 0.42, s, s * 0.14);
+      g.fillStyle = '#7a5a44'; g.fillRect(x, ty + s * 0.4, s, s * 0.08);
+      g.fillStyle = '#c8a070'; g.fillRect(x + s * 0.2, ty + s * 0.42, 2, 2); g.fillRect(x + s * 0.7, ty + s * 0.42, 2, 2);
+      if (hash(c, r, 140) < 0.25) { g.fillStyle = 'rgba(200,110,50,.35)'; g.fillRect(x + s * (0.2 + hash(c, r, 141) * 0.5), ty + s * 0.5, s * 0.08, s * 0.4); }   // rust streak
+    }
     if (look === 'bedrock') { g.fillStyle = '#211b20'; for (let k = 0; k < 3; k++) g.fillRect(x + s * 0.1, ty + s * (0.2 + k * 0.28), s * 0.8, s * 0.06); }
     if (look === 'stone') { g.fillStyle = 'rgba(0,0,0,.12)'; g.fillRect(x + s * (0.15 + hash(c, r, 1) * 0.5), ty + s * (0.3 + hash(c, r, 2) * 0.4), s * 0.25, s * 0.06); }
     if (look === 'granite') { // speckled, chunky: needs Drill Arms
@@ -298,11 +424,33 @@ function drawWall(t, c, r, x, y, s, W) {
     g.lineCap = 'butt';
   }
   const hp = C.BLOCKS[t].hp, d = DMG[i] / hp;
-  if (d > 0 && hp !== Infinity) {
-    g.strokeStyle = 'rgba(10,6,3,' + (0.35 + d * 0.6) + ')'; g.lineWidth = Math.max(1.5, s * 0.05); g.beginPath();
-    g.moveTo(x + s * 0.5, ty + s * 0.1); g.lineTo(x + s * 0.36, ty + s * 0.5); g.lineTo(x + s * 0.58, ty + s * 0.6);
-    if (d > 0.45) { g.lineTo(x + s * 0.46, ty + s * 0.9); g.moveTo(x + s * 0.36, ty + s * 0.5); g.lineTo(x + s * 0.12, ty + s * 0.7); }
-    g.stroke();
+  if (d > 0 && hp !== Infinity) drawCracks(c, r, x, ty, s, Math.min(1, d));
+}
+// Cracks spread across a block as it takes damage: branches grow out from a weak point, then chips fall out
+function drawCracks(c, r, x, ty, s, d) {
+  const ox = x + s * (0.3 + hash(c, r, 91) * 0.4), oy = ty + s * (0.3 + hash(r, c, 92) * 0.4);
+  const n = 2 + Math.floor(d * 3), len = s * (0.12 + d * 0.5);
+  const clampX = v => Math.max(x + 2, Math.min(x + s - 2, v)), clampY = v => Math.max(ty + 2, Math.min(ty + s - 2, v));
+  g.fillStyle = 'rgba(0,0,0,' + (d * 0.22) + ')'; g.fillRect(x, ty, s, s);   // the block darkens as it weakens
+  g.lineCap = 'round';
+  for (const pass of [0, 1]) {   // a dark crack, then a thin light edge beside it for depth
+    g.strokeStyle = pass ? 'rgba(255,240,220,.14)' : 'rgba(10,6,3,' + (0.5 + d * 0.45) + ')';
+    g.lineWidth = pass ? 1 : Math.max(1.2, s * (0.025 + d * 0.035));
+    for (let b = 0; b < n; b++) {
+      let ang = hash(c, r, 100 + b) * 6.283, px = ox + pass, py = oy + pass;
+      g.beginPath(); g.moveTo(px, py);
+      for (let k = 0; k < 3; k++) {
+        ang += (hash(c + k, r + b, 110) - 0.5) * 1.3;
+        px = clampX(px + Math.cos(ang) * len / 3); py = clampY(py + Math.sin(ang) * len / 3);
+        g.lineTo(px, py);
+      }
+      g.stroke();
+    }
+  }
+  g.lineCap = 'butt';
+  if (d > 0.55) {   // chips knocked out of the surface
+    g.fillStyle = 'rgba(8,5,3,.55)';
+    for (let k = 0; k < Math.floor((d - 0.5) * 10); k++) g.fillRect(x + s * (0.12 + hash(c, r, 120 + k) * 0.7), ty + s * (0.12 + hash(r, c, 130 + k) * 0.7), Math.max(2, s * 0.07), Math.max(2, s * 0.07));
   }
 }
 
@@ -310,13 +458,28 @@ function drawWall(t, c, r, x, y, s, W) {
 // Y(y) converts a world y position to a screen y.
 // Town decorations and features
 function drawTree(c, r, x, y, s, W) {
+  if (TOWN().style === 'rust') {   // Rustvale: scrap heaps and lamp posts instead of trees
+    if (hash(c, r, 260) < 0.5) {
+      g.fillStyle = 'rgba(0,0,0,.25)'; g.beginPath(); g.ellipse(x + s * 0.5, y + s * 0.85, s * 0.45, s * 0.12, 0, 0, 7); g.fill();
+      g.fillStyle = '#4A5059'; g.beginPath(); g.moveTo(x, y + s * 0.85); g.lineTo(x + s * 0.35, y + s * 0.1); g.lineTo(x + s * 0.7, y + s * 0.3); g.lineTo(x + s, y + s * 0.85); g.closePath(); g.fill();
+      g.fillStyle = '#6a4632'; g.fillRect(x + s * 0.25, y + s * 0.45, s * 0.3, s * 0.12); g.fillStyle = '#8E96A0'; g.fillRect(x + s * 0.5, y + s * 0.25, s * 0.25, s * 0.08);
+      g.fillStyle = '#2B2A2E'; g.beginPath(); g.arc(x + s * 0.7, y + s * 0.62, s * 0.15, 0, 7); g.fill(); g.fillStyle = '#5D646E'; g.beginPath(); g.arc(x + s * 0.7, y + s * 0.62, s * 0.05, 0, 7); g.fill();
+    } else {
+      g.fillStyle = 'rgba(255,179,71,.12)'; g.beginPath(); g.ellipse(x + s * 0.5, y + s * 0.8, s * 0.7, s * 0.3, 0, 0, 7); g.fill();
+      g.fillStyle = '#3B3F46'; g.fillRect(x + s * 0.46, y - s * 0.4, s * 0.08, s * 1.2);
+      g.fillRect(x + s * 0.46, y - s * 0.4, s * 0.3, s * 0.06);
+      g.fillStyle = 'rgba(255,200,120,.3)'; g.beginPath(); g.arc(x + s * 0.74, y - s * 0.28, s * 0.25, 0, 7); g.fill();
+      g.fillStyle = '#ffd98a'; g.beginPath(); g.arc(x + s * 0.74, y - s * 0.3, s * 0.07, 0, 7); g.fill();
+    }
+    return;
+  }
   g.fillStyle = 'rgba(0,0,0,.25)'; g.beginPath(); g.ellipse(x + s * 0.5, y + s * 0.85, s * 0.4, s * 0.12, 0, 0, 7); g.fill();
   g.fillStyle = '#5a3d26'; g.fillRect(x + s * 0.42, y + s * 0.35, s * 0.16, s * 0.5);
   g.fillStyle = '#2f4a2a'; g.beginPath(); g.arc(x + s * 0.5, y + s * 0.15, s * 0.48, 0, 7); g.fill();
   g.fillStyle = '#3f6236'; g.beginPath(); g.arc(x + s * 0.4, y + s * 0.02, s * 0.3, 0, 7); g.fill();
 }
 function drawPedestal(c, r, x, y, s, W) {
-  const k = C.TOWN.pedestals.indexOf(c), done = k >= 0 && S.caves[k].relicDone;
+  const k = C.TOWN.pedestals.indexOf(c), cvk = k >= 0 ? gateCave(k) : null, done = cvk != null && S.caves[cvk].relicDone;
   g.fillStyle = 'rgba(0,0,0,.25)'; g.beginPath(); g.ellipse(x + s * 0.5, y + s * 0.88, s * 0.4, s * 0.1, 0, 0, 7); g.fill();
   g.fillStyle = '#5b5753'; g.fillRect(x + s * 0.2, y + s * 0.15 - W * 0.5, s * 0.6, s * 0.75);
   g.fillStyle = '#7a756f'; g.fillRect(x + s * 0.12, y + s * 0.05 - W * 0.5, s * 0.76, s * 0.18);
@@ -770,11 +933,19 @@ function drawLockedGate(c, r, x, ty, s) {
 function drawGates(X, Y, s, W) {
   const TW = C.TOWN, r = TW.gateRow;
   TW.gates.forEach((gc, k) => {
-    const x = X(gc), y = Y(r + 1) - W, open = gateOpen(k), cv = gateCave(k);
-    g.strokeStyle = '#6a5038'; g.lineWidth = Math.max(3, s * 0.1);
-    g.beginPath(); g.moveTo(x + s * 0.08, y + s + W); g.lineTo(x + s * 0.08, y + s * 0.2); g.arc(x + s * 0.5, y + s * 0.2, s * 0.42, Math.PI, 0); g.lineTo(x + s * 0.92, y + s + W); g.stroke();
+    const x = X(gc), y = Y(r + 1) - W, open = gateOpen(k), cv = gateCave(k), rust = TOWN().style === 'rust';
+    if (rust) {   // a steel mine-head frame with a hazard-striped beam
+      g.fillStyle = '#4A5059'; g.fillRect(x - s * 0.02, y - s * 0.1, s * 0.14, s + W + s * 0.1); g.fillRect(x + s * 0.88, y - s * 0.1, s * 0.14, s + W + s * 0.1);
+      for (let k2 = 0; k2 < 5; k2++) { g.fillStyle = k2 % 2 ? '#17130F' : '#E8B33A'; g.fillRect(x - s * 0.05 + k2 * s * 0.22, y - s * 0.18, s * 0.22, s * 0.12); }
+      g.strokeStyle = '#5D646E'; g.lineWidth = 2; g.beginPath(); g.moveTo(x + s * 0.05, y + s * 0.6); g.lineTo(x + s * 0.5, y - s * 0.06); g.lineTo(x + s * 0.95, y + s * 0.6); g.stroke();
+      if (open) { g.fillStyle = 'rgba(255,179,71,' + (0.5 + Math.sin(time * 3 + k) * 0.3) + ')'; g.beginPath(); g.arc(x + s * 0.5, y + s * 0.15, s * 0.06, 0, 7); g.fill(); }
+    } else {
+      g.strokeStyle = '#6a5038'; g.lineWidth = Math.max(3, s * 0.1);
+      g.beginPath(); g.moveTo(x + s * 0.08, y + s + W); g.lineTo(x + s * 0.08, y + s * 0.2); g.arc(x + s * 0.5, y + s * 0.2, s * 0.42, Math.PI, 0); g.lineTo(x + s * 0.92, y + s + W); g.stroke();
+    }
     const sx = x - s * 0.9, sy = y - s * 0.8, w = s * 2.8, h = s * 0.62;
-    g.fillStyle = '#3a2b20'; rr2(g, sx, sy, w, h, 3); g.fill();
+    g.fillStyle = rust ? '#2f3238' : '#3a2b20'; rr2(g, sx, sy, w, h, 3); g.fill();
+    if (rust) { g.strokeStyle = '#5D646E'; g.lineWidth = 1; rr2(g, sx, sy, w, h, 3); g.stroke(); }
     g.textAlign = 'center';
     g.fillStyle = open ? '#efe3d3' : '#a8937c'; g.font = '700 ' + Math.round(s * 0.22) + 'px "Pixelify Sans", monospace';
     g.fillText(cv == null ? 'CAVE ?' : caveLabel(cv).toUpperCase() + (S.caves[cv].relicDone ? ' · CLEARED' : ''), sx + w / 2, sy + h * 0.42);
@@ -818,7 +989,7 @@ function render(dt) {
   const s = CELL, W = Math.round(s * 0.32);
   const [tx, ty] = cameraTarget(), k = Math.min(1, dt * 8);
   camX += (tx - camX) * k; camY += (ty - camY) * k;
-  const shake = P.shake > 0 ? (Math.random() - 0.5) * 6 : 0;
+  const shake = P.shake > 0 ? (Math.random() - 0.5) * (P.shake > 0.15 ? 6 : 2.5) : 0;   // small shakes (hard rock) are gentler
   const X = x => Math.round(x * s - camX + shake);           // world x → screen x
   const Y = y => Math.round((ROWS - y) * s - camY + shake);  // world y → screen y (deeper = higher up)
 
@@ -832,7 +1003,7 @@ function render(dt) {
   const blocked = new Set(beltBlocked());
 
   // Pass 1: all floor tiles first, so floor never paints over the walker's feet
-  for (let r = rTop; r >= rBot; r--) for (let c = c0; c <= c1; c++) { const t = at(c, r); if (isFloor(t) || t === 'chasm' || t === 'tree' || t === 'pedestal' || t === 'boulder') drawFloor(c, r, X(c), Y(r + 1), s); }
+  for (let r = rTop; r >= rBot; r--) for (let c = c0; c <= c1; c++) { const t = at(c, r); if (isFloor(t) || t === 'chasm' || t === 'tree' || t === 'pedestal' || t === 'boulder' || t === 'board') drawFloor(c, r, X(c), Y(r + 1), s); }
   // Pass 2: walls, buildings and the walker, top of screen to bottom.
   // The walker is drawn with the row its feet stand in, so only walls in front of it overlap it.
   const walkerRow = Math.floor(P.y - HB + 0.01);
@@ -875,7 +1046,15 @@ function render(dt) {
   }
 
   if (!inTown()) { drawDrops(X, Y, s); drawFoes(X, Y, s, false); }
-  particles.forEach(p => { g.globalAlpha = Math.max(0, p.life * 2); g.fillStyle = p.col; const q = Math.max(2, s * 0.07); g.fillRect(X(p.x) - q / 2, Y(p.y) - W - q / 2, q, q); });
+  particles.forEach(p => {
+    g.globalAlpha = Math.max(0, Math.min(1, p.life * 2)); g.fillStyle = p.col;
+    if (p.chunk) {   // a tumbling chunk with a little shadow under it
+      const q = Math.max(3, s * p.size), px = X(p.x), py = Y(p.y) - W * 0.4;
+      g.fillStyle = 'rgba(0,0,0,.25)'; g.fillRect(px - q / 2, py + q * 0.3, q, q * 0.35);
+      g.save(); g.translate(px, py - p.z * s * 0.35); g.rotate(p.rot); g.fillStyle = p.col; g.fillRect(-q / 2, -q / 2, q, q);
+      g.fillStyle = 'rgba(255,240,220,.18)'; g.fillRect(-q / 2, -q / 2, q, q * 0.3); g.restore();
+    } else { const q = Math.max(2, s * 0.07); g.fillRect(X(p.x) - q / 2, Y(p.y) - W - q / 2, q, q); }
+  });
   g.globalAlpha = 1;
 
   // darkness inside the cave (everything above the yard), with light around the robot
@@ -920,6 +1099,14 @@ function render(dt) {
         g.strokeStyle = 'rgba(242,201,76,' + (0.35 + Math.sin(time * 4) * 0.2) + ')'; g.lineWidth = 1.5;
         g.beginPath(); g.arc(cx, cy, s * (0.42 + (time % 1.2) * 0.15), 0, 7); g.stroke();
       }
+      if (t === 'magma' && !SEEN[idx(c, r)] && dist <= lightRadius() + 3) {   // rock near a hidden lava pocket glows
+        g.fillStyle = 'rgba(255,110,40,' + (0.1 + Math.sin(time * 2.5 + c) * 0.06) + ')'; g.beginPath(); g.arc(cx, cy, s * 0.9, 0, 7); g.fill();
+      }
+      if (t === 'lava' || (t === 'chasm' && cave().lava)) {   // lava lights up the dark around it
+        const gl = g.createRadialGradient(cx, cy + W, 0, cx, cy + W, s * 1.3);
+        gl.addColorStop(0, 'rgba(255,120,40,.22)'); gl.addColorStop(1, 'rgba(255,120,40,0)');
+        g.fillStyle = gl; g.fillRect(cx - s * 1.3, cy + W - s * 1.3, s * 2.6, s * 2.6);
+      }
       if (t === 'relic') { // the relic is a beacon you can always see
         const pulse = 0.5 + Math.sin(time * 2.5) * 0.25;
         const glow = g.createRadialGradient(cx, cy, 0, cx, cy, s * 2.5);
@@ -947,6 +1134,7 @@ function render(dt) {
   g.textAlign = 'center'; g.font = '600 ' + Math.max(11, Math.round(s * 0.28)) + 'px "IBM Plex Mono", monospace';
   floats.forEach(f => { g.globalAlpha = Math.min(1, f.life * 1.5); g.fillStyle = f.col; g.fillText(f.text, X(f.x), Y(f.y) - W); });
   g.globalAlpha = 1;
+  if (!inTown()) { drawTutorial(X, Y, s, W); drawBossCard(); }
   if (tripStage() === 'travel') drawTravel();
 }
 
@@ -1003,6 +1191,10 @@ function drawCaveMap(mg, MM, mcv) {
 // A circuit board with the nano-bot zipping between chips, making Flux.
 const CHIPS = [[0.18, 0.35], [0.45, 0.7], [0.72, 0.3], [0.86, 0.72]];
 function renderBots() {
+  // keep the canvas matched to the box (it changes size when the box shrinks, grows or reappears)
+  const cw = pcv.clientWidth, ch = pcv.clientHeight;
+  if (cw && ch && (Math.abs(cw - PW) > 0.5 || Math.abs(ch - PH) > 0.5)) [PW, PH] = fit(pcv, pg);
+  if (!cw || !ch) return;
   const w = PW, h = PH;
   pg.fillStyle = '#0d1714'; pg.fillRect(0, 0, w, h);
   pg.strokeStyle = '#1d3a31'; pg.lineWidth = 2;
@@ -1039,6 +1231,6 @@ function renderBots() {
     pg.fillStyle = '#a8937c'; pg.textAlign = 'center'; pg.font = '500 16px "Pixelify Sans", monospace';
     pg.fillText('No nano-bot yet', w / 2, h / 2 - 4);
     pg.font = '400 11px "IBM Plex Mono", monospace';
-    pg.fillText('One is sealed inside the Ember Idol, deep in Cave 1', w / 2, h / 2 + 14);
+    pg.fillText('Sealed in the Ember Idol, Cave 1', w / 2, h / 2 + 14);
   }
 }

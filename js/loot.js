@@ -51,7 +51,7 @@ function updateDrops(dt) {
     if (isFloor(at(Math.floor(nx), Math.floor(d.y))) || at(Math.floor(nx), Math.floor(d.y)) === 'chasm') d.x = nx; else d.vx *= -0.4;
     if (isFloor(at(Math.floor(d.x), Math.floor(ny))) || at(Math.floor(d.x), Math.floor(ny)) === 'chasm') d.y = ny; else d.vy *= -0.4;
     if (dist < 0.45 && d.t > 0.35) {
-      if (cargoCount() < cargoMax()) { cargoAdd(d.type); d.got = true; sfx('ore'); pickupFloat(d.type); }
+      if (cargoCount() < cargoMax()) { cargoAdd(d.type); d.got = true; sfx('ore'); pickupFloat(d.type); contractEvent('ore', 1, d.type); }
     }
   }
   drops = drops.filter(d => !d.got);

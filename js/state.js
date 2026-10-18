@@ -14,11 +14,12 @@ const $ = id => document.getElementById(id);
 const CODE = { d: 'dirt', c: 'clay', e: 'stone', b: 'basalt', l: 'loose', r: 'rubble', o: 'copper', s: 'silver', g: 'gold', k: 'crystal',
   f: 'fossil', q: 'relic', n: 'found', t: 'post', x: 'bedrock', G: 'granite', O: 'obsidian', h: 'cache', K: 'keycache', v: 'chasm', B: 'bridge', w: 'oldbridge', p: 'pad',
   E: 'exit', A: 'gate', L: 'gatelocked', Q: 'cliff', Y: 'tree', D: 'pedestal', R: 'rail',
-  z: 'sand', U: 'boulder', a: 'aquifer', W: 'water', y: 'gas', m: 'beam' };
+  z: 'sand', U: 'boulder', a: 'aquifer', W: 'water', y: 'gas', m: 'beam',
+  i: 'rust', j: 'slag', C: 'cinder', S: 'scrap', M: 'magma', V: 'lava', T: 'crust', N: 'vent', H: 'board' };
 const CHAR = Object.fromEntries(Object.entries(CODE).map(([k, v]) => [v, k]));
 const ORES = new Set(['copper', 'silver', 'gold', 'crystal']);
 // Tiles you can walk on even though they aren't empty
-const WALKABLE = new Set(['bridge', 'oldbridge', 'pad', 'exit', 'gate', 'shopdoor', 'water', 'beam']);
+const WALKABLE = new Set(['bridge', 'oldbridge', 'pad', 'exit', 'gate', 'shopdoor', 'water', 'beam', 'lava', 'crust', 'vent']);
 
 const freshCave = () => ({ world: null, seen: null, deco: null, outposts: 0, relicDone: false, bossDone: false });
 const ORE_LIST = ['copper', 'silver', 'gold', 'crystal'];
@@ -40,7 +41,9 @@ const freshState = () => ({
   core: {},                     // Flux upgrades from the Computer car: { magnet: 2 }
   skillCharge: 0,               // 0–1: how charged your active skill is
   hints: [],                    // first-time hints already shown
-  ver: 11,                      // save layout version
+  contracts: null,              // today's contracts: { day, list: [{ id, n, x, have, claimed }], bonus }
+  tut: null,                    // the Cave 1 tutorial: null = not started, a step number, or 'done'
+  ver: 13,                      // save layout version
   cave: -1,                     // where you are: -1 = town, -2 = inside Pip's shop, 0+ = a cave
   town: 0,                      // which town on the train line you're in (or whose cave you're in)
   lineOpen: false,              // the test unlock for the train line (it also opens with the Core Heart)
@@ -67,6 +70,16 @@ try {
     if ((S.ver || 8) < 9) { S.caves.forEach(c => { c.world = c.seen = c.deco = null; }); S.ver = 9; S.pos = null; }
     // v0.11 added boss halls and Cave 3's boss room: rebuild cave layouts once more (progress is kept)
     if (S.ver < 11) { S.caves.forEach(c => { c.world = c.seen = c.deco = null; if (c.relicDone) c.bossDone = true; }); S.ver = 11; S.pos = null; }
+    // v0.13 replaced Rustvale's test cave with three real caves (Hollowmouth progress is kept), and players
+    // who've already found a relic skip the tutorial
+    if (S.ver < 13) {
+      if (S.caves[3]) S.caves[3] = freshCave();
+      if (S.keys[3]) S.keys[3] = 0;
+      if (S.relicHeld === 4) S.relicHeld = 0;
+      if (S.cave === 3) { S.cave = -1; S.pos = null; }
+      if (S.relics > 0 || S.caves[0].relicDone) S.tut = 'done';
+      S.ver = 13;
+    }
   }
 } catch (e) { /* storage unavailable: play without saving */ }
 while (S.caves.length < C.CAVES.length) S.caves.push(freshCave());

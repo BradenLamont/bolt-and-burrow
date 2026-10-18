@@ -361,6 +361,7 @@ function updateUI() {
     lab: ['Lab car', 'Build mods with materials and coins, then place them in the computer. Each mod has a fixed shape.'],
     computer: ['Computer car', 'Spend Flux on permanent upgrades: magnet range, hull plating, damage mitigation, field repair, weapon power, prospector\'s luck and scanner range.'],
     storage: ['Storage car', 'Everything you send home ends up here. Sell it at Pip\'s counter or refine it in the Forge car.'],
+    board: ['Contracts board', 'Three contracts a day, picked at random. Finish them anywhere, then claim coins and Flux here. Do all three for a bonus.'],
     engine: ['Engine car', 'Board here to ride the train to another town. The line opens with the Core Heart.'],
     stand: ['Display stand', 'Each stand shows every tier of one part. Press E (or tap the button) to look and buy. The weapon rack sells weapons for your weapon arm.'],
     counter: ['Pip\'s counter', 'Buy tools for your belt and sell ore and materials from storage.'],
@@ -395,6 +396,7 @@ function updateUI() {
   $('botTag').classList.toggle('open', S.bots > 0);
   $('botBox').title = S.bots ? 'Making ' + fmt(fluxRate() * 60) + ' Flux a minute, even while you\'re away (up to ' + C.NANOBOT.offlineCapHours + ' h)' : 'The first nano-bot is sealed inside the Ember Idol, Cave 1\'s relic';
 
+  $('skipTut').hidden = !tutActive() || paused();
   renderTip(low);
   renderCue(act);
 }
@@ -403,6 +405,7 @@ function updateUI() {
 // Messages and first-time hints show in the tip line; when there's no message it says what you can do here.
 function idleTip(low) {
   if (trip) return 'Riding the Drill Liner · press any key or tap to skip';
+  if (tutActive()) return tt('Scout') + TUT[S.tut].text();
   if (low) return '<span class="warn">Low battery · head back to an outpost on the conveyor</span>';
   if (inShop()) {
     const sp = shopSpot();
@@ -416,6 +419,8 @@ function idleTip(low) {
     const CAR = { forge: 'Refine ore from storage into materials.', lab: 'Build mods and place them in the computer grid.', computer: 'Spend Flux on permanent upgrades for your mech.', storage: 'Everything you send home ends up here.' };
     if (t === 'engine') return tt('Engine car') + (lineIsOpen() ? 'The Drill Liner takes your whole train to ' + C.TOWNS[(S.town + 1) % C.TOWNS.length].name + '.' : 'The line to ' + C.TOWNS[1].name + ' opens when you bring home the Core Heart from Cave 3.');
     if (CAR[t]) return tt(PANEL_NAME[t]()) + CAR[t];
+    if (t === 'board') return tt('Contracts board') + 'Three new contracts every day. Press E to see them and claim rewards.';
+    if (contractsReady()) return tt('Contract done') + 'A reward is waiting at the contracts board (the notice board by the path).';
     return (TOWN().shop ? 'Walk through the big door of <b>Pip\'s shop</b> to buy parts and sell.' : 'Pip hasn\'t opened a shop here yet.') + ' Stand at a train car\'s door to use the <b>Forge</b>, <b>Lab</b>, <b>Storage</b> or <b>Computer</b>.';
   }
   if (station()) return tt(station() === 'outpost' ? 'Halfway outpost' : 'Entrance outpost') + 'Your battery recharges and ore rides the conveyor home. Open it to build or fast travel.';

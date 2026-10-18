@@ -98,9 +98,10 @@ function claimRelic() {
   let extra = '';
   sfx('relic');
   if (k === CORE) extra = ' Hollowmouth is complete: the active row of your computer is open, and the train line to Rustvale is open. Board at the Engine car!';
+  if (k === C.CAVES.length - 1) extra = ' Rustvale is complete! The old foundry is quiet at last.';
   if (k === 0 && !S.bots) { S.bots = 1; extra = ' A nano-bot was sealed inside it! It now makes Flux for your computer, even while you\'re away.'; }
   toast(cv.relic.name + ' recovered!', 'You claimed ' + fmt(cv.relic.reward) + ' coins. ' +
-    (next ? 'Its pedestal in town now glows, and the gate to Cave ' + (k + 2) + ', ' + next.name + ', is open.' : k === CORE ? '' : 'Nice work. That\'s everything in this cave.') + extra);
+    (next ? 'Its pedestal in town now glows, and the gate to ' + caveLabel(k + 1) + ', ' + next.name + ', is open.' : k === CORE ? '' : 'Nice work. That\'s everything in this cave.') + extra);
   if (onTownMap()) genTown();
   save();
 }
@@ -109,8 +110,12 @@ function claimRelic() {
 function breakBlock(c, r) {
   const i = idx(c, r), t = T[i];
   T[i] = null; DMG[i] = 0;
-  const B = C.BLOCKS[t];
-  burst(c + 0.5, r + 0.5, B.ore || B.color || (t === 'relic' ? '#c9a2ff' : C.BLOCKS[baseFor(c, r)].color), t === 'relic' ? 30 : 10);
+  const B = C.BLOCKS[t], col = B.color || (t === 'relic' ? '#c9a2ff' : C.BLOCKS[baseFor(c, r)].color);
+  chunks(c + 0.5, r + 0.5, ORES.has(t) ? C.BLOCKS[baseFor(c, r)].color : col, t === 'relic' ? 16 : 7, B.hp >= 9 ? 1.2 : 1);   // the block breaks into chunks
+  burst(c + 0.5, r + 0.5, B.ore || col, t === 'relic' ? 30 : 8);
+  if (B.hp >= 9) P.shake = Math.max(P.shake, 0.12);
+  contractEvent('dig'); tutDigged();
+  if (t === 'scrap') floatText(c + 0.5, r + 0.9, 'Salvage!', '#8E96A0');
   sfx(B.value || t === 'relic' || t === 'cache' || t === 'keycache' ? 'ore' : 'break');
   // every block pays a few coins (more for hard rock and deeper caves)
   if (B.coin) {
@@ -144,6 +149,7 @@ function openCache(c, r) {
   const ores = Object.keys(cave().ores), best = ores[ores.length - 1];
   const got = C.CACHE.ores;
   dropOre(best, c + 0.5, r + 0.5, got);
+  contractEvent('cache');
   burst(c + 0.5, r + 0.5, '#F2C94C', 24);
   floatText(c + 0.5, r + 0.9, '+' + fmt(coins), '#F2C94C');
   toast('Treasure cache!', '+' + fmt(coins) + ' coins' + (got ? ' and ' + got + ' ' + C.BLOCKS[best].label : '') + '.');
@@ -168,7 +174,7 @@ function dig(c, r, dt) {
     else if (t === 'gatelocked') {
       const k = C.TOWN.gates.indexOf(c), cv = gateCave(k);
       if (cv == null) hintOnce('soon' + S.town + k, 'Coming soon', 'This gate leads to a cave that isn\'t built yet.');
-      else hintOnce('gate' + k, 'Sealed gate', 'Bring home the ' + C.CAVES[cv - 1].relic.name + ' from Cave ' + cv + ' to open the way to ' + C.CAVES[cv].name + '.');
+      else hintOnce('gate' + S.town + k, 'Sealed gate', 'Bring home the ' + C.CAVES[cv - 1].relic.name + ' from ' + caveLabel(cv - 1) + ' to open the way to ' + C.CAVES[cv].name + '.');
     }
     return;
   }
@@ -178,6 +184,7 @@ function dig(c, r, dt) {
   const hard = t === 'granite' || t === 'obsidian' ? 1 + modVal('hardrock') : 1;
   const burstMult = P.burstT > 0 ? 3 : 1;   // the Drill Burst skill
   DMG[i] += digPower() * hard * burstMult * C.DIG_RATE * dt;
+  if (C.BLOCKS[t].hp >= 9 && Math.random() < dt * 10) P.shake = Math.max(P.shake, 0.05);   // hard rock judders a little
   touchGas(c, r);   // digging next to a gas pocket lights it
   sfx('dig');
   P.digging.push({ c, r });
@@ -243,8 +250,8 @@ function updatePlayer(dt) {
   }
   if (!dx && !dy) { finishMove(); return; }
 
-  const wet = at(pCol(), pRow()) === 'water';   // wading through flood water
-  if (wet && !station() && drain(C.REACT.waterDrain * dt)) return;
+  const wet = at(pCol(), pRow()) === 'water' || at(pCol(), pRow()) === 'lava';   // wading through flood water (or lava)
+  if (wet && at(pCol(), pRow()) === 'water' && !station() && drain(C.REACT.waterDrain * dt)) return;
   const sp = legs().speed * (wet ? C.REACT.waterSpeed : 1);
   const len = Math.hypot(dx, dy), vx = dx / len * sp, vy = dy / len * sp;
   if (dx && !dy) align('y', dt);
@@ -273,6 +280,7 @@ function finishMove() {
   lastCell = cell;
   markSeen();
   S.best = Math.max(S.best, depthOf(pRow()));
+  if (!inTown()) contractEvent('depth', depthOf(pRow()));
   const here = at(pCol(), pRow());
   if (here === 'gate') return enterCave(gateCave(C.TOWN.gates.indexOf(pCol())));
   if (here === 'exit') return goToTown();

@@ -86,9 +86,10 @@ function genCave() {
       if (y < cv.obsidian * (0.4 + deep)) t = 'obsidian';
       else if (y < (cv.obsidian + cv.granite) * (0.4 + deep)) t = 'granite';
       else if (cv.unstable && y > 1 - cv.unstable) t = 'loose';
+      else if (cv.scrap && y > 1 - cv.unstable - cv.scrap) t = 'scrap';   // old machinery (Rustvale)
     }
     // keep the conveyor path to the outpost free of hard rock
-    if (c === BELT && r <= beltRows && (t === 'granite' || t === 'obsidian' || t === 'loose')) t = baseFor(c, r);
+    if (c === BELT && r <= beltRows && (t === 'granite' || t === 'obsidian' || t === 'loose' || t === 'scrap')) t = baseFor(c, r);
     T[i] = t;
   }
 
@@ -150,12 +151,21 @@ function genCave() {
   }
   if (cv.boulders) for (let r = 7; r < C.RELIC.row - 4; r++) for (let c = 1; c < COLS - 1; c++)
     if (plain(c, r) && Math.random() < cv.boulders) T[idx(c, r)] = 'boulder';
-  for (const [type, count] of [['aquifer', cv.aquifers || 0], ['gas', cv.gas || 0]])
+  for (const [type, count] of [['aquifer', cv.aquifers || 0], ['gas', cv.gas || 0], ['magma', cv.magma || 0]])
     for (let n = 0, tries = 0; n < count && tries < 300; tries++) {
       const r = randInt(9, C.RELIC.row - 5), c = randInt(2, COLS - 3);
       if (!plain(c, r)) continue;
       T[idx(c, r)] = type; n++;
     }
+  // 5c. Steam vents (Rustvale): about half on cavern floors, the rest hidden in the rock as little pockets
+  const cavern = [];
+  for (let r = 8; r < C.RELIC.row - 4; r++) for (let c = 1; c < COLS - 1; c++) if (DECO[idx(c, r)] === 1 && T[idx(c, r)] === null && Math.abs(c - BELT) > 1) cavern.push(idx(c, r));
+  for (let n = 0, tries = 0; n < (cv.vents || 0) && tries < 300; tries++) {
+    if (n % 2 === 0 && cavern.length) { T[cavern.splice(Math.floor(Math.random() * cavern.length), 1)[0]] = 'vent'; n++; continue; }
+    const r = randInt(9, C.RELIC.row - 5), c = randInt(2, COLS - 3);
+    if (!plain(c, r)) continue;
+    T[idx(c, r)] = 'vent'; n++;
+  }
   // 6. The entrance outpost and exit door, outposts and the relic
   const B = C.BASE_BUILDING;
   for (let r = B.rows[0]; r <= B.rows[1]; r++) for (let c = B.cols[0]; c <= B.cols[1]; c++) T[idx(c, r)] = 'found';
@@ -187,10 +197,14 @@ function genCave() {
 // trees and relic pedestals. Gates open once the previous cave's relic is home.
 // Which cave is behind gate k of the current town (null = a sealed "coming soon" gate), and is it open?
 const gateCave = k => TOWN().gates[k];
+// Each town's caves open one relic at a time: its first cave is open, then each relic opens the next
+function caveOpen(cv) {
+  const first = C.CAVES.findIndex(c => (c.town || 0) === caveTown(cv));
+  return cv === first || cv < S.unlocked || !!(S.caves[cv - 1] && S.caves[cv - 1].relicDone);
+}
 function gateOpen(k) {
   const cv = gateCave(k);
-  if (cv == null) return false;
-  return caveTown(cv) === 0 ? cv < S.unlocked : true;   // Hollowmouth's caves open one relic at a time
+  return cv != null && caveOpen(cv);
 }
 function genTown() {
   const TW = C.TOWN, TN = TOWN();
@@ -206,6 +220,7 @@ function genTown() {
   if (TN.shop) for (let k = 0; k < b.doorW; k++) T[idx(b.door + k, b.rows[0])] = 'shopdoor';   // the shop's wide door
   TW.trees.forEach(([c, r]) => { T[idx(c, r)] = 'tree'; });
   if (TN.pedestals) TW.pedestals.forEach(c => { T[idx(c, TW.pedestalRow)] = 'pedestal'; });
+  T[idx(C.BOARD.col, C.BOARD.row)] = 'board';   // the contracts board
   // train station: tracks across the bottom row, a stone platform above them (DECO 3)
   const ST = TW.station;
   for (let c = 0; c < COLS; c++) T[idx(c, ST.railRow)] = 'rail';

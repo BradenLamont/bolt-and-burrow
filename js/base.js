@@ -11,6 +11,7 @@ function townSpot() {
     const car = ST.cars.find(k => c >= k.cols[0] && c <= k.cols[1]);
     if (car) return car.id;
   }
+  if (r === C.BOARD.row - 1 && Math.abs(c - C.BOARD.col) <= 0) return 'board';   // in front of the contracts board
   return null;
 }
 // Inside the shop: 'stand-head' (etc.) when you're right next to a display stand, 'counter' at Pip's counter
@@ -37,6 +38,7 @@ function depositCargo() {
   if (!n) return;
   for (const [t, k] of Object.entries(S.cargo.items)) S.storage[t] = (S.storage[t] || 0) + k;
   S.cargo.items = {};
+  contractEvent('home', n);
   floatText(P.x, P.y + 0.6, '+' + n + ' ore home', '#e8a160'); sfx('coin');
   toast(null, n + ' ore ' + (inTown() ? 'unloaded into the storage car.' : 'sent home along the conveyor to the train\'s storage car.'));
   hintOnce('storage', null, 'Ore isn\'t sold automatically any more. Sell it at the town SHOP, or refine it in the Forge car.');
@@ -49,7 +51,7 @@ function sellItem(id, all) {
   if (!n) return;
   if (C.MATERIALS[id]) S.mats[id] -= n; else S.storage[id] -= n;
   const coins = n * itemValue(id);
-  S.coins += coins; sfx('sell');
+  S.coins += coins; sfx('sell'); contractEvent('sell', coins);
   toast(null, 'Sold ' + n + ' ' + itemName(id).toLowerCase() + ' for ' + fmt(coins) + ' coins.');
   save();
 }
@@ -74,7 +76,7 @@ function updateForge() {
   let made = 0;
   while (q.length && now - S.forge.start >= recipeTime(q[0])) {
     S.forge.start += recipeTime(q[0]);
-    S.mats[q[0]]++; made++; sfx('ding');
+    S.mats[q[0]]++; made++; sfx('ding'); contractEvent('refine');
     if (onTownMap()) floatText(carDoor('forge') + 0.5, C.TOWN.station.platformRow + 1.2, '+1 ' + C.MATERIALS[q[0]].name, C.MATERIALS[q[0]].color);
     q.shift();
   }

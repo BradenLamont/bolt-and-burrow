@@ -43,6 +43,7 @@ function aimAt(wx, wy) {
   if (Math.abs(dx) > Math.abs(dy)) { P.dir = dx > 0 ? 'right' : 'left'; P.face = dx > 0 ? 1 : -1; } else P.dir = dy > 0 ? 'up' : 'down';
 }
 const swings = [];   // visual effects: { kind, x, y, ax, ay, t, life, range, arc }
+function sparks(x, y, col, n) { burst(x, y, col, n); }
 const shots = [];    // projectiles: { x, y, vx, vy, dmg, foe (fired by an enemy), life }
 function attack() {
   if (inTown() || trip || attackCd > 0) return;
@@ -152,12 +153,14 @@ function spawnFoes() {
   }
   if (cv.miniBoss && !cs.bossDone) { const H = C.BOSS_HALL; foes.push(makeFoe(cv.miniBoss, (H.cols[0] + H.cols[1] + 1) / 2, (H.rows[0] + H.rows[1] + 1) / 2)); }
   if (cv.boss && !cs.bossDone && S.relicHeld !== S.cave + 1) { const A = C.BOSS_ARENA; foes.push(makeFoe(cv.boss, (A.cols[0] + A.cols[1] + 1) / 2, (A.rows[0] + A.rows[1] + 1) / 2 + 1)); }
+  tutStarted = -1; tutGrub = null; bossCard = null;   // a tutorial step that brought in a grub sets it up again
 }
 function hurtFoe(f, dmg, o = {}) {
   const F = C.FOES[f.type];
   if (f.mark > 0) dmg *= 1.5;
   if (F.armor && !o.armorBreak && f.mark <= 0 && f.stun <= 0) { dmg *= 1 - F.armor; if (Math.random() < 0.4) floatText(f.x, f.y + 0.9, 'Armoured', '#a8a39c'); }
-  f.hp -= dmg; f.flash = 0.15;
+  f.hp -= dmg; f.flash = 0.15; f.squash = 0.18;
+  sparks(f.x, f.y, f.mark > 0 ? '#c9a2ff' : '#fff2c8', 5);
   if (o.stun) f.stun = Math.max(f.stun, o.stun);
   if (o.mark) f.mark = Math.max(f.mark, o.mark);
   if (o.knock && o.from && !f.boss) { const dx = f.x - o.from.x, dy = f.y - o.from.y, d = Math.hypot(dx, dy) || 1; moveFoe(f, dx / d * o.knock, dy / d * o.knock); }
@@ -167,7 +170,12 @@ function hurtFoe(f, dmg, o = {}) {
 function killFoe(f) {
   const F = C.FOES[f.type];
   f.dead = true;
-  burst(f.x, f.y, F.color, f.boss ? 40 : 14); sfx(f.boss ? 'boom' : 'pop');
+  chunks(f.x, f.y, F.color, f.boss ? 26 : 9, f.boss ? 1.6 : 1);   // the body breaks apart
+  burst(f.x, f.y, '#fff2c8', f.boss ? 24 : 6);
+  swings.push({ kind: 'pop', x: f.x, y: f.y, t: 0, life: f.boss ? 0.7 : 0.35, range: f.r * (f.boss ? 4 : 2.4), col: F.color });
+  if (f.boss) for (let k = 1; k <= 3; k++) swings.push({ kind: 'pop', x: f.x, y: f.y, t: -k * 0.15, life: 0.6, range: f.r * (3 + k * 1.5), col: '#ff8c3c' });
+  sfx(f.boss ? 'boom' : 'pop');
+  contractEvent('foes', 1, f.type);
   const coins = Math.round(F.coins * cave().coinMult);
   S.coins += coins; floatText(f.x, f.y + 0.9, '+' + coins, '#f2c94c');
   if (F.flux) S.flux += F.flux;
@@ -188,6 +196,7 @@ function updateCombat(dt) {
   if (attackHeld) attack();
   if (!inTown() && !station() && P.hull > 0) P.hull = Math.min(hullMax(), P.hull + coreVal('repair') * dt);   // Flux upgrade: field repair
   for (let k = swings.length - 1; k >= 0; k--) { swings[k].t += dt; if (swings[k].t > swings[k].life) swings.splice(k, 1); }
+  if (bossCard) { bossCard.t += dt; if (bossCard.t > 2.4) bossCard = null; }
   if (inTown()) { foes = []; shots.length = 0; return; }
   // projectiles
   for (let k = shots.length - 1; k >= 0; k--) {
@@ -195,8 +204,8 @@ function updateCombat(dt) {
     b.x += b.vx * dt; b.y += b.vy * dt; b.life -= dt;
     let gone = b.life <= 0;
     const c = Math.floor(b.x), r = Math.floor(b.y), t = at(c, r);
-    if (!gone && !isFloor(t) && t !== 'chasm') { if (!b.foe) weaponBlock(c, r, b.dmg * b.blockHit, b.tier); burst(b.x, b.y, b.foe ? '#9fd18a' : '#c9c0b0', 4); gone = true; }
-    if (!gone && b.foe && Math.hypot(b.x - P.x, b.y - P.y) < HB + 0.15) { hurtHull(b.dmg, b.x - b.vx, b.y - b.vy, 'acid'); gone = true; }
+    if (!gone && !isFloor(t) && t !== 'chasm') { if (!b.foe) weaponBlock(c, r, b.dmg * b.blockHit, b.tier); burst(b.x, b.y, b.col || (b.foe ? '#9fd18a' : '#c9c0b0'), 4); gone = true; }
+    if (!gone && b.foe && Math.hypot(b.x - P.x, b.y - P.y) < HB + 0.15) { hurtHull(b.dmg, b.x - b.vx, b.y - b.vy, b.what || 'acid'); gone = true; }
     if (!gone && !b.foe) for (const f of foes) if (!f.dead && Math.hypot(b.x - f.x, b.y - f.y) < f.r + 0.12) { hurtFoe(f, b.dmg, { from: { x: b.x - b.vx, y: b.y - b.vy } }); gone = true; break; }
     if (gone) shots.splice(k, 1);
   }
@@ -210,12 +219,14 @@ function updateCombat(dt) {
 
 function updateFoe(f, dt) {
   const F = C.FOES[f.type];
-  f.flash = Math.max(0, f.flash - dt); f.mark = Math.max(0, f.mark - dt); f.cd -= dt;
+  f.flash = Math.max(0, f.flash - dt); f.mark = Math.max(0, f.mark - dt); f.cd -= dt; f.squash = Math.max(0, (f.squash || 0) - dt);
+  if (f.intro > 0) { f.intro -= dt; return; }   // the boss intro card is showing
   if (f.stun > 0) { f.stun -= dt; return; }
   const dx = P.x - f.x, dy = P.y - f.y, d = Math.hypot(dx, dy) || 1;
   const sees = d < F.aggro && lineOfSight(f.x, f.y, P.x, P.y);
   const touching = d < f.r + HB + 0.08;
-  if (sees) hintOnce(f.boss ? 'boss-' + f.type : 'foes', f.boss ? C.FOES[f.type].name : 'Enemies!', f.boss ? (C.FOES[f.type].boss === 'big' ? 'The Basalt Golem holds the Core Heart. Watch for its slam: back away when the red ring flashes.' : 'A guardian blocks the way to the relic. Beat it to clear the path.') : 'Press F or J to attack the way you face (or click to aim). Enemies damage your hull, which repairs at outposts.');
+  if (sees && f.boss && !f.introDone) { f.introDone = true; f.intro = 1.8; bossIntro(f); return; }
+  if (sees) hintOnce(f.boss ? 'boss-' + f.type : 'foes', f.boss ? F.name : 'Enemies!', f.boss ? C.BOSS_TEXT[f.type][1] : 'Press F or J to attack the way you face (or click to aim). Enemies damage your hull, which repairs at outposts.');
   if (touching && f.cd <= 0 && !trip) { hurtHull(F.dmg, f.x, f.y, F.name); f.cd = f.boss ? 1.2 : 1; if (f.type === 'bat') { f.state = 'retreat'; f.st = 0.9; } }
   let sp = F.speed;
   if (f.type === 'spitter') {
@@ -226,29 +237,53 @@ function updateFoe(f, dt) {
     }
     return;
   }
-  if (f.type === 'warden') {   // charges in straight lines
-    if (f.state === 'charge') { f.st -= dt; moveFoe(f, f.wx * 6 * dt, f.wy * 6 * dt); if (f.st <= 0) { f.state = 'idle'; f.cd2 = F.charge; } return; }
+  if (F.charge) {   // charges in straight lines (the Scrap Hauler crashes into rock and is stunned)
+    if (f.state === 'charge') {
+      f.st -= dt;
+      const ox = f.x, oy = f.y, csp = F.chargeSpeed || 6;
+      moveFoe(f, f.wx * csp * dt, f.wy * csp * dt);
+      if (F.crash && Math.hypot(f.x - ox, f.y - oy) < csp * dt * 0.3) {   // hit the wall
+        f.state = 'idle'; f.cd2 = F.charge; f.stun = F.crash; P.shake = Math.max(P.shake, 0.3);
+        chunks(f.x + f.wx * f.r, f.y + f.wy * f.r, '#8a7a6a', 8, 1); sfx('rumble'); floatText(f.x, f.y + 1, 'Crash!', '#f2c94c');
+        return;
+      }
+      if (f.st <= 0) { f.state = 'idle'; f.cd2 = F.charge; }
+      return;
+    }
     f.cd2 = (f.cd2 == null ? F.charge : f.cd2) - dt;
-    if (sees && f.cd2 <= 0) { f.state = 'charge'; f.st = 0.6; f.wx = dx / d; f.wy = dy / d; sfx('roll'); return; }
+    if (sees && f.cd2 <= 0) { f.state = 'charge'; f.st = F.crash ? 1.1 : 0.6; f.wx = dx / d; f.wy = dy / d; sfx('roll'); return; }
   }
-  if (f.type === 'golem') {    // slams the ground: a warning ring, then a shockwave
+  if (F.volley) {   // the Foundry Titan fires a fan of molten slag
+    f.cd4 = (f.cd4 == null ? F.volley : f.cd4) - dt;
+    if (sees && f.cd4 <= 0 && d > 2) {
+      f.cd4 = F.volley * (f.hp < f.max / 2 ? 0.7 : 1);
+      const base = Math.atan2(dy, dx);
+      for (let k = 0; k < F.shots; k++) {
+        const a = base + (k - (F.shots - 1) / 2) * 0.28;
+        shots.push({ x: f.x, y: f.y, vx: Math.cos(a) * F.shotSpeed, vy: Math.sin(a) * F.shotSpeed, dmg: F.shotDmg, foe: true, life: 2.2, col: '#ff8c3c', what: 'molten slag' });
+      }
+      sfx('spit');
+    }
+  }
+  if (F.slam) {    // slams the ground: a warning ring, then a shockwave
     if (f.state === 'slam') {
       f.st -= dt;
       if (f.st <= 0) {
         f.state = 'idle'; f.cd2 = F.slam * (f.hp < f.max / 2 ? 0.7 : 1);
         swings.push({ kind: 'shock', x: f.x, y: f.y, t: 0, life: 0.4, range: F.slamRadius }); sfx('boom'); P.shake = 0.5;
+        chunks(f.x, f.y, '#8a7a6a', 10, 1.3);
         if (Math.hypot(P.x - f.x, P.y - f.y) < F.slamRadius) hurtHull(F.slamDmg, f.x, f.y, F.name);
       }
       return;
     }
     f.cd2 = (f.cd2 == null ? F.slam : f.cd2) - dt;
-    if (sees && f.cd2 <= 0) { f.state = 'slam'; f.st = 0.9; sfx('crane'); return; }
+    if (sees && f.cd2 <= 0 && (!F.volley || d < F.slamRadius + 1)) { f.state = 'slam'; f.st = 0.9; sfx('crane'); return; }
     if (f.hp < f.max / 2) sp *= 1.5;
   }
   if (F.spawn) {   // bosses call for help
     f.cd3 = (f.cd3 == null ? F.every : f.cd3) - dt;
     const helpers = foes.filter(o => o.type === F.spawn && !o.dead && Math.hypot(o.x - f.x, o.y - f.y) < 8).length;
-    if (sees && f.cd3 <= 0 && (f.type !== 'golem' || f.hp < f.max / 2) && helpers < 4) {
+    if (sees && f.cd3 <= 0 && (!F.spawnHalf || f.hp < f.max / 2) && helpers < 4) {
       f.cd3 = F.every;
       for (let k = 0; k < 2; k++) { const n = makeFoe(F.spawn, f.x + (k ? 0.8 : -0.8), f.y); if (foeFree(n.x, n.y, n.r, C.FOES[F.spawn].fly)) foes.push(n); }
       burst(f.x, f.y, F.color, 10);
@@ -264,6 +299,25 @@ function updateFoe(f, dt) {
     moveFoe(f, hx / hd * sp * 0.4 * dt, hy / hd * sp * 0.4 * dt);
   }
 }
+// The boss intro card: the name slides in over the cave the first time you meet a boss on each visit
+let bossCard = null;
+function bossIntro(f) {
+  bossCard = { type: f.type, t: 0 }; sfx('relic'); P.shake = Math.max(P.shake, 0.3);
+}
+function drawBossCard() {
+  if (!bossCard) return;
+  const F = C.FOES[bossCard.type], t = bossCard.t, a = Math.min(1, t * 4, (2.4 - t) * 3);
+  const slide = (1 - Math.min(1, t * 3)) * VW * 0.2, y = VH * 0.32;
+  g.globalAlpha = Math.max(0, a);
+  g.fillStyle = 'rgba(11,8,6,.82)'; g.fillRect(0, y - 46, VW, 92);
+  g.fillStyle = '#ff8c3c'; g.fillRect(0, y - 46, VW, 2); g.fillRect(0, y + 44, VW, 2);
+  g.textAlign = 'center';
+  g.fillStyle = '#a8937c'; g.font = '500 ' + Math.max(11, Math.min(15, VW / 50)) + 'px "IBM Plex Mono", monospace';
+  g.fillText((F.boss === 'big' ? 'BOSS · ' : 'GUARDIAN · ') + C.BOSS_TEXT[bossCard.type][0].toUpperCase(), VW / 2 - slide, y - 18);
+  g.fillStyle = '#efe3d3'; g.font = '700 ' + Math.max(24, Math.min(46, VW / 18)) + 'px "Pixelify Sans", monospace';
+  g.fillText(F.name.toUpperCase(), VW / 2 + slide, y + 24);
+  g.globalAlpha = 1;
+}
 // The boss you're fighting (for the health bar), if one is close and awake
 function activeBoss() { return foes.find(f => f.boss && !f.dead && Math.hypot(f.x - P.x, f.y - P.y) < 12) || null; }
 
@@ -276,6 +330,7 @@ function drawFoes(X, Y, s, bosses) {
     g.fillStyle = 'rgba(0,0,0,.3)'; g.beginPath(); g.ellipse(x, y + R * 0.6, R, R * 0.4, 0, 0, 7); g.fill();
     const bob = Math.sin(time * 6 + f.sx) * s * 0.03, col = f.flash > 0 ? '#ffffff' : F.color;
     g.save(); g.translate(x, y - R * 0.2 + bob);
+    if (f.squash > 0) { const q = f.squash / 0.18; g.scale(1 + q * 0.18, 1 - q * 0.14); }   // a squash when hit
     if (f.type === 'grub' || f.type === 'grubmother') {
       for (let k = 2; k >= 0; k--) { g.fillStyle = k ? shade(col, 0.85) : col; g.beginPath(); g.arc(-k * R * 0.55 * Math.sign(f.wx || 1), k * R * 0.1, R * (1 - k * 0.18), 0, 7); g.fill(); }
       g.fillStyle = '#16110d'; g.fillRect(-R * 0.35, -R * 0.25, R * 0.18, R * 0.18); g.fillRect(R * 0.15, -R * 0.25, R * 0.18, R * 0.18);
@@ -304,8 +359,38 @@ function drawFoes(X, Y, s, bosses) {
       g.strokeStyle = 'rgba(255,140,60,' + (0.5 + Math.sin(time * 5) * 0.3) + ')'; g.lineWidth = 2;
       g.beginPath(); g.moveTo(-R * 0.5, -R * 0.4); g.lineTo(-R * 0.1, 0); g.lineTo(R * 0.4, -R * 0.3); g.moveTo(-R * 0.3, R * 0.4); g.lineTo(R * 0.2, R * 0.2); g.stroke();
       g.fillStyle = '#ff8c3c'; g.fillRect(-R * 0.35, -R * 0.55, R * 0.2, R * 0.12); g.fillRect(R * 0.15, -R * 0.55, R * 0.2, R * 0.12);
-      if (f.state === 'slam') { g.strokeStyle = 'rgba(226,112,90,' + (0.5 + Math.sin(time * 30) * 0.4) + ')'; g.lineWidth = 3; g.beginPath(); g.arc(0, R * 0.2, C.FOES.golem.slamRadius * s, 0, 7); g.stroke(); }
+    } else if (f.type === 'hauler') {   // a runaway ore cart: steel tub on wheels, one headlight, a scoop
+      const dir = f.state === 'charge' ? Math.sign(f.wx || 1) : Math.sign(P.x - f.x || 1);
+      g.fillStyle = '#2B2A2E'; for (const sd of [-1, 1]) for (const fb of [-1, 1]) { g.beginPath(); g.arc(sd * R * 0.6, R * 0.55 + fb * 0, R * 0.26, 0, 7); g.fill(); }
+      g.fillStyle = shade(col, 0.7); g.beginPath(); g.moveTo(-R, -R * 0.5); g.lineTo(R, -R * 0.5); g.lineTo(R * 0.8, R * 0.5); g.lineTo(-R * 0.8, R * 0.5); g.closePath(); g.fill();
+      g.fillStyle = col; g.fillRect(-R * 0.95, -R * 0.65, R * 1.9, R * 0.25);
+      g.fillStyle = '#c86a3a'; for (let k = 0; k < 4; k++) g.fillRect(-R * 0.7 + k * R * 0.45, -R * 0.35, R * 0.12, R * 0.12);   // rust spots
+      g.fillStyle = '#5a4a3e'; g.beginPath(); g.ellipse(0, -R * 0.62, R * 0.7, R * 0.18, 0, 0, 7); g.fill();   // ore heaped inside
+      g.fillStyle = '#E8B33A'; g.fillRect(dir * R * 0.95 - R * 0.12, -R * 0.2, R * 0.24, R * 0.5);   // the scoop
+      g.fillStyle = f.state === 'charge' || Math.sin(time * 6) > 0 ? '#fff2a8' : '#8a7a40'; g.beginPath(); g.arc(dir * R * 0.75, -R * 0.05, R * 0.14, 0, 7); g.fill();
+      if (f.state === 'charge') { g.fillStyle = 'rgba(255,242,168,.18)'; g.beginPath(); g.moveTo(dir * R * 0.8, -R * 0.05); g.lineTo(dir * R * 3, -R * 0.6); g.lineTo(dir * R * 3, R * 0.5); g.closePath(); g.fill(); }
+    } else if (f.type === 'slaggolem') {   // a heap of slag held together by molten seams
+      g.fillStyle = shade(col, 0.75); g.beginPath(); g.arc(-R * 0.75, R * 0.1, R * 0.4, 0, 7); g.arc(R * 0.75, R * 0.1, R * 0.4, 0, 7); g.fill();
+      g.fillStyle = col; g.beginPath(); g.ellipse(0, -R * 0.1, R * 0.8, R * 0.85, 0, 0, 7); g.fill();
+      g.strokeStyle = 'rgba(255,140,60,' + (0.6 + Math.sin(time * 4) * 0.3) + ')'; g.lineWidth = Math.max(2, R * 0.1);
+      g.beginPath(); g.moveTo(-R * 0.5, -R * 0.6); g.lineTo(-R * 0.1, -R * 0.1); g.lineTo(-R * 0.4, R * 0.4); g.moveTo(R * 0.4, -R * 0.5); g.lineTo(R * 0.1, 0); g.lineTo(R * 0.5, R * 0.3); g.stroke();
+      g.fillStyle = '#ffb347'; g.fillRect(-R * 0.32, -R * 0.45, R * 0.18, R * 0.12); g.fillRect(R * 0.14, -R * 0.45, R * 0.18, R * 0.12);
+      const drip = (time * 0.8 + f.sx) % 1; g.fillStyle = 'rgba(255,140,60,' + (1 - drip) + ')'; g.beginPath(); g.arc(-R * 0.4, R * 0.4 + drip * R * 0.6, R * 0.08, 0, 7); g.fill();
+    } else if (f.type === 'titan') {   // an old mining machine: tracks, a boiler body, a smokestack and a furnace mouth
+      g.fillStyle = '#2B2A2E'; g.fillRect(-R * 1.15, R * 0.25, R * 2.3, R * 0.55);
+      g.fillStyle = '#4A5059'; for (let k = 0; k < 7; k++) g.fillRect(-R * 1.1 + ((k * R * 0.34 + time * R * 1.2) % (R * 2.25)), R * 0.3, R * 0.12, R * 0.45);
+      g.fillStyle = shade(col, 0.8); g.fillRect(-R * 1.3, -R * 0.3, R * 0.35, R * 0.55); g.fillRect(R * 0.95, -R * 0.3, R * 0.35, R * 0.55);   // arms
+      g.fillStyle = col; rr2(g, -R * 0.9, -R * 0.95, R * 1.8, R * 1.3, R * 0.2); g.fill();
+      g.fillStyle = shade(col, 1.2); g.fillRect(-R * 0.9, -R * 0.95, R * 1.8, R * 0.15);
+      g.fillStyle = '#c86a3a'; for (let k = 0; k < 6; k++) g.fillRect(-R * 0.8 + k * R * 0.3, -R * 0.75, R * 0.06, R * 0.06);   // rivets
+      const heat = 0.6 + Math.sin(time * (f.cd4 < 0.8 ? 20 : 3)) * 0.3;
+      g.fillStyle = '#16110d'; rr2(g, -R * 0.45, -R * 0.45, R * 0.9, R * 0.55, R * 0.1); g.fill();
+      g.fillStyle = 'rgba(255,140,60,' + heat + ')'; rr2(g, -R * 0.38, -R * 0.38, R * 0.76, R * 0.42, R * 0.08); g.fill();
+      g.fillStyle = '#ffd98a'; for (let k = 0; k < 4; k++) g.fillRect(-R * 0.32 + k * R * 0.2, -R * 0.42, R * 0.06, R * 0.5);   // grate bars
+      g.fillStyle = '#3B3F46'; g.fillRect(R * 0.45, -R * 1.6, R * 0.28, R * 0.7);   // smokestack
+      for (let k = 0; k < 3; k++) { const ph = (time * 0.7 + k / 3) % 1; g.fillStyle = 'rgba(90,80,75,' + (0.5 * (1 - ph)) + ')'; g.beginPath(); g.arc(R * 0.59 + Math.sin(ph * 4) * R * 0.2, -R * 1.7 - ph * R * 1.2, R * (0.15 + ph * 0.25), 0, 7); g.fill(); }
     }
+    if (F.slam && f.state === 'slam') { g.strokeStyle = 'rgba(226,112,90,' + (0.5 + Math.sin(time * 30) * 0.4) + ')'; g.lineWidth = 3; g.beginPath(); g.arc(0, R * 0.2, F.slamRadius * s, 0, 7); g.stroke(); }
     g.restore();
     if (f.stun > 0) { g.fillStyle = '#f2c94c'; for (let k = 0; k < 3; k++) { const a = time * 6 + k * 2.1; g.fillRect(x + Math.cos(a) * R - 2, y - R * 1.2 + Math.sin(a) * R * 0.3 - 2, 4, 4); } }
     if (f.mark > 0) { g.strokeStyle = 'rgba(201,162,255,.8)'; g.lineWidth = 1.5; g.beginPath(); g.arc(x, y - R * 0.2, R * 1.3, 0, 7); g.stroke(); }
@@ -314,9 +399,9 @@ function drawFoes(X, Y, s, bosses) {
 }
 function drawCombatFx(X, Y, s) {
   for (const b of shots) {
-    g.fillStyle = b.foe ? '#b6f27a' : '#e8e0d0';
+    g.fillStyle = b.col || (b.foe ? '#b6f27a' : '#e8e0d0');
     g.beginPath(); g.arc(X(b.x), Y(b.y) - s * 0.2, b.foe ? s * 0.1 : s * 0.06, 0, 7); g.fill();
-    if (b.foe) { g.fillStyle = 'rgba(182,242,122,.25)'; g.beginPath(); g.arc(X(b.x), Y(b.y) - s * 0.2, s * 0.22, 0, 7); g.fill(); }
+    if (b.foe) { g.fillStyle = b.col ? 'rgba(255,140,60,.3)' : 'rgba(182,242,122,.25)'; g.beginPath(); g.arc(X(b.x), Y(b.y) - s * 0.2, s * 0.22, 0, 7); g.fill(); }
   }
   for (const w of swings) {
     const k = w.t / w.life, x = X(w.x), y = Y(w.y) - s * 0.2;
@@ -331,6 +416,8 @@ function drawCombatFx(X, Y, s) {
       g.strokeStyle = '#86cfdc'; g.lineWidth = 3; g.beginPath(); g.arc(x, y, w.range * s * (1 - k), 0, 7); g.stroke();
     } else if (w.kind === 'shock') {
       g.strokeStyle = '#ff8c3c'; g.lineWidth = 5; g.beginPath(); g.arc(x, y, w.range * s * k, 0, 7); g.stroke();
+    } else if (w.kind === 'pop' && k >= 0) {   // a burst ring when an enemy breaks apart
+      g.strokeStyle = w.col; g.lineWidth = Math.max(2, s * 0.08 * (1 - k)); g.beginPath(); g.arc(x, y, w.range * s * (0.3 + k * 0.7), 0, 7); g.stroke();
     }
     g.globalAlpha = 1;
   }

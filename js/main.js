@@ -14,6 +14,7 @@ function frame(now) {
     }
     updateSkills(dt);
     updateEffects(dt);
+    updateTutorial(dt);
   }
   updateBots(dt);
   if (updateForge()) updateUI();
@@ -25,6 +26,7 @@ function frame(now) {
   requestAnimationFrame(frame);
 }
 
+rollContracts();
 loadArea();
 resizeMinimap();
 placePlayerFromSave();

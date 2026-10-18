@@ -52,7 +52,7 @@ function endTrip() {
   if (!trip.arrived) arriveTown();
   trip = null;
   const b = boardSpot(); P.x = b.x; P.y = b.y; lastCell = -1;
-  toast(TOWN().name, C.TOWNS[S.town].placeholder ? 'A placeholder town for testing the train. Its first gate leads to a test cave.' : 'Back home in Hollowmouth.');
+  toast(TOWN().name, S.town === 1 ? 'The old mining town. Its first gate leads to the Scrap Tunnels; each relic you bring home opens the next.' : 'Back home in Hollowmouth.');
   save(); updateUI();
 }
 function skipTrip() { if (trip) endTrip(); }

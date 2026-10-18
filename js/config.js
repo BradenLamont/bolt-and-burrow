@@ -40,13 +40,16 @@ const CONFIG = {
   // ----- Towns on the train line -----
   // Every town uses the TOWN layout above; each has its own name, colours and caves behind its gates
   // (gates: a cave number, or null for a sealed "coming soon" gate). shop: Pip's shop style there
-  // ('burrow' = Burrow Workshop, 'garage' = Salvage Garage). Town 2 is a placeholder for testing travel.
+  // ('burrow' = Burrow Workshop, 'garage' = Salvage Garage). style 'rust' = Rustvale's industrial look
+  // (gravel and steel plates instead of grass, scrap heaps and lamp posts instead of trees, girder gates).
   TOWNS: [
     { name: 'Hollowmouth', gates: [0, 1, 2], shop: 'burrow', pedestals: true,
       look: { grass: '#3c4a2c', grassDot: 'rgba(120,150,80,.25)', path: '#7a6248', cliff: '#4a4038' } },
-    { name: 'Rustvale', gates: [3, null, null], shop: 'garage', pedestals: false, placeholder: true,
-      look: { grass: '#4d4230', grassDot: 'rgba(190,150,90,.22)', path: '#86684a', cliff: '#5a4334' } },
+    { name: 'Rustvale', gates: [3, 4, 5], shop: 'garage', pedestals: true, style: 'rust',
+      look: { grass: '#3f362d', grassDot: 'rgba(200,120,60,.18)', path: '#5c5249', cliff: '#5a3b2c' } },
   ],
+  // The contracts board in each town: stand in front of it (the row below) and press E
+  BOARD: { col: 14, row: 3 },
   // The train trip: seconds for each part of boarding, the drilling scene and unloading
   TRIP: { doors: 0.6, lift: 1.4, walk: 0.9, travel: 4 },
   LINE_TEST_KEY: 'KeyT',   // press it 5 times in town to open the line early (for testing)
@@ -85,12 +88,24 @@ const CONFIG = {
       valueMult: 3.5, relic: { name: 'Core Heart', reward: 2000, wall: 'obsidian' }, keyName: 'Deeps bridge key', coinMult: 2, gas: 8,
       foes: { grub: 4, bat: 5, spitter: 6 }, boss: 'golem',
       note: 'No old bridge here: find this cave\'s bridge keys before the chasm. Unstable rock collapses as you pass, and green gas pockets explode if you dig next to them.' },
-    // Rustvale's test cave: a mix of everything, to try the town-to-town loop
-    { id: 'test', name: 'Test Cavern', town: 1, label: 'Test cave', rock: ['stone'], floor: '#1d2129',
-      ores: { copper: 0.05, silver: 0.04, gold: 0.02 }, granite: 0.05, obsidian: 0, chasms: [], pits: 1, unstable: 0.03, caverns: 3,
-      valueMult: 1.5, relic: { name: 'Test Shard', reward: 100, wall: null }, keyName: 'Test bridge key', coinMult: 1.5,
-      sand: 3, boulders: 0.008, aquifers: 2, gas: 3, foes: { crab: 5, mite: 3 },
-      note: 'A placeholder cave for testing: a little of everything from Hollowmouth\'s three caves.' },
+    // ----- Rustvale: old industrial mines -----
+    //   scrap: chance of old machinery blocks (they pay extra coins) · vents: steam vents that burst on a timer
+    //   magma: hidden lava pockets (nearby rock glows) that spill lava when opened · lava: chasms are lava rivers
+    { id: 'scrap', name: 'Scrap Tunnels', town: 1, rock: ['rust', 'stone'], floor: '#262019',
+      ores: { copper: 0.05, silver: 0.045, gold: 0.02 }, granite: 0.07, obsidian: 0, chasms: [{ row: 38, oldBridge: true, pads: 1 }], pits: 1, unstable: 0.02, caverns: 3,
+      valueMult: 4, relic: { name: 'Brass Governor', reward: 2500, wall: 'granite' }, keyName: 'Tunnel bridge key', coinMult: 2.2,
+      scrap: 0.035, vents: 10, foes: { crab: 4, mite: 3, bat: 3 }, miniBoss: 'hauler',
+      note: 'Old mine tunnels full of rusted machinery. Scrap blocks pay extra coins. Steam vents hiss before they burst: step off them.' },
+    { id: 'slag', name: 'Slag Works', town: 1, rock: ['slag'], floor: '#211a17',
+      ores: { silver: 0.04, gold: 0.045, crystal: 0.015 }, granite: 0.06, obsidian: 0.05, chasms: [{ row: 36, oldBridge: false, pads: 1 }], pits: 2, unstable: 0.04, caverns: 3,
+      valueMult: 5, relic: { name: 'Slag Crown', reward: 4000, wall: 'obsidian' }, keyName: 'Works bridge key', coinMult: 2.6,
+      scrap: 0.02, vents: 5, magma: 10, foes: { crab: 5, mite: 4, spitter: 3 }, miniBoss: 'slaggolem',
+      note: 'Slag heaps from the old works. Rock that glows orange hides lava: open it and lava spills into your tunnels. It cools to a crust after a while.' },
+    { id: 'crucible', name: 'The Crucible', town: 1, rock: ['cinder'], floor: '#1e1514',
+      ores: { gold: 0.05, crystal: 0.035 }, granite: 0.05, obsidian: 0.09, chasms: [{ row: 33, oldBridge: true, pads: 1 }, { row: 44, oldBridge: false, pads: 2 }], pits: 2, unstable: 0.03, caverns: 3,
+      valueMult: 6.5, relic: { name: 'Foundry Heart', reward: 6000, wall: 'obsidian' }, keyName: 'Crucible bridge key', coinMult: 3,
+      vents: 4, magma: 8, lava: true, foes: { crab: 5, mite: 6, bat: 3 }, boss: 'titan',
+      note: 'The old foundry, still burning. Two lava rivers cross it, and the Foundry Titan guards the Foundry Heart at the end.' },
   ],
 
   // hp = how much digging a block takes; coin = coins for digging it (× the cave's coinMult);
@@ -100,6 +115,15 @@ const CONFIG = {
     clay:    { hp: 4,   coin: 2, color: '#86563a' },
     stone:   { hp: 5,   coin: 2, color: '#5b5753' },
     basalt:  { hp: 9,   coin: 3, color: '#3e3c44' },
+    rust:    { hp: 7,   coin: 2, color: '#6a4632' },  // Rustvale rock: rust-stained stone
+    slag:    { hp: 10,  coin: 3, color: '#3b3432' },  // dark slag with glowing flecks
+    cinder:  { hp: 12,  coin: 4, color: '#2c2120' },  // burnt black rock with hot seams
+    scrap:   { hp: 8,   coin: 9, color: '#5D646E', label: 'Scrap' },   // old machinery: pays extra coins
+    magma:   { hp: 3,   coin: 1, color: '#5a2a1c' },  // a hidden lava pocket: spills lava when opened
+    lava:    { hp: Infinity },                        // spilled lava (walkable, burns your hull; cools to crust)
+    crust:   { hp: Infinity },                        // cooled lava (walkable)
+    vent:    { hp: Infinity },                        // a steam vent in the floor (walkable; bursts on a timer)
+    board:   { hp: Infinity },                        // the contracts board in town
     // Hard rock: needs = the Arms tier required (1 = Drill Arms, 2 = Plasma Cutters)
     granite:  { hp: 10, coin: 4, needs: 1, color: '#8c8286', label: 'Granite' },
     obsidian: { hp: 16, coin: 6, needs: 2, color: '#241d2c', label: 'Obsidian' },
@@ -216,6 +240,8 @@ const CONFIG = {
     floodVolume: 10, floodStep: 0.2,   // blocks of water per pocket, seconds per block
     waterSpeed: 0.55, waterDrain: 1.2, // speed while wading, extra battery per second
     gasFuse: 0.9, gasRadius: 1, gasHit: 1.8,
+    lavaVolume: 7, lavaStep: 0.35, lavaCool: 25, lavaBurn: 9,   // blocks per pocket, s per block, s to cool, hull per second
+    ventCycle: 4.5, ventWarn: 1, ventBurst: 0.7, ventDmg: 9,    // seconds between bursts, hiss before, burst length, hull damage
     hits: { sand: { battery: 0.05, cargo: 0 }, boulder: { battery: 0.15, cargo: 0.1 }, gas: { battery: 0.3, cargo: 0.3 } },
   },
 
@@ -262,7 +288,20 @@ const CONFIG = {
     // mini-bosses guard the hall before the relic; the big boss holds Cave 3's Core Heart
     grubmother: { name: 'Grub Mother',   hp: 70,  speed: 0.8, dmg: 7,  r: 0.7, aggro: 7, coins: 150, flux: 20, color: '#d9b77a', boss: 'mini', spawn: 'grub', every: 6 },
     warden:     { name: 'Crystal Warden', hp: 160, speed: 1.4, dmg: 15, r: 0.65, aggro: 7, coins: 300, flux: 40, color: '#9fe3f0', boss: 'mini', armor: 0.5, charge: 4 },
-    golem:      { name: 'Basalt Golem',  hp: 450, speed: 1.0, dmg: 18, r: 1.0, aggro: 9, coins: 500, flux: 60, color: '#3e3c44', boss: 'big', slam: 5, slamRadius: 3.2, slamDmg: 20, spawn: 'bat', every: 8 },
+    golem:      { name: 'Basalt Golem',  hp: 450, speed: 1.0, dmg: 18, r: 1.0, aggro: 9, coins: 500, flux: 60, color: '#3e3c44', boss: 'big', slam: 5, slamRadius: 3.2, slamDmg: 20, spawn: 'bat', every: 8, spawnHalf: true },
+    // Rustvale: machines gone wild
+    hauler:     { name: 'Scrap Hauler',  hp: 220, speed: 1.2, dmg: 16, r: 0.7, aggro: 8, coins: 400, flux: 50, color: '#8E96A0', boss: 'mini', armor: 0.4, charge: 3.5, chargeSpeed: 8, crash: 1.4 },
+    slaggolem:  { name: 'Slag Golem',    hp: 300, speed: 0.9, dmg: 18, r: 0.85, aggro: 8, coins: 500, flux: 60, color: '#4a3a33', boss: 'mini', slam: 4.5, slamRadius: 2.6, slamDmg: 16, spawn: 'mite', every: 7 },
+    titan:      { name: 'Foundry Titan', hp: 800, speed: 0.8, dmg: 22, r: 1.15, aggro: 10, coins: 1000, flux: 120, color: '#5a4a3e', boss: 'big', slam: 6, slamRadius: 3, slamDmg: 22, volley: 3.2, shots: 3, shotSpeed: 6, shotDmg: 12, spawn: 'mite', every: 9, spawnHalf: true },
+  },
+  // What the boss intro card says, and the first-time hint
+  BOSS_TEXT: {
+    grubmother: ['Guardian of the Ember Idol', 'A guardian blocks the way to the relic. Beat it to clear the path.'],
+    warden:     ['Guardian of the Storm Lens', 'It charges in straight lines. Step aside, then hit it while it turns.'],
+    golem:      ['Keeper of the Core Heart', 'The Basalt Golem holds the Core Heart. Watch for its slam: back away when the red ring flashes.'],
+    hauler:     ['Runaway ore cart', 'It charges in straight lines. Dodge so it crashes into the rock, then hit it while it\'s stunned.'],
+    slaggolem:  ['Guardian of the Slag Crown', 'It slams the ground and calls Magma Mites. Back away when the red ring flashes.'],
+    titan:      ['Keeper of the Foundry Heart', 'It fires molten slag, slams anything close, and calls Magma Mites when it\'s hurt.'],
   },
   BOSS_HALL: { rows: [50, 53], cols: [6, 18] },     // the mini-boss hall, just before the relic chamber
   BOSS_ARENA: { rows: [50, 59], cols: [2, 22] },    // Cave 3's boss room, walled in obsidian
@@ -339,6 +378,30 @@ const CONFIG = {
     shield:     { name: 'Shield',          shape: [[0, 0], [1, 0]], active: true, cost: { conductors: 2, lenses: 1 }, coins: 400, battery: 0,
                   eff: [30, 25, 20],       text: e => 'Blocks the next cave-in, boulder or gas blast · recharges in ' + e + ' s' },
   },
+
+  // ----- Daily contracts (the board in each town) -----
+  // Three contracts are picked at random each day (they reset at midnight). Claim the reward at the board.
+  // n: how many, by progress tier (0 = Hollowmouth start, 1 = after the Ember Idol, 2 = after the Storm Lens, 3 = Rustvale).
+  // coins and flux are the reward at tier 0; coins scale with your tier (×tierMult per tier).
+  CONTRACTS: {
+    list: [
+      { id: 'dig',     text: n => 'Dig ' + n + ' blocks',                       n: [40, 70, 100, 140], coins: 60,  flux: 10 },
+      { id: 'ore',     text: (n, x) => 'Collect ' + n + ' ' + x,               n: [8, 10, 12, 14],    coins: 80,  flux: 10 },
+      { id: 'foes',    text: n => 'Defeat ' + n + ' enemies',                   n: [6, 10, 14, 18],    coins: 70,  flux: 15 },
+      { id: 'foeType', text: (n, x) => 'Defeat ' + n + ' ' + x,                n: [4, 6, 8, 10],      coins: 70,  flux: 15 },
+      { id: 'home',    text: n => 'Send ' + n + ' ore home',                    n: [15, 25, 35, 50],   coins: 90,  flux: 10 },
+      { id: 'refine',  text: n => 'Refine ' + n + ' materials in the Forge',    n: [2, 3, 4, 5],       coins: 80,  flux: 15 },
+      { id: 'sell',    text: n => 'Earn ' + n + ' coins selling to Pip',        n: [150, 400, 800, 1500], coins: 60, flux: 10 },
+      { id: 'cache',   text: n => 'Open ' + n + ' treasure cache' + (n > 1 ? 's' : ''), n: [1, 1, 2, 2], coins: 100, flux: 20 },
+      { id: 'depth',   text: n => 'Reach ' + n + ' m deep in any cave',         n: [20, 30, 40, 50],   coins: 80,  flux: 15 },
+      { id: 'tools',   text: n => 'Use ' + n + ' tools from your belt',         n: [2, 3, 4, 5],       coins: 70,  flux: 10 },
+    ],
+    perDay: 3, tierMult: 2.2, bonus: { coins: 150, flux: 40 },   // bonus for finishing all three (× tier for coins)
+  },
+
+  // ----- Tutorial (Cave 1, first run) -----
+  // Scout, a little guide drone, shows new players the basics in Cave 1, then flies home to the train.
+  TUTORIAL: { digBlocks: 5 },
 
   // ----- Nano-bots -----
   // The first nano-bot comes with the Ember Idol (Cave 1's relic). Nano-bots make Flux, even while

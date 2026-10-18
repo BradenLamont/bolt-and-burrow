@@ -93,6 +93,8 @@ button:focus-visible { outline: 2px solid var(--crystal); outline-offset: 2px; }
   background: rgba(33, 25, 19, .9); color: var(--muted); font-size: .78rem;
 }
 #recall.armed { border-color: var(--danger); color: var(--danger); }
+#skipTut { padding: 8px 12px; border-radius: 4px; border: 2px solid var(--crystal); background: rgba(33, 25, 19, .9); color: var(--crystal); font-size: .78rem; }
+#skipTut[hidden] { display: none; }
 .belt { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
 .belt button { padding: 6px 9px; border-radius: 4px; border: 1px solid var(--line); background: rgba(33, 25, 19, .9); color: var(--fg); font-size: .72rem; }
 #skill { display: grid; gap: 3px; padding: 6px 12px; border-radius: 4px; border: 2px solid var(--line); background: rgba(33, 25, 19, .92); color: var(--muted); font-family: var(--display); font-size: .95rem; min-width: 96px; }
