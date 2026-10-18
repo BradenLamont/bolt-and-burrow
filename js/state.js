@@ -37,6 +37,7 @@ const freshState = () => ({
   tools: {},                    // tools on your belt: { blast: 2 }
   weapon: 'wrench',             // the weapon on your weapon arm
   weapons: { wrench: 1 },       // weapons you own and their Mk (1–3)
+  core: {},                     // Flux upgrades from the Computer car: { magnet: 2 }
   skillCharge: 0,               // 0–1: how charged your active skill is
   hints: [],                    // first-time hints already shown
   ver: 11,                      // save layout version

@@ -216,6 +216,9 @@ button:focus-visible { outline: 2px solid var(--crystal); outline-offset: 2px; }
 .rows { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px; }
 
 .rows.one { grid-template-columns: minmax(0, 1fr); }
+.pips { display: inline-flex; gap: 3px; margin-left: 6px; vertical-align: 1px; }
+.pip { width: 8px; height: 8px; border-radius: 2px; border: 1px solid #86cfdc; }
+.pip.on { background: #86cfdc; }
 .row {
   display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center;
   padding: 8px 10px; border: 1px solid var(--line); border-radius: 5px;

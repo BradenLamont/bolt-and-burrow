@@ -1,0 +1,86 @@
+<title>Bolt &amp; Burrow</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@500;700&family=IBM+Plex+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="css/style.css">
+
+<main class="app">
+  <section class="stage" id="stage" aria-label="Cave">
+    <canvas id="world" aria-label="The cave, seen from above. Your base is at the bottom. Use the arrow keys or the touch joystick to move and dig."></canvas>
+    <div class="joy" id="joy" hidden><i id="joyKnob"></i></div>
+    <canvas class="minimap" id="minimap" aria-label="Map of what you've explored in this cave"></canvas>
+    <div class="bossbar" id="bossBar" hidden><span id="bossName">Boss</span><div><i id="bossHp"></i></div></div>
+    <div class="hud">
+      <div class="readout">
+        <small>Depth</small>
+        <b id="depth">0 m</b>
+        <span id="biome">Town</span>
+      </div>
+      <div class="meters">
+        <div class="meter"><span>Battery</span><div class="bar"><i id="batBar"></i><u id="batMark" hidden></u></div><em id="batTxt">80</em></div>
+        <div class="meter"><span>Hull</span><div class="bar hull"><i id="hullBar"></i></div><em id="hullTxt">60</em></div>
+        <div class="meter"><span>Cargo</span><div class="bar cargo"><i id="cargoBar"></i></div><em id="cargoTxt">0/8</em></div>
+        <p class="warn" id="batWarn" hidden>Low battery · head back to the conveyor</p>
+      </div>
+      <div class="readout end">
+        <small>Coins</small>
+        <b id="coins">0</b>
+        <span id="flux" hidden>0 Flux</span>
+      </div>
+    </div>
+    <div class="controls">
+      <p class="keys">Arrows or WASD: move · push into blocks to dig · Up goes deeper · E: use pads and stands · F/J or click: attack · Space/Q: skill · 1–4: tools · walk into a gate to enter a cave · ride the conveyor by holding Up or Down on it</p>
+      <p class="touch">Touch and drag anywhere for the joystick · push into blocks to dig</p>
+      <div class="btns">
+        <div class="belt" id="belt"></div>
+        <button id="attack" type="button" hidden>Attack</button>
+        <button id="skill" type="button" hidden><span id="skillName">Skill</span><i><b id="skillBar"></b></i></button>
+        <button id="action" type="button" hidden>Action</button>
+        <button id="recall" type="button">Recall</button>
+        <button id="mute" type="button">Sound on</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel workshop" aria-label="Base, shop and cargo">
+    <header>
+      <h2 id="panelTitle">Town</h2>
+      <span class="chip" id="shopState">Home base</span>
+    </header>
+    <div class="view" id="panelBody"></div>
+    <footer>
+      <span>Progress saves in this browser.</span>
+      <span class="foot-btns"><button id="backup" type="button">Backup</button><button id="reset" type="button">Reset progress</button></span>
+    </footer>
+  </section>
+
+  <section class="panel bots" aria-label="Nano-bots">
+    <header>
+      <h2>Nano-bots</h2>
+      <span class="chip" id="botTag">None yet</span>
+    </header>
+    <div class="bot-view" id="botView"><canvas id="bots" aria-label="Your nano-bot at work on the computer's circuit board"></canvas></div>
+    <div class="pet-info">
+      <p id="botInfo">The first nano-bot is sealed inside the Ember Idol, Cave 1's relic.</p>
+    </div>
+  </section>
+</main>
+<div id="toast" role="status" hidden></div>
+
+<!-- Game scripts, in load order. Each file is one part of the game. -->
+<script src="js/config.js"></script>  <!-- balance numbers -->
+<script src="js/state.js"></script>   <!-- shared state, saving, helpers -->
+<script src="js/sound.js"></script>   <!-- sound effects and mute -->
+<script src="js/world.js"></script>   <!-- cave generation, conveyor, outposts, relic -->
+<script src="js/base.js"></script>    <!-- train base: storage, shop, forge, computer, nano-bots -->
+<script src="js/player.js"></script>  <!-- robot movement, digging, battery -->
+<script src="js/hazards.js"></script> <!-- unstable rock, sand, boulders, water, gas -->
+<script src="js/gear.js"></script>    <!-- tool belt and active skills -->
+<script src="js/trip.js"></script>    <!-- riding the train between towns -->
+<script src="js/combat.js"></script>  <!-- weapon arm, enemies, bosses, hull -->
+<script src="js/loot.js"></script>    <!-- ore drops, the magnet, Flux upgrades -->
+<script src="js/walker.js"></script>  <!-- the Canopy Walker mech -->
+<script src="js/render.js"></script>  <!-- drawing -->
+<script src="js/ui.js"></script>      <!-- HUD, workshop, inventory -->
+<script src="js/input.js"></script>   <!-- keyboard and joystick -->
+<script src="js/main.js"></script>    <!-- start-up and main loop -->

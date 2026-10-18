@@ -29,10 +29,11 @@ const CONFIG = {
     // The train is your home base. It's parked along the bottom of town: tracks in row 0, a platform in
     // row 1. Stand at a car's door (the marked platform tile) to use it. Other towns aren't built yet.
     station: { railRow: 0, platformRow: 1, cars: [
-      { id: 'engine',  name: 'Engine car',  cols: [3, 5] },
-      { id: 'forge',   name: 'Forge car',   cols: [7, 9] },
-      { id: 'lab',     name: 'Lab car',     cols: [11, 13] },
-      { id: 'storage', name: 'Storage car', cols: [15, 17] },
+      { id: 'engine',   name: 'Engine car',   cols: [2, 4] },
+      { id: 'forge',    name: 'Forge car',    cols: [6, 8] },
+      { id: 'lab',      name: 'Lab car',      cols: [10, 12] },
+      { id: 'storage',  name: 'Storage car',  cols: [14, 16] },
+      { id: 'computer', name: 'Computer car', cols: [18, 20] },
     ] },
   },
 
@@ -265,6 +266,22 @@ const CONFIG = {
   },
   BOSS_HALL: { rows: [50, 53], cols: [6, 18] },     // the mini-boss hall, just before the relic chamber
   BOSS_ARENA: { rows: [50, 59], cols: [2, 22] },    // Cave 3's boss room, walled in obsidian
+
+  // ----- Ore drops and the magnet -----
+  // Each ore block holds 1–oreMax pieces (the pixels you see on it). Breaking it scatters them on the floor,
+  // and your magnet pulls them in. Pieces left on the floor are gone when you leave the cave.
+  ORE_DROP: { oreMax: 4, magnet: 1.5, pull: 6 },
+
+  // ----- Flux upgrades (Computer car) -----
+  // Permanent upgrades bought with Flux. per = the bonus each level adds; cost = Flux for each level.
+  CORE: {
+    magnet:   { name: 'Magnet',            per: 0.7,  max: 5, unit: v => '+' + v.toFixed(1) + ' blocks pickup range', text: 'Pulls ore in from farther away, and faster.' },
+    plating:  { name: 'Hull plating',      per: 15,   max: 5, unit: v => '+' + v + ' max hull', text: 'Extra armour plates on top of your Tank.' },
+    mitigate: { name: 'Damage mitigation', per: 0.06, max: 5, unit: v => '−' + pct(v) + ' damage taken', text: 'Every hit to your hull is reduced (up to 30%).' },
+    repair:   { name: 'Field repair',      per: 0.5,  max: 5, unit: v => v + ' hull a second', text: 'Your hull slowly repairs itself away from outposts.' },
+    weapon:   { name: 'Weapon power',      per: 0.1,  max: 5, unit: v => '+' + pct(v) + ' weapon damage', text: 'More damage from every weapon on your weapon arm.' },
+  },
+  CORE_COST: [30, 60, 120, 240, 400],
 
   // ----- Unstable rock hazard (only in caves with an `unstable` chance) -----
   // It starts shaking once two sides are dug open, or as soon as you pass within triggerRadius of

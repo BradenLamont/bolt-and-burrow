@@ -25,6 +25,7 @@ A browser mining game: steer a robot with swappable parts down through the earth
 - `js/gear.js` – the tool belt and active skills
 - `js/trip.js` – riding the train between towns (boarding, the drilling scene, unloading)
 - `js/combat.js` – the weapon arm, enemies, bosses and the hull
+- `js/loot.js` – ore pixels, ore drops and the magnet, and the Computer car's Flux upgrades
 - `js/base.js` – the train base: storage, shop, forge, computer and mods, nano-bots
 - `js/walker.js` – the Canopy Walker mech (every part, every facing, walk and dig animation)
 - `js/render.js` – drawing the cave, town, train, effects, the minimap and the nano-bot window
@@ -159,6 +160,19 @@ A browser mining game: steer a robot with swappable parts down through the earth
 - Rustvale: the Salvage Garage, corrugated metal with a 2-block roller door, a glowing PIP'S SALVAGE sign and a roof gantry. Inside: steel floor plates, a mech lift with robot arms, steel shelves and a workbench counter (Pip wears a hard hat)
 - Both shop doors are 2 blocks wide, outside and in, so they're easy to walk into
 - Rustvale now has a shop, so you can buy and sell in both towns
+
+## v0.12 – ore drops and the Computer car
+- Every ore block shows 1–4 ore "pixels" scattered across it, and each pixel is one piece of ore
+- Breaking an ore block (or a cache, or an enemy that carries ore) pops the pieces out onto the floor. Your mech's magnet pulls in anything nearby; walk closer to grab the rest
+- Block coins still go straight to you
+- With full cargo the pieces stay on the floor until you leave the cave, so you can send a load home and come back for them
+- New fifth car on the train: the Computer car. Spend Flux on permanent upgrades, 5 levels each:
+  - Magnet: +0.7 blocks pickup range per level, and a faster pull
+  - Hull Plating: +15 max hull per level
+  - Damage Mitigation: −6% damage taken per level (up to −30%)
+  - Field Repair: +0.5 hull a second in the caves per level
+  - Weapon Power: +10% weapon damage per level
+- Balancing sheet: new Flux upgrades tab
 
 ## The plan (agreed October 2026)
 

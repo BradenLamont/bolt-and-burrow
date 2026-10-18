@@ -258,8 +258,9 @@ function drawWall(t, c, r, x, y, s, W) {
   }
   if (!hidden && ORES.has(t)) {
     g.fillStyle = C.BLOCKS[t].ore;
-    const q = Math.max(2, s * 0.12);
-    for (let k = 0; k < 5; k++) g.fillRect(x + s * 0.15 + hash(c, r, k * 3) * (s * 0.7 - q), ty + s * 0.15 + hash(r, c, k * 7) * (s * 0.7 - q), q, q);
+    // one pixel per piece of ore inside (1–4), each one drops when the block breaks
+    const q = Math.max(3, s * 0.14);
+    for (let k = 0, n = orePieces(c, r); k < n; k++) { const p = pixelAt(c, r, k); g.fillRect(x + s * p.x, ty + s * p.y, q, q); }
   }
   if (look === 'sand') {   // fine grains and ripples
     g.fillStyle = 'rgba(90,70,40,.25)';
@@ -342,6 +343,7 @@ const CAR_LOOK = {
   forge:   { roof: '#463630', side: '#4a3a32', label: 'FORGE' },
   lab:     { roof: '#2d3d48', side: '#2f4d5c', label: 'LAB' },
   storage: { roof: '#4a4636', side: '#5d5438', label: 'STORAGE' },
+  computer: { roof: '#262c36', side: '#1f2a33', label: 'COMPUTER' },
 };
 // A small side view of the mech, for the hold window (pilot shown only while it's inside)
 function drawMechSide(cx, by, u, pilot) {
@@ -469,6 +471,15 @@ function drawTrain(X, Y, s, W) {
       g.strokeStyle = 'rgba(0,0,0,.3)'; g.lineWidth = 1;
       for (let k = 1; k < 9; k++) { g.beginPath(); g.moveTo(x + k * w / 9, sideTop + 2); g.lineTo(x + k * w / 9, bottom - s * 0.18); g.stroke(); }
     }
+    if (car.id === 'computer') {
+      // a roof full of server vents and a big screen showing your Flux upgrades as bars
+      for (let k = 0; k < 6; k++) { g.fillStyle = '#1a1f27'; g.fillRect(x + s * 0.15 + k * (w - s * 0.3) / 6, top + roofH * 0.2, (w - s * 0.3) / 6 - 3, roofH * 0.6); g.fillStyle = Math.sin(time * 3 + k * 1.7) > 0.3 ? '#86cfdc' : '#3a5a66'; g.fillRect(x + s * 0.2 + k * (w - s * 0.3) / 6, top + roofH * 0.3, 3, 3); }
+      const sx2 = x + s * 0.15, sw = s * 0.75;
+      g.fillStyle = '#0d2a33'; g.fillRect(sx2, winY, sw, winH);
+      Object.keys(C.CORE).forEach((id, k) => { g.fillStyle = 'rgba(134,207,220,.25)'; g.fillRect(sx2 + 3, winY + 3 + k * (winH - 6) / 5, sw - 6, Math.max(1, (winH - 6) / 5 - 2)); g.fillStyle = '#86cfdc'; g.fillRect(sx2 + 3, winY + 3 + k * (winH - 6) / 5, (sw - 6) * coreLevel(id) / C.CORE[id].max, Math.max(1, (winH - 6) / 5 - 2)); });
+      g.fillStyle = '#0d2a33'; g.fillRect(x + w - s * 0.75, winY, s * 0.6, winH);
+      g.fillStyle = 'rgba(134,207,220,.7)'; g.font = '700 ' + Math.round(s * 0.16) + 'px "Pixelify Sans", monospace'; g.textAlign = 'center'; g.fillText(fmt(S.flux), x + w - s * 0.45, winY + winH * 0.7);
+    }
     if (car.id !== 'engine') { // the door you stand in front of
       const dx = X(door) + s * 0.2;
       g.fillStyle = '#1b1410'; g.fillRect(dx, winY - s * 0.02, s * 0.6, bottom - winY - s * 0.17);
@@ -476,7 +487,7 @@ function drawTrain(X, Y, s, W) {
     }
   });
   // the town's name sign on the platform's right end
-  const sx = X(20), sy = Y(ST.platformRow + 1) - s * 0.15;
+  const sx = X(22.2), sy = Y(ST.platformRow + 1) - s * 0.15;
   g.fillStyle = '#2a1f17'; g.fillRect(sx + s * 0.45, sy + s * 0.3, s * 0.1, s * 0.55);
   g.fillStyle = '#3a2b20'; rr2(g, sx - s * 0.9, sy - s * 0.16, s * 2.8, s * 0.56, 3); g.fill();
   g.strokeStyle = '#d9813b'; g.lineWidth = 1; rr2(g, sx - s * 0.9, sy - s * 0.16, s * 2.8, s * 0.56, 3); g.stroke();
@@ -851,7 +862,7 @@ function render(dt) {
     }
   }
 
-  if (!inTown()) drawFoes(X, Y, s, false);
+  if (!inTown()) { drawDrops(X, Y, s); drawFoes(X, Y, s, false); }
   particles.forEach(p => { g.globalAlpha = Math.max(0, p.life * 2); g.fillStyle = p.col; const q = Math.max(2, s * 0.07); g.fillRect(X(p.x) - q / 2, Y(p.y) - W - q / 2, q, q); });
   g.globalAlpha = 1;
 

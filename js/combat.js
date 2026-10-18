@@ -5,7 +5,7 @@
 'use strict';
 
 // ---------- Hull (the mech's health) ----------
-const hullMax = () => part('body').val.hull;
+const hullMax = () => part('body').val.hull + coreVal('plating');
 P.hull = 60; P.invuln = 0;
 function repairHull(dt) { P.hull = Math.min(hullMax(), P.hull + C.HULL.repair * dt); }
 // Something hit the mech. fromX/fromY: where the hit came from (a Gravity Bulwark halves hits from the front).
@@ -17,6 +17,7 @@ function hurtHull(dmg, fromX, fromY, what) {
     const a = aimVec(), dx = fromX - P.x, dy = fromY - P.y, d = Math.hypot(dx, dy) || 1;
     if ((dx * a.x + dy * a.y) / d > 0.3) { dmg *= W.guard; floatText(P.x, P.y + 1, 'Guard', '#86cfdc'); }
   }
+  dmg *= 1 - Math.min(0.3, coreVal('mitigate'));   // Flux upgrade: damage mitigation
   P.hull -= dmg; P.invuln = C.HULL.invuln; P.shake = Math.max(P.shake, 0.25); P.hitFlash = 0.25;
   sfx('hit'); floatText(P.x, P.y + 0.7, '-' + Math.round(dmg), '#e2705a');
   hintOnce('hull', 'Hull damage', 'Enemies damage your hull (the red bar). It repairs at any outpost. If it runs out, a drone recalls you.');
@@ -26,7 +27,7 @@ function hurtHull(dmg, fromX, fromY, what) {
 // ---------- Weapons ----------
 const weapon = () => C.WEAPONS[S.weapon] || C.WEAPONS.wrench;
 const weaponMk = id => S.weapons[id] || 0;
-const wDmg = id => C.WEAPONS[id].dmg * C.WEAPON_MK.dmg[Math.max(0, weaponMk(id) - 1)];
+const wDmg = id => C.WEAPONS[id].dmg * C.WEAPON_MK.dmg[Math.max(0, weaponMk(id) - 1)] * (1 + coreVal('weapon'));
 const wCd = id => C.WEAPONS[id].cd * C.WEAPON_MK.cd[Math.max(0, weaponMk(id) - 1)];
 let attackCd = 0, attackHeld = false, aimUntil = 0;
 const aimV = { x: 0, y: 1 };
@@ -170,7 +171,7 @@ function killFoe(f) {
   const coins = Math.round(F.coins * cave().coinMult);
   S.coins += coins; floatText(f.x, f.y + 0.9, '+' + coins, '#f2c94c');
   if (F.flux) S.flux += F.flux;
-  if (!f.boss && Math.random() < 0.15 && cargoCount() < cargoMax()) { const o = Object.keys(cave().ores)[0]; cargoAdd(o); floatText(f.x, f.y + 1.2, '+' + o, C.BLOCKS[o].ore); }
+  if (!f.boss && Math.random() < 0.2) dropOre(Object.keys(cave().ores)[0], f.x, f.y, 1);
   if (f.boss) {
     CS().bossDone = true; P.shake = 0.6;
     if (F.boss === 'big') {
@@ -185,6 +186,7 @@ function updateCombat(dt) {
   attackCd = Math.max(0, attackCd - dt); P.attackT = Math.max(0, (P.attackT || 0) - dt);
   P.invuln = Math.max(0, P.invuln - dt); P.hitFlash = Math.max(0, (P.hitFlash || 0) - dt);
   if (attackHeld) attack();
+  if (!inTown() && !station() && P.hull > 0) P.hull = Math.min(hullMax(), P.hull + coreVal('repair') * dt);   // Flux upgrade: field repair
   for (let k = swings.length - 1; k >= 0; k--) { swings[k].t += dt; if (swings[k].t > swings[k].life) swings.splice(k, 1); }
   if (inTown()) { foes = []; shots.length = 0; return; }
   // projectiles

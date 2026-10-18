@@ -249,7 +249,7 @@ function loadArea() {
 }
 function arrive(x, y, dir) {
   P.x = x; P.y = y; P.dir = dir; P.digging = [];
-  clearHazards(); flares.length = 0; lastCell = -1; markSeen(); spawnFoes();
+  clearHazards(); flares.length = 0; clearDrops(); lastCell = -1; markSeen(); spawnFoes();
   resizeMinimap(); resize();
   [camX, camY] = cameraTarget();
   save(); updateUI();

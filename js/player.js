@@ -118,12 +118,9 @@ function breakBlock(c, r) {
     S.coins += coins;
     if (!B.value) floatText(c + 0.5, r + 0.5, '+' + coins, '#c9a074');
   }
-  if (B.value) {
-    const n = Math.random() < modVal('sorter') ? 2 : 1;   // the Sorter mod sometimes gives two
-    let got = 0;
-    for (let k = 0; k < n && cargoCount() < cargoMax(); k++) { cargoAdd(t); got++; }
-    if (got) floatText(c + 0.5, r + 0.7, '+' + (got > 1 ? got + ' ' : '') + B.label, B.ore);
-    else floatText(c + 0.5, r + 0.7, 'Cargo full', '#e2705a');
+  if (B.value) {   // ore pops out onto the floor, one piece per pixel; the magnet pulls it in
+    dropBlockOre(t, c, r);
+    hintOnce('drops', 'Ore drops', 'Ore pieces spill onto the floor and your magnet pulls them in. Upgrade the magnet with Flux in the Computer car.');
   }
   if (t === 'relic') {
     S.relicHeld = S.cave + 1;
@@ -145,11 +142,11 @@ function openCache(c, r) {
   const coins = Math.round((C.CACHE.coins[0] + Math.random() * (C.CACHE.coins[1] - C.CACHE.coins[0])) * cave().valueMult);
   S.coins += coins;
   const ores = Object.keys(cave().ores), best = ores[ores.length - 1];
-  let got = 0;
-  for (let k = 0; k < C.CACHE.ores && cargoCount() < cargoMax(); k++) { cargoAdd(best); got++; }
+  const got = C.CACHE.ores;
+  dropOre(best, c + 0.5, r + 0.5, got);
   burst(c + 0.5, r + 0.5, '#F2C94C', 24);
   floatText(c + 0.5, r + 0.9, '+' + fmt(coins), '#F2C94C');
-  toast('Treasure cache!', '+' + fmt(coins) + ' coins' + (got ? ' and ' + got + ' ' + C.BLOCKS[best].label : '') + (got < C.CACHE.ores ? '. Your cargo was too full for the rest.' : '.'));
+  toast('Treasure cache!', '+' + fmt(coins) + ' coins' + (got ? ' and ' + got + ' ' + C.BLOCKS[best].label : '') + '.');
 }
 // Hard rock the current arms can't break
 const HARD_HINT = {

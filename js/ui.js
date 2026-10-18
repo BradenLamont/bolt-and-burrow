@@ -176,7 +176,7 @@ function loadSaveText(text) {
 }
 
 const PANEL = {
-  town: () => [TOWN().name, 'Town ' + (S.town + 1), `<p class="note">${TOWN().shop ? 'Walk through the big door of <b>Pip\'s shop</b> to buy parts and sell.' : 'Pip hasn\'t opened a shop here yet: buy and sell back in Hollowmouth.'} Stand at a train car's door (the marked platform tiles) to use the <b>Forge</b>, <b>Lab</b> or <b>Storage</b>.</p>` +
+  town: () => [TOWN().name, 'Town ' + (S.town + 1), `<p class="note">${TOWN().shop ? 'Walk through the big door of <b>Pip\'s shop</b> to buy parts and sell.' : 'Pip hasn\'t opened a shop here yet: buy and sell back in Hollowmouth.'} Stand at a train car's door (the marked platform tiles) to use the <b>Forge</b>, <b>Lab</b>, <b>Storage</b> or <b>Computer</b>.</p>` +
     '<small class="sub">In storage</small>' + itemList([...ORE_LIST, ...MAT_LIST], { empty: 'Storage is empty. Ore you bring to any outpost ends up here.' })],
   shopfloor: () => ['Pip\'s shop', 'Inside', '<p class="note">Walk up to a <b>display stand</b> to look at a part, or to <b>Pip</b> at the counter to sell. The door at the bottom leads back to town.</p>' + partsSummary()],
   stand: () => { const slot = shopSpot().slice(6); if (slot === 'weapon') return ['Weapon rack', 'Weapon arm', weaponRows()]; return [C.PARTS[slot].label + ' stand', C.PARTS[slot].stat, standRows(slot)]; },
@@ -190,6 +190,12 @@ const PANEL = {
     : '<p class="note">The line to <b>' + C.TOWNS[1].name + '</b> opens when you bring home the Core Heart from Cave 3.</p>'],
   forge: () => ['Forge car', 'Queue ' + S.forge.queue.length + '/' + C.FORGE.queueMax, forgeRows()],
   lab: () => ['Lab car', '<span data-live="flux"></span>', computerGrid() + modRows()],
+  computer: () => ['Computer car', '<span data-live="flux"></span>', '<p class="note">Permanent upgrades for your mech, paid for with Flux from your nano-bot.</p><div class="rows one">' + Object.keys(C.CORE).map(id => {
+    const U = C.CORE[id], lv = coreLevel(id), max = lv >= U.max;
+    const pips = Array.from({ length: U.max }, (_, k) => `<i class="pip${k < lv ? ' on' : ''}"></i>`).join('');
+    const now = lv ? U.unit(coreVal(id)) : 'not upgraded', next = max ? '' : ' → ' + U.unit((lv + 1) * U.per);
+    return `<div class="row"><div><small>${U.name} <span class="pips">${pips}</span></small><strong>${now}${next}</strong><span>${U.text}</span></div>${max ? '<button type="button" disabled>Max</button>' : `<button type="button" data-act="core" data-id="${id}" ${S.flux >= coreCost(id) ? '' : 'disabled'}>Level ${lv + 1} · ${coreCost(id)} Flux</button>`}</div>`;
+  }).join('') + '</div>'],
   storage: () => ['Storage car', 'Unlimited for now', '<small class="sub">Ore</small>' + itemList(ORE_LIST, { empty: 'No ore stored.' }) +
     '<small class="sub">Materials</small>' + itemList(MAT_LIST, { empty: 'No materials yet. Refine ore in the Forge car.' })],
   outpost: () => [station() === 'outpost' ? 'Halfway outpost' : 'Entrance outpost', 'Recharging',
@@ -213,6 +219,7 @@ $('panelBody').addEventListener('click', e => {
   const b = e.target.closest('[data-act]'); if (!b || b.disabled) return;
   const id = b.dataset.id, act = b.dataset.act;
   if (act === 'buy') buyPart(id);
+  if (act === 'core') buyCore(id);
   if (act === 'wbuy') buyWeapon(id);
   if (act === 'wequip') equipWeapon(id);
   if (act === 'wup') upgradeWeapon(id);
@@ -333,6 +340,7 @@ function updateUI() {
   const FIRST = {
     forge: ['Forge car', 'Refine ore from storage into materials. Mixed recipes need more than one kind of ore.'],
     lab: ['Lab car', 'Build mods with materials and coins, then place them in the computer. Each mod has a fixed shape.'],
+    computer: ['Computer car', 'Spend Flux on permanent upgrades: magnet range, hull plating, damage mitigation, field repair and weapon power.'],
     storage: ['Storage car', 'Everything you send home ends up here. Sell it at Pip\'s counter or refine it in the Forge car.'],
     engine: ['Engine car', 'Board here to ride the train to another town. The line opens with the Core Heart.'],
     stand: ['Display stand', 'Each stand shows every tier of one part. Buy the next tier with the button or press E. The weapon rack sells weapons for your weapon arm.'],

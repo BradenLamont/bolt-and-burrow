@@ -9,6 +9,7 @@ function frame(now) {
     updatePlayer(dt);
     updateRocks(dt);
     updateCombat(dt);
+    updateDrops(dt);
   }
   updateBots(dt);
   updateSkills(dt);
