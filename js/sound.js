@@ -1,16 +1,16 @@
 // Bolt & Burrow — sound effects, made on the fly with the Web Audio API (no sound files).
 // The browser only allows sound after you press a key or tap, so the audio starts then.
-// sfx('name') plays one; the mute button turns them all off (remembered in this browser).
+// sfx('name') plays one; M or the Settings tab turns them off, and sets the volume (remembered in this browser).
 'use strict';
 
 let actx = null, master = null;
-let muted = false;
-try { muted = localStorage.getItem('bolt-burrow-sound') === 'off'; } catch (e) {}
+let muted = false, volume = 1;
+try { muted = localStorage.getItem('bolt-burrow-sound') === 'off'; const v = localStorage.getItem('bolt-burrow-vol'); if (v !== null) volume = Math.max(0, Math.min(1, +v)); } catch (e) {}
 function startAudio() {
   if (actx) { if (actx.state === 'suspended') actx.resume(); return; }
   const AC = window.AudioContext || window.webkitAudioContext;
   if (!AC) return;
-  actx = new AC(); master = actx.createGain(); master.gain.value = 0.35; master.connect(actx.destination);
+  actx = new AC(); master = actx.createGain(); master.gain.value = 0.35 * volume; master.connect(actx.destination);
 }
 addEventListener('keydown', startAudio);
 addEventListener('pointerdown', startAudio);
@@ -77,4 +77,8 @@ function toggleMute() {
   muted = !muted;
   try { localStorage.setItem('bolt-burrow-sound', muted ? 'off' : 'on'); } catch (e) {}
   if (!muted) { startAudio(); setTimeout(() => sfx('click'), 30); }
+}
+function setVolume(v) {
+  volume = v; if (master) master.gain.value = 0.35 * v;
+  try { localStorage.setItem('bolt-burrow-vol', v); } catch (e) {}
 }

@@ -5,11 +5,11 @@ A browser mining game: steer a robot with swappable parts down through the earth
 **Play:** open `index.html`, or publish the repo with GitHub Pages.
 
 ## Controls
-- Desktop: arrow keys or WASD to move. Push into blocks to dig them (standing between two blocks digs both). Up goes deeper into the cave. Stand on the conveyor and hold Up or Down to ride it. E (or the action button) uses a bridge pad or boards the train. Walk into an open gate in town to enter a cave; walk out the TOWN door to leave. In town, walk through the SHOP door to go inside, or stand at a train car's door to use it.
+- Desktop: arrow keys or WASD to move. Push into blocks to dig them (standing between two blocks digs both). Up goes deeper into the cave. Stand on the conveyor and hold Up or Down to ride it. E (or the action button) opens the train car, shop stand, counter or outpost you're standing at (the game pauses while it's open; E or Esc closes it), uses a bridge pad, or boards the train. Walk into an open gate in town to enter a cave; walk out the TOWN door to leave. In town, walk through the SHOP door to go inside, or stand at a train car's door to use it.
 - Computer (Lab car): tap a mod, then tap a cell. With a mouse you can also drag mods onto the grid.
 - F or J: attack with your weapon arm the way you face (or click the cave with a mouse to aim; ATTACK button on phones). Hold to keep attacking.
 - Space or Q: use your active skill. 1–4: use tools from your belt (or tap the buttons by Recall).
-- Sound on/off button by Recall. Backup button at the bottom of the left panel.
+- Esc or P (or the ⏸ button): the pause menu, with Mech & cargo, Train cars, Map, and Settings & hints (sound, volume, zoom, full screen, backup, reset, and every hint you've seen). M: sound on/off. ⛶ button: full screen.
 - Phone: touch and drag anywhere on the cave for a joystick.
 - Recall button: emergency trip back to the cave entrance, keeping half your ore.
 
@@ -29,7 +29,8 @@ A browser mining game: steer a robot with swappable parts down through the earth
 - `js/base.js` – the train base: storage, shop, forge, computer and mods, nano-bots
 - `js/walker.js` – the Canopy Walker mech (every part, every facing, walk and dig animation)
 - `js/render.js` – drawing the cave, town, train, effects, the minimap and the nano-bot window
-- `js/ui.js` – HUD and the base panel (shop, forge, lab, storage, outposts, cargo)
+- `js/ui.js` – HUD, the tip line, key cues, and the pop-ups for train cars, shop stands, the counter and outposts
+- `js/menu.js` – the pause menu tabs, settings, full screen and the nano-bot box
 - `js/input.js` – keyboard and touch joystick
 - `js/main.js` – start-up and the main loop
 - `docs/balancing.xlsx` – planning copy of the numbers (doesn't change the game)
@@ -173,6 +174,15 @@ A browser mining game: steer a robot with swappable parts down through the earth
   - Field Repair: +0.5 hull a second in the caves per level
   - Weapon Power: +10% weapon damage per level
 - Balancing sheet: new Flux upgrades tab
+
+## v0.12.1 – full screen
+- The game fills the whole window. A strip on top holds the HUD and a tip line (messages, first-time hints, and what you can do where you're standing); a strip at the bottom holds the key cues and buttons. Nothing covers the game except the minimap and the nano-bot box
+- The panels under the game are gone. Train cars, shop stands, Pip's counter and outposts open as pop-ups when you press E (or tap Open …). The game pauses while one is open
+- Pause menu (Esc, P or ⏸) with four tabs: Mech & cargo, Train cars (a read-only look from anywhere), Map (the whole explored cave, plus every cave's progress) and Settings & hints
+- Settings: sound on/off (or M) and volume, cave zoom (Close / Normal / Far / Farther), full screen, the nano-bot box, controls, save backup, reset, and a log of every hint you've seen
+- Full-screen button (⛶) hides the browser's bars and turns phones sideways where the browser allows it
+- The nano-bot window sits in the bottom-right corner. Tap its header to shrink it to a Flux counter; it shrinks itself in town so the train stays in view, and turns see-through when your mech walks under it
+- On a phone held upright the town fills the screen's height and scrolls sideways
 
 ## The plan (agreed October 2026)
 

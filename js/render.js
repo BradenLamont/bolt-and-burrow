@@ -33,14 +33,17 @@ function fit(canvas, ctx) {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   return [r.width, r.height];
 }
+// Zoom (Settings): how many rows of a cave fit on screen. Remembered in this browser.
+const ZOOMS = { close: 8, normal: 10, far: 13, farther: 16 };
+let zoom = 'normal';
+try { zoom = localStorage.getItem('bolt-burrow-zoom') || 'normal'; if (!ZOOMS[zoom]) zoom = 'normal'; } catch (e) {}
 function resize() {
   [VW, VH] = fit(cv, g); [PW, PH] = fit(pcv, pg);
-  // the HUD (top) and controls (bottom) sit over the canvas; the town is fitted between them
-  const sr = stage.getBoundingClientRect(), hud = document.querySelector('.hud').getBoundingClientRect();
-  const ctl = document.querySelector('.controls').getBoundingClientRect();
-  padTop = Math.max(0, hud.bottom - sr.top); padBot = Math.max(0, sr.bottom - ctl.top);
-  // the town is shown whole; caves zoom in a little closer
-  CELL = Math.max(22, Math.floor(Math.min(VW / 15, inTown() ? (VH - padTop - padBot) / (ROWS + 0.4) : VH / 9.5)));
+  // the HUD and controls now have their own strips above and below the game, so nothing covers it
+  padTop = 4; padBot = 4;
+  // the town and shop fit the screen's height (on a phone held upright the town scrolls sideways); caves use the zoom setting
+  const rows = ZOOMS[zoom];
+  CELL = Math.max(18, Math.floor(inTown() ? Math.min(VW / (VW < VH ? 9 : 15), (VH - padTop - padBot) / (ROWS + 0.4)) : Math.min(VW / (rows * 1.5), VH / rows)));
 }
 new ResizeObserver(resize).observe(stage);
 new ResizeObserver(resize).observe($('botView'));
@@ -51,9 +54,9 @@ function cameraTarget() {
   const tx = worldW <= VW ? (worldW - VW) / 2 : Math.max(0, Math.min(worldW - VW, P.x * s - VW / 2));
   if (inShop()) return [(C.SHOP.door + C.SHOP.doorW / 2) * s - VW / 2, -(padTop + (VH - padTop - padBot - ROWS * s) / 2) + s * 0.25];
   if (inTown()) return [tx, -(padTop + (VH - padTop - padBot - ROWS * s) / 2) + s * 0.25];   // the whole town fits between the HUD and controls
-  let ty = (ROWS - P.y) * s - VH * 0.55;
-  ty = Math.min(ty, ROWS * s - VH + s * 1.4);   // room under the bottom row for the controls
-  ty = Math.max(ty, -s * 1.6);                  // room above the top row for the HUD
+  let ty = (ROWS - P.y) * s - VH * 0.5;
+  ty = Math.min(ty, ROWS * s - VH + s * 0.4);   // don't scroll far past the bottom row
+  ty = Math.max(ty, -s * 0.6);                  // or the top row
   return [tx, ty];
 }
 
@@ -958,6 +961,10 @@ let mmT = 0;
 function renderMinimap(dt) {
   if (inTown()) return;
   mmT += dt; if (mmT < 0.2) return; mmT = 0;
+  drawCaveMap(mg, MM, mcv);
+}
+// Draws the explored cave on any canvas, MM pixels per block (the minimap, and the pause menu's big map)
+function drawCaveMap(mg, MM, mcv) {
   mg.clearRect(0, 0, mcv.width, mcv.height);
   for (let r = 0; r < ROWS - 1; r++) for (let c = 0; c < COLS; c++) {
     const i = idx(c, r); if (!SEEN[i] && r >= BASE_ROWS) continue;
@@ -979,7 +986,8 @@ function renderMinimap(dt) {
   mg.fillStyle = '#d9813b';
   for (let r = BASE_ROWS; r <= beltEnd(); r++) mg.fillRect(BELT * MM + 1, (ROWS - 2 - r) * MM, 1, MM);
   for (let k = 1; k <= outpostCount(); k++) mg.fillRect((BELT - 1) * MM, (ROWS - 2 - outpostRow(k)) * MM - 1, MM * 3, MM + 1);
-  if (Math.sin(time * 8) > -0.4) { mg.fillStyle = '#9fe3f0'; mg.fillRect(P.x * MM - 2, (ROWS - 1 - P.y) * MM - 2, 4, 4); }
+  const pd = Math.max(4, MM * 1.4);
+  if (MM > 3 || Math.sin(time * 8) > -0.4) { mg.fillStyle = '#9fe3f0'; mg.fillRect(P.x * MM - pd / 2, (ROWS - 1 - P.y) * MM - pd / 2, pd, pd); }
 }
 
 // ---------- Nano-bot window (its own panel) ----------

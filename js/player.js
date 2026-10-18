@@ -300,11 +300,8 @@ function markSeen() {
 }
 // The action button: deploy a bridge when standing on a ready bridge pad
 function actionHere() {
-  const sp = shopSpot();
-  if (sp && sp.startsWith('stand-') && sp !== 'stand-weapon') {
-    const slot = sp.slice(6), next = C.PARTS[slot].tiers[S.tiers[slot] + 1];
-    if (next) return { label: 'Buy ' + next.name + ' · ' + fmt(next.cost), run: () => buyPart(slot) };
-  }
+  const pk = spotPanel();   // train cars, shop stands, Pip's counter and outposts open as pop-ups
+  if (pk) return { label: 'Open ' + PANEL_NAME[pk](), run: () => openPopup(pk) };
   if (townSpot() === 'engine' && !trip) return { label: lineIsOpen() ? 'Board train · to ' + C.TOWNS[(S.town + 1) % C.TOWNS.length].name : 'Board train', run: startTrip };
   if (padReady(pCol(), pRow())) return { label: 'Deploy bridge · ' + S.keys[S.cave] + ' key' + (S.keys[S.cave] === 1 ? '' : 's'), run: () => {
     if (!S.keys[S.cave]) return toast(null, 'You need a ' + keyName(S.cave) + '. Marked caches before the chasm hold them.');

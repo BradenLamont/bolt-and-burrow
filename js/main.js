@@ -4,17 +4,19 @@
 let prev = performance.now(), uiT = 0, saveT = 0;
 function frame(now) {
   const dt = Math.max(0, Math.min(0.05, (now - prev) / 1000)); prev = now; time += dt;
-  if (!updateTrip(dt)) {   // riding the train: no walking until you arrive
-    depositAndCharge(dt);
-    updatePlayer(dt);
-    updateRocks(dt);
-    updateCombat(dt);
-    updateDrops(dt);
+  if (!paused()) {          // a pop-up or the pause menu freezes the game (the forge and nano-bots keep working)
+    if (!updateTrip(dt)) {   // riding the train: no walking until you arrive
+      depositAndCharge(dt);
+      updatePlayer(dt);
+      updateRocks(dt);
+      updateCombat(dt);
+      updateDrops(dt);
+    }
+    updateSkills(dt);
+    updateEffects(dt);
   }
   updateBots(dt);
-  updateSkills(dt);
   if (updateForge()) updateUI();
-  updateEffects(dt);
   render(dt);
   renderMinimap(dt);
   renderBots();

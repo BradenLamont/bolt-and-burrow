@@ -1,4 +1,4 @@
-// Bolt & Burrow — controls. Keyboard (arrows / WASD, E, Space/Q for the skill, 1–4 for tools) and a touch joystick.
+// Bolt & Burrow — controls. Keyboard (arrows / WASD, E, Space/Q for the skill, 1–4 for tools, Esc for the menu) and a touch joystick.
 // Directions are screen directions: 'up' means up the screen, which is deeper into the cave.
 'use strict';
 
@@ -11,6 +11,11 @@ const vertDir = () => joyV || lastOf('up', 'down');
 
 addEventListener('keydown', e => {
   if (e.target.closest && e.target.closest('textarea, input')) return;   // typing a backup code
+  // Esc / P: the pause menu (or close a pop-up). E also closes a pop-up. M: sound on/off
+  if (e.code === 'Escape' || e.code === 'KeyP') { e.preventDefault(); if (!e.repeat) { if (popup) closePopup(); else toggleMenu(); } return; }
+  if (e.code === 'KeyM' && !e.repeat) { toggleMute(); renderMenu(); updateUI(); }
+  if (popup && e.code === 'KeyE') { e.preventDefault(); if (!e.repeat) closePopup(); return; }
+  if (paused()) return;                                                  // menus are open: the game ignores keys
   if (trip) { if (!e.repeat) skipTrip(); return; }                      // any key skips the train trip
   if (e.code === C.LINE_TEST_KEY && onTownMap()) lineTestPress();
   const d = KEYMAP[e.code];

@@ -1,7 +1,7 @@
-// Bolt & Burrow — the HUD and the panels under the cave.
-// The left panel changes with where you stand: in town it's the shop or a train car (forge, lab,
-// storage); at a cave outpost it's the outpost; anywhere else in a cave it's your cargo.
-// The right panel is the nano-bot window.
+// Bolt & Burrow — the HUD, the tip line, the key cues and the station pop-ups.
+// Stand at a train car, a shop stand, Pip's counter or an outpost and press E (or tap the button):
+// that place's panel opens as a pop-up over the game, and the game pauses until you close it.
+// The pause menu (menu.js) has everything else.
 'use strict';
 
 const SLOTS = ['head', 'arms', 'body', 'legs'];
@@ -13,12 +13,29 @@ const haveText = needs => Object.entries(needs).map(([k, n]) => `<span class="${
 
 let selMod = null, dragging = false;
 
-// Which panel to show
-function panelMode() {
-  if (inShop()) return shopSpot() ? (shopSpot() === 'counter' ? 'counter' : 'stand') : 'shopfloor';
-  if (inTown()) return townSpot() || 'town';
-  return station() ? 'outpost' : 'cargo';
+// Which pop-up this spot opens (null = nothing to open here)
+function spotPanel() {
+  if (inShop()) { const sp = shopSpot(); return sp ? (sp === 'counter' ? 'counter' : 'stand') : null; }
+  if (onTownMap()) { const t = townSpot(); return t && t !== 'engine' ? t : null; }
+  if (!inTown() && station()) return 'outpost';
+  return null;
 }
+// The game pauses while a pop-up or the pause menu is open
+let popup = null, menuOpen = false;
+const paused = () => !!(popup || menuOpen);
+function openPopup(k) {
+  popup = k; held.length = 0; joyH = joyV = null; attackHeld = false;
+  $('popup').hidden = false; panelHTML = ''; titleSig = ''; sfx('click');
+  renderPanel();
+  $('popup').querySelector('.x').focus({ preventScroll: true });
+}
+function closePopup() {
+  if (!popup) return;
+  popup = null; selMod = null; $('popup').hidden = true; sfx('click');
+  if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+  updateUI();
+}
+$('popup').addEventListener('click', e => { if (e.target === $('popup') || e.target.closest('[data-close]')) closePopup(); });
 
 // ---------- Panel contents ----------
 function itemList(ids, opts = {}) {
@@ -156,16 +173,15 @@ function toolRows() {
       <div class="mod-btns"><button type="button" data-act="tool" data-id="${id}" ${n >= t.max || full || S.coins < t.cost ? 'disabled' : ''}>${full ? 'Belt full' : 'Buy'}</button>${n ? `<button type="button" data-act="untool" data-id="${id}">Put back</button>` : ''}</div></div>`;
   }).join('') + '</div>';
 }
-// Save backup: a code you can copy somewhere safe, or a file
-let backupCode = '', panelOverride = null;
+// Save backup: a code you can copy somewhere safe, or a file (shown in the pause menu's Settings tab)
+let backupCode = '';
 const encodeSave = () => btoa(unescape(encodeURIComponent(JSON.stringify(S))));
 function backupView() {
   return `<p class="note">Your progress lives in this browser. Make a backup code and keep it somewhere safe (a note, an email to yourself), or download it as a file. To restore, paste a code or choose a file.</p>
     <div class="row"><div><small>Back up</small><span>${backupCode ? 'Code made. Copy all of it.' : 'Makes a code from your current progress.'}</span></div><div class="mod-btns"><button type="button" data-act="mkcode">Make code</button><button type="button" data-act="dlsave">Download file</button></div></div>
     ${backupCode ? `<textarea class="code" readonly>${backupCode}</textarea>` : ''}
     <div class="row"><div><small>Restore</small><span>Paste a backup code below, or choose a backup file. This replaces your current progress.</span></div><div class="mod-btns"><button type="button" data-act="loadsave">Load code</button><label class="filebtn">Choose file<input type="file" id="saveFile" accept=".json,.txt,application/json,text/plain" hidden></label></div></div>
-    <textarea class="code" id="importCode" placeholder="Paste a backup code here"></textarea>
-    <button type="button" class="back" data-act="closebackup">Back to the game panel</button>`;
+    <textarea class="code" id="importCode" placeholder="Paste a backup code here"></textarea>`;
 }
 function loadSaveText(text) {
   let o;
@@ -176,18 +192,11 @@ function loadSaveText(text) {
 }
 
 const PANEL = {
-  town: () => [TOWN().name, 'Town ' + (S.town + 1), `<p class="note">${TOWN().shop ? 'Walk through the big door of <b>Pip\'s shop</b> to buy parts and sell.' : 'Pip hasn\'t opened a shop here yet: buy and sell back in Hollowmouth.'} Stand at a train car's door (the marked platform tiles) to use the <b>Forge</b>, <b>Lab</b>, <b>Storage</b> or <b>Computer</b>.</p>` +
-    '<small class="sub">In storage</small>' + itemList([...ORE_LIST, ...MAT_LIST], { empty: 'Storage is empty. Ore you bring to any outpost ends up here.' })],
-  shopfloor: () => ['Pip\'s shop', 'Inside', '<p class="note">Walk up to a <b>display stand</b> to look at a part, or to <b>Pip</b> at the counter to sell. The door at the bottom leads back to town.</p>' + partsSummary()],
   stand: () => { const slot = shopSpot().slice(6); if (slot === 'weapon') return ['Weapon rack', 'Weapon arm', weaponRows()]; return [C.PARTS[slot].label + ' stand', C.PARTS[slot].stat, standRows(slot)]; },
   counter: () => ['Pip\'s counter', 'Tools and trading', '<p class="note pip">Pip: "Tools for the road, and I\'ll buy whatever you dug up!"</p>' +
     '<small class="sub">Tool belt · ' + beltTypes().length + '/' + beltSlots() + ' slots</small>' + toolRows() +
     '<small class="sub">Sell from storage</small>' +
     itemList([...ORE_LIST, ...MAT_LIST], { sell: true, empty: 'Nothing to sell. Ore you bring home is kept in the storage car until you sell or refine it.' })],
-  backup: () => ['Save backup', 'Copy or load', backupView()],
-  engine: () => ['Engine car', lineIsOpen() ? 'Line open' : 'Line closed', lineIsOpen()
-    ? '<p class="note">The Drill Liner takes the whole train, forge, lab and storage included, to <b>' + C.TOWNS[(S.town + 1) % C.TOWNS.length].name + '</b>. The crane loads your mech into the hold and your pilot drives from the cab. Press E or tap Board train.</p>'
-    : '<p class="note">The line to <b>' + C.TOWNS[1].name + '</b> opens when you bring home the Core Heart from Cave 3.</p>'],
   forge: () => ['Forge car', 'Queue ' + S.forge.queue.length + '/' + C.FORGE.queueMax, forgeRows()],
   lab: () => ['Lab car', '<span data-live="flux"></span>', computerGrid() + modRows()],
   computer: () => ['Computer car', '<span data-live="flux"></span>', '<p class="note">Permanent upgrades for your mech, paid for with Flux from your nano-bot.</p><div class="rows one">' + Object.keys(C.CORE).map(id => {
@@ -200,22 +209,24 @@ const PANEL = {
     '<small class="sub">Materials</small>' + itemList(MAT_LIST, { empty: 'No materials yet. Refine ore in the Forge car.' })],
   outpost: () => [station() === 'outpost' ? 'Halfway outpost' : 'Entrance outpost', 'Recharging',
     outpostRows() + '<p class="note">Your battery recharges here, and ore rides the conveyor home to the train\'s storage car.</p>' + cargoList()],
-  cargo: () => ['Cargo', cargoCount() + '/' + cargoMax(), cargoList() + '<p class="note">Bring ore to an outpost and the conveyor sends it home to the train.</p>'],
 };
+const PANEL_NAME = { stand: () => PANEL.stand()[0], counter: () => 'Pip\'s counter', forge: () => 'Forge car', lab: () => 'Lab car', computer: () => 'Computer car', storage: () => 'Storage car', outpost: () => 'outpost' };
+// (the button reads "Open outpost")
 
 let panelHTML = '', titleSig = '';
 function renderPanel() {
-  const [title, chip, body] = PANEL[panelOverride || panelMode()]();
-  if (title + chip !== titleSig) { titleSig = title + chip; $('panelTitle').textContent = title; $('shopState').innerHTML = chip; }
-  $('shopState').classList.toggle('open', panelMode() !== 'cargo');
-  if (body !== panelHTML && !dragging) { panelHTML = body; $('panelBody').innerHTML = body; }
+  if (popup) {
+    const [title, chip, body] = PANEL[popup]();
+    if (title + chip !== titleSig) { titleSig = title + chip; $('popTitle').textContent = title; $('popChip').innerHTML = chip; }
+    if (body !== panelHTML && !dragging) { panelHTML = body; $('popBody').innerHTML = body; }
+  }
   // numbers that change every frame are written straight in, so the buttons aren't rebuilt
   document.querySelectorAll('[data-live="flux"]').forEach(e => (e.textContent = fmt(S.flux) + ' Flux'));
   document.querySelectorAll('[data-live="forge"]').forEach(e => (e.style.width = (forgeProgress() * 100) + '%'));
 }
 
-// ---------- Panel buttons (one handler for everything) ----------
-$('panelBody').addEventListener('click', e => {
+// ---------- Pop-up buttons (one handler for everything) ----------
+$('popBody').addEventListener('click', e => {
   const b = e.target.closest('[data-act]'); if (!b || b.disabled) return;
   const id = b.dataset.id, act = b.dataset.act;
   if (act === 'buy') buyPart(id);
@@ -225,16 +236,6 @@ $('panelBody').addEventListener('click', e => {
   if (act === 'wup') upgradeWeapon(id);
   if (act === 'tool') buyTool(id);
   if (act === 'untool') returnTool(id);
-  if (act === 'mkcode') { save(); backupCode = encodeSave(); }
-  if (act === 'dlsave') {
-    save();
-    const a = document.createElement('a'), d = new Date();
-    a.href = URL.createObjectURL(new Blob([JSON.stringify(S)], { type: 'application/json' }));
-    a.download = 'bolt-burrow-save-' + d.toISOString().slice(0, 10) + '.json';
-    document.body.appendChild(a); a.click(); a.remove();
-  }
-  if (act === 'loadsave') loadSaveText($('importCode').value);
-  if (act === 'closebackup') { panelOverride = null; backupCode = ''; }
   if (act === 'sell' || act === 'sellall') sellItem(id, act === 'sellall');
   if (act === 'refine') queueRecipe(id);
   if (act === 'build') buildMod(id);
@@ -255,12 +256,6 @@ $('panelBody').addEventListener('click', e => {
   if (act === 'travel') travelTo(Number(id));
   updateUI();
 });
-$('panelBody').addEventListener('change', e => {
-  if (e.target.id !== 'saveFile' || !e.target.files[0]) return;
-  e.target.files[0].text().then(loadSaveText);
-});
-$('backup').addEventListener('click', () => { panelOverride = panelOverride ? null : 'backup'; backupCode = ''; updateUI(); });
-$('mute').addEventListener('click', () => { toggleMute(); updateUI(); });
 $('skill').addEventListener('click', () => { useSkill(); updateUI(); });
 // ATTACK button (phones): hold to keep attacking
 $('attack').addEventListener('pointerdown', e => { e.preventDefault(); attackHeld = true; attack(); });
@@ -268,14 +263,14 @@ for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) $('attack').add
 $('belt').addEventListener('click', e => { const b = e.target.closest('[data-tool]'); if (b) { useTool(b.dataset.tool); updateUI(); } });
 
 // Drag and drop (mouse): drag a mod onto a cell
-$('panelBody').addEventListener('dragstart', e => {
+$('popBody').addEventListener('dragstart', e => {
   const m = e.target.closest('[data-mod]'); if (!m) return;
   dragging = true; selMod = m.dataset.mod;
   e.dataTransfer.setData('text/plain', m.dataset.mod); e.dataTransfer.effectAllowed = 'move';
 });
-$('panelBody').addEventListener('dragend', () => { dragging = false; updateUI(); });
-$('panelBody').addEventListener('dragover', e => { if (e.target.closest('.cell.open')) e.preventDefault(); });
-$('panelBody').addEventListener('drop', e => {
+$('popBody').addEventListener('dragend', () => { dragging = false; updateUI(); });
+$('popBody').addEventListener('dragover', e => { if (e.target.closest('.cell.open')) e.preventDefault(); });
+$('popBody').addEventListener('drop', e => {
   const c = e.target.closest('.cell.open'); if (!c) return;
   e.preventDefault(); dragging = false;
   if (placeMod(e.dataTransfer.getData('text/plain'), +c.dataset.x, +c.dataset.y)) selMod = null;
@@ -297,11 +292,11 @@ function confirmButton(id, label, armedLabel, onConfirm) {
   });
 }
 confirmButton('recall', 'Recall', () => 'Tap again · keep ' + Math.round(C.RECALL.keepCargo * 100) + '% ore', () => { if (!inTown() && station() !== 'entrance') recall('manual'); });
-confirmButton('reset', 'Reset progress', () => 'Click again to reset', () => {
+function resetProgress() {
   S = freshState(); selMod = null; loadArea(); placePlayerFromSave();
   arrive(P.x, P.y, 'up');
   toast('New dig', 'Walk up to the Cave 1 gate to start digging.');
-});
+}
 
 // ---------- Refresh everything that shows numbers ----------
 function updateUI() {
@@ -320,7 +315,6 @@ function updateUI() {
   $('batMark').hidden = !!st || need <= 0;
   $('batMark').style.left = (need * 100) + '%';
   $('batTxt').textContent = Math.ceil(Math.max(0, P.battery));
-  $('batWarn').hidden = !low;
   const cn = cargoCount();
   $('cargoBar').style.width = (cn / cargoMax() * 100) + '%';
   $('hullBar').style.width = (Math.max(0, P.hull) / hullMax() * 100) + '%';
@@ -331,19 +325,19 @@ function updateUI() {
   if (boss) { $('bossName').textContent = C.FOES[boss.type].name; $('bossHp').style.width = (Math.max(0, boss.hp) / boss.max * 100) + '%'; }
   $('cargoTxt').textContent = cn + '/' + cargoMax();
   $('recall').hidden = st === 'town' || st === 'entrance';
-  stage.classList.toggle('tripping', !!trip);   // hide the control hints during the train ride
+  $('app').classList.toggle('tripping', !!trip);   // hide the key cues during the train ride
 
-  if (panelMode() !== 'lab') selMod = null;
+  if (popup !== 'lab') selMod = null;
   renderPanel();
   // first visits to each part of the base
-  const spot = panelMode();
+  const spot = spotPanel() || (townSpot() === 'engine' ? 'engine' : null);
   const FIRST = {
     forge: ['Forge car', 'Refine ore from storage into materials. Mixed recipes need more than one kind of ore.'],
     lab: ['Lab car', 'Build mods with materials and coins, then place them in the computer. Each mod has a fixed shape.'],
     computer: ['Computer car', 'Spend Flux on permanent upgrades: magnet range, hull plating, damage mitigation, field repair and weapon power.'],
     storage: ['Storage car', 'Everything you send home ends up here. Sell it at Pip\'s counter or refine it in the Forge car.'],
     engine: ['Engine car', 'Board here to ride the train to another town. The line opens with the Core Heart.'],
-    stand: ['Display stand', 'Each stand shows every tier of one part. Buy the next tier with the button or press E. The weapon rack sells weapons for your weapon arm.'],
+    stand: ['Display stand', 'Each stand shows every tier of one part. Press E (or tap the button) to look and buy. The weapon rack sells weapons for your weapon arm.'],
     counter: ['Pip\'s counter', 'Buy tools for your belt and sell ore and materials from storage.'],
   };
   if (FIRST[spot]) hintOnce('visit-' + spot, ...FIRST[spot]);
@@ -359,32 +353,85 @@ function updateUI() {
     $('skillName').textContent = C.MODS[sk].name;
     $('skillBar').style.width = (S.skillCharge * 100) + '%';
   }
-  $('mute').textContent = muted ? 'Sound off' : 'Sound on';
-  $('mute').classList.toggle('off', muted);
 
-  // context action (bridge pads, the engine car)
+  // context action (pop-ups, bridge pads, the engine car)
   const act = actionHere(), ab = $('action');
-  ab.hidden = !act; if (act) ab.textContent = act.label;
+  ab.hidden = !act || paused(); if (act) ab.textContent = act.label;
 
-  // nano-bot panel
-  $('botTag').textContent = S.bots ? S.bots + ' nano-bot' + (S.bots > 1 ? 's' : '') : 'None yet';
+  // nano-bot box (shrunk, it shows just the Flux count). In town and the shop it shrinks itself so the
+  // train stays in view, and it turns see-through when your mech walks under it.
+  const bb = $('botBox');
+  bb.classList.toggle('auto', inTown());
+  const br = bb.getBoundingClientRect(), cr = cv.getBoundingClientRect();
+  const sx = cr.left + P.x * CELL - camX, sy = cr.top + (ROWS - P.y) * CELL - camY;
+  bb.classList.toggle('ghost', sx > br.left - CELL && sx < br.right + CELL && sy > br.top - CELL && sy < br.bottom + CELL * 0.5);
+  const mini = bb.classList.contains('mini') || inTown();
+  $('botTag').textContent = mini && S.bots ? fmt(S.flux) + ' Flux' : S.bots ? S.bots + ' nano-bot' + (S.bots > 1 ? 's' : '') : 'None yet';
   $('botTag').classList.toggle('open', S.bots > 0);
-  $('botInfo').innerHTML = S.bots
-    ? '<b>Making ' + fmt(fluxRate() * 60) + ' Flux a minute</b>, even while you\'re away (up to ' + C.NANOBOT.offlineCapHours + ' h). Spend Flux on mod upgrades in the Lab car.'
-    : 'The first nano-bot is sealed inside the Ember Idol, Cave 1\'s relic. Bring it home to start making Flux.';
+  $('botBox').title = S.bots ? 'Making ' + fmt(fluxRate() * 60) + ' Flux a minute, even while you\'re away (up to ' + C.NANOBOT.offlineCapHours + ' h)' : 'The first nano-bot is sealed inside the Ember Idol, Cave 1\'s relic';
+
+  renderTip(low);
+  renderCue(act);
+}
+
+// ---------- The tip line (top strip) and the key cues (bottom strip) ----------
+// Messages and first-time hints show in the tip line; when there's no message it says what you can do here.
+function idleTip(low) {
+  if (trip) return 'Riding the Drill Liner · press any key or tap to skip';
+  if (low) return '<span class="warn">Low battery · head back to an outpost on the conveyor</span>';
+  if (inShop()) {
+    const sp = shopSpot();
+    if (sp === 'counter') return tt('Pip\'s counter') + 'Buy tools for your belt and sell ore and materials from storage.';
+    if (sp) return tt(PANEL.stand()[0]) + (sp === 'stand-weapon' ? 'Weapons for your weapon arm.' : 'Every tier of this part, with the next one for sale.');
+    return 'Walk up to a <b>display stand</b> or to <b>Pip</b> at the counter. The door at the bottom leads back to town.';
+  }
+  if (inTown()) {
+    const t = townSpot();
+    const CAR = { forge: 'Refine ore from storage into materials.', lab: 'Build mods and place them in the computer grid.', computer: 'Spend Flux on permanent upgrades for your mech.', storage: 'Everything you send home ends up here.' };
+    if (t === 'engine') return tt('Engine car') + (lineIsOpen() ? 'The Drill Liner takes your whole train to ' + C.TOWNS[(S.town + 1) % C.TOWNS.length].name + '.' : 'The line to ' + C.TOWNS[1].name + ' opens when you bring home the Core Heart from Cave 3.');
+    if (CAR[t]) return tt(PANEL_NAME[t]()) + CAR[t];
+    return (TOWN().shop ? 'Walk through the big door of <b>Pip\'s shop</b> to buy parts and sell.' : 'Pip hasn\'t opened a shop here yet.') + ' Stand at a train car\'s door to use the <b>Forge</b>, <b>Lab</b>, <b>Storage</b> or <b>Computer</b>.';
+  }
+  if (station()) return tt(station() === 'outpost' ? 'Halfway outpost' : 'Entrance outpost') + 'Your battery recharges and ore rides the conveyor home. Open it to build or fast travel.';
+  if (cargoCount() >= cargoMax()) return '<span class="warn">Cargo full</span> · bring it to an outpost and the conveyor sends it home.';
+  return caveLabel(S.cave) + ' · ' + cave().name + '. Bring ore to an outpost and the conveyor sends it home to the train.';
+}
+let tipMsg = null, tipTimer = 0;
+const tt = title => '<b class="tt">' + title + '</b>';
+function renderTip(low) {
+  const p = $('tip'), html = tipMsg || idleTip(low);
+  if (p.innerHTML !== html) {
+    p.innerHTML = html;
+    p.classList.toggle('msg', !!tipMsg);
+    p.classList.toggle('long', !!tipMsg && p.scrollHeight > p.parentElement.clientHeight + 2);
+  }
+}
+const touchUI = matchMedia('(pointer: coarse)').matches;
+function renderCue(act) {
+  let html;
+  if (touchUI) html = 'Drag anywhere to move · push into blocks to dig · &#x23F8; for the menu';
+  else {
+    const k = (key, what) => '<kbd>' + key + '</kbd> ' + what;
+    const bits = [];
+    if (act) bits.push(k('E', act.label));
+    bits.push(k('WASD', 'move'));
+    if (!inTown()) bits.push(k('F', 'attack'), k('Space', 'skill'), k('1–4', 'tools'));
+    bits.push(k('Esc', 'menu'));
+    html = bits.join(' · ');
+  }
+  if ($('cue').innerHTML !== html) $('cue').innerHTML = html;
 }
 
 // ---------- Messages ----------
-let toastTimer;
 const hinted = new Set();
 function toast(title, msg) {
-  const t = $('toast');
-  t.innerHTML = (title ? '<b>' + title + '</b>' : '') + msg;
-  t.hidden = false;
-  clearTimeout(toastTimer); toastTimer = setTimeout(() => (t.hidden = true), title ? 4200 : 2600);
+  tipMsg = (title ? '<b class="tt">' + title + '</b>' : '') + msg;
+  clearTimeout(tipTimer); tipTimer = setTimeout(() => { tipMsg = null; updateUI(); }, title ? 7000 : 3500);
+  if (typeof updateUI === 'function' && $('tip')) renderTip(false);
 }
-// First-time hints are remembered with your save, so each one shows once
+// First-time hints are remembered with your save, so each one shows once (and stays in the menu's hint log)
 function hintOnce(key, title, msg) {
   if (hinted.has(key) || S.hints.includes(key)) return;
   hinted.add(key); S.hints.push(key); toast(title, msg);
+  S.hintLog = (S.hintLog || []).concat([[title, msg]]).slice(-40);
 }
