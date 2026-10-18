@@ -210,6 +210,18 @@ A browser mining game: steer a robot with swappable parts down through the earth
 - Saves: Rustvale's old test cave is reset; Hollowmouth progress is kept. Players who've already found a relic skip the tutorial
 - Balancing sheet: Rustvale caves and bosses, and a new Contracts tab
 
+## v0.13.1 – the weapon arm
+- The weapon is now the mech's right arm instead of a tool drawn over the mech (concept C from the concept board): the arm ends in a hex hardpoint dock with the weapon snapped on, and a power cable runs from the back tank down the arm, glowing in the weapon's class colour (melee orange, ranged white, defensive cyan, support yellow)
+- The dig arm keeps its tool on the other side. Seen from the side, the weapon arm is the near arm and the dig arm shows behind it
+- Each weapon has its own module: wrench jaw, Rock Hammer head, Rivet Gun barrel and drum, Bulwark shield plate, Stun Pulse prongs with a crackling arc
+- Attacks animate on the arm: melee weapons swing from overhead with a trail, the Rivet Gun flashes at the muzzle, the Bulwark pushes out with its pull ring, and the Stun Pulse lights up
+- Upgrades show on the arm: one chevron per Mk on its shoulder plate, a steel cuff at Mk II and a glowing core at Mk III
+
+## v0.13.2 – Miner's Waystation outposts
+- Entrance outposts are now a timber hut on a stone footing, with a pitched plank roof, a smoking chimney, a warm-lit door and window, and an ore cart by the wall. The lantern post beside it is the charger: its amber ring fills as your battery recharges
+- Halfway outposts are a timber shack with a lantern, beside plank decking around the conveyor (the pad you stand on)
+- Same look in every cave, Hollowmouth and Rustvale (concept A from the concept board)
+
 ## The plan (agreed October 2026)
 
 ### v0.8 – the train base, materials and the computer (done)

@@ -2,7 +2,10 @@
 // Drawn on a 64×64 grid (the same grid as the concept art), facing front, back or side.
 // Each part slot changes one piece of the drawing:
 //   head → canopy (Glass Bubble, Armored Visor, Sensor Dome)
-//   arms → both tools (Rock Claws, Drill Arms, Plasma Cutters)
+//   arms → the dig arm's tool (Rock Claws, Drill Arms, Plasma Cutters)
+//   weapon → the weapon arm (v0.13.1): the mech's right arm ends in a hardpoint dock with the weapon on it,
+//            fed by a power cable from the back tank that glows in the weapon class colour. Mk II adds a steel
+//            cuff, Mk III a powered core, and the weapon arm's shoulder plate has one chevron per Mk.
 //   body → back tank (Small Tank, Twin Tanks, Reactor Tank)
 //   legs → legs (Piston Legs, Spring Struts, Hover Jets)
 'use strict';
@@ -153,9 +156,12 @@ function wTankSide(c, body, t) {
   }
 }
 
-// ---------- Arms (one arm; ox = arm's left edge, jab = dig thrust) ----------
-function wArmDown(c, tool, ox, jab, t) {
-  c.save(); c.translate(ox, jab);
+// ---------- Arms ----------
+// One front/back arm. ox = the arm's left edge, ext = how far it punches out along its length,
+// rot = swing around the shoulder (0 = hanging down, ±π = raised overhead).
+function wArmDown(c, tool, ox, ext, rot, t) {
+  const jab = ext;
+  c.save(); c.translate(ox + 4, 31); c.rotate(rot); c.translate(-4, -31 + ext);
   wRect(c, 0, 31, 8, 9, 1.5, W_STEEL);
   if (tool === 'pincers') {
     const open = Math.max(0, Math.sin(t * 16)) * (jab ? 1.2 : 0);
@@ -197,6 +203,100 @@ function wPauldrons(c) {
   wRect(c, 47, 22, 13, 9, 2, W_ORANGE); wStripes(c, 48, 27, 11, 3);
 }
 
+// ---------- Weapon arm (hardpoint dock + power cable) ----------
+// Class colours: melee orange, ranged white, defensive cyan, support yellow
+const W_CLASS = { wrench: '#E07A2E', hammer: '#E07A2E', rivet: '#C9D3D6', bulwark: '#86CFDC', stun: '#F2C94C' };
+function wRingE(c, x, y, rx, ry, col) { c.save(); c.strokeStyle = col; c.lineWidth = 1.4; c.setLineDash([3, 2]); c.beginPath(); c.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2); c.stroke(); c.restore(); }
+// The weapon hanging down from the dock (front/back views). Arm is x 0..8; the dock sits at y 40–44.
+function wWeaponDown(c, w, atk, mk, t) {
+  const glow = W_CLASS[w], y0 = 44;
+  wPath(c, 'M-0.5 40 H8.5 L9.5 42 L8.5 44 H-0.5 L-1.5 42 Z', W_DARK);
+  wCirc(c, 4, 42, 1, glow);
+  if (w === 'wrench') {
+    wRect(c, 0.5, y0, 7, 3, 1, W_STEEL_LIGHT);
+    wRect(c, 2.6, y0 + 3, 2.8, 8, 0.8, '#A8A39C');
+    wPath(c, `M-0.5 ${y0 + 11} H8.5 V${y0 + 16} H6 V${y0 + 13.5} H2 V${y0 + 16} H-0.5 Z`, '#A8A39C');
+  } else if (w === 'hammer') {
+    wRect(c, 1, y0, 6, 3, 1, W_STEEL_LIGHT);
+    wRect(c, 2.8, y0 + 3, 2.4, 6, 0.5, '#6A4E36');
+    wRect(c, -3, y0 + 8.5, 14, 6.5, 1.2, W_STEEL_LIGHT);
+    wRect(c, -3, y0 + 10.5, 14, 1.4, 0, W_STEEL_MID, null); wRect(c, -3, y0 + 12.8, 14, 1.4, 0, W_STEEL_MID, null);
+  } else if (w === 'rivet') {
+    wRect(c, -0.5, y0, 9, 6, 1.5, W_DARK);
+    wCirc(c, -1.5, y0 + 3, 2.6, W_COPPER, W_OUT);
+    wRect(c, 2, y0 + 6, 4, 8, 0.6, W_STEEL_MID);
+    wRect(c, 1.3, y0 + 13, 5.4, 2, 0.6, W_STEEL_LIGHT);
+    if (atk) { wCirc(c, 4, y0 + 17, 3.2, '#FFE2A0', null, 0.85); wCirc(c, 4, y0 + 17, 1.6, '#FFFFFF'); }
+  } else if (w === 'bulwark') {
+    wRect(c, 1, y0, 6, 3, 1, W_STEEL_MID);
+    const sc = atk ? 1.15 : 1;
+    c.save(); c.translate(4, y0 + 9); c.scale(sc, sc);
+    wRect(c, -8, -7, 16, 15, 3, W_STEEL); wStripes(c, -7, -6.2, 14, 2.4);
+    wEll(c, 0, 2, 5, 3.6, W_CYAN, null, atk ? 0.75 : 0.4 + Math.sin(t * 3) * 0.08); wEll(c, 0, 2, 2.4, 1.6, '#FFFFFF', null, 0.7);
+    c.restore();
+    if (atk) wRingE(c, 4, y0 + 10, 14, 10, W_CYAN);
+  } else if (w === 'stun') {
+    wRect(c, 0.5, y0, 7, 5, 1.5, W_DARK);
+    for (let k = 0; k < 3; k++) wRect(c, -0.5, y0 + 0.6 + k * 1.6, 9, 0.9, 0.3, W_COPPER, null);
+    wLine(c, `M1.5 ${y0 + 5} L0 ${y0 + 13} M6.5 ${y0 + 5} L8 ${y0 + 13}`, W_STEEL_LIGHT, 1.6);
+    wCirc(c, 0, y0 + 13.4, 1.2, glow, W_OUT); wCirc(c, 8, y0 + 13.4, 1.2, glow, W_OUT);
+    const j = Math.sin(t * 20) * 0.8;
+    wLine(c, `M0.5 ${y0 + 13} L2.5 ${y0 + 11 + j} L4 ${y0 + 14 - j} L5.5 ${y0 + 11 + j} L7.5 ${y0 + 13}`, glow, 0.9);
+    if (atk) wCirc(c, 4, y0 + 12, 12, glow, null, 0.25);
+  }
+  if (mk >= 2) wRect(c, -0.6, 38.8, 9.2, 1.4, 0.4, W_STEEL_LIGHT);   // Mk II: a reinforced cuff above the dock
+  if (mk >= 3) wCirc(c, 4, 36.5, 1.1, glow, W_OUT);                  // Mk III: a powered core
+}
+// The weapon pointing forward from the dock (side view). Arm runs x 38..49 at y 30–36; the dock is x 48–52.
+function wWeaponSide(c, w, atk, mk, t) {
+  const glow = W_CLASS[w], x0 = 52;
+  wPath(c, 'M48 29 L50 28 H52 V38 H50 L48 37 Z', W_DARK); wCirc(c, 50.5, 33, 1, glow);
+  if (w === 'wrench') {
+    wRect(c, x0, 30.5, 3, 5, 1, W_STEEL_LIGHT);
+    wRect(c, x0 + 3, 31.6, 8, 2.8, 0.8, '#A8A39C');
+    wPath(c, `M${x0 + 11} 29 V37 H${x0 + 16} V34.5 H${x0 + 13.5} V31.5 H${x0 + 16} V29 Z`, '#A8A39C');
+  } else if (w === 'hammer') {
+    wRect(c, x0, 30.5, 3, 5, 1, W_STEEL_LIGHT);
+    wRect(c, x0 + 3, 31.8, 6, 2.4, 0.5, '#6A4E36');
+    wRect(c, x0 + 8.5, 26, 6.5, 14, 1.2, W_STEEL_LIGHT);
+    wRect(c, x0 + 10.5, 26, 1.4, 14, 0, W_STEEL_MID, null); wRect(c, x0 + 12.8, 26, 1.4, 14, 0, W_STEEL_MID, null);
+  } else if (w === 'rivet') {
+    wRect(c, x0, 29.5, 6, 7, 1.5, W_DARK);
+    wCirc(c, x0 + 3, 38, 2.6, W_COPPER, W_OUT);
+    wRect(c, x0 + 6, 31.5, 8, 3, 0.6, W_STEEL_MID);
+    wRect(c, x0 + 13, 30.8, 2, 4.4, 0.6, W_STEEL_LIGHT);
+    if (atk) { wCirc(c, x0 + 18, 33, 3.4, '#FFE2A0', null, 0.85); wCirc(c, x0 + 18, 33, 1.6, '#FFFFFF'); }
+  } else if (w === 'bulwark') {
+    wRect(c, x0, 31, 3, 4, 1, W_STEEL_MID);
+    const dx = atk ? 2 : 0;
+    wRect(c, x0 + 3 + dx, 23, 4.5, 20, 2, W_STEEL);
+    wRect(c, x0 + 6.2 + dx, 25, 1.4, 16, 0.6, W_CYAN, null);
+    if (atk) wRingE(c, x0 + 12, 33, 6, 11, W_CYAN);
+  } else if (w === 'stun') {
+    wRect(c, x0, 30, 5, 6, 1.5, W_DARK);
+    for (let k = 0; k < 3; k++) wRect(c, x0 + 0.6 + k * 1.6, 29.2, 0.9, 7.6, 0.3, W_COPPER, null);
+    wLine(c, `M${x0 + 5} 31 L${x0 + 13} 28.5 M${x0 + 5} 35 L${x0 + 13} 37.5`, W_STEEL_LIGHT, 1.6);
+    wCirc(c, x0 + 13.4, 28.4, 1.2, glow, W_OUT); wCirc(c, x0 + 13.4, 37.6, 1.2, glow, W_OUT);
+    const j = Math.sin(t * 20) * 0.8;
+    wLine(c, `M${x0 + 13} 29 L${x0 + 11 + j} 31 L${x0 + 14 - j} 33 L${x0 + 11 + j} 35 L${x0 + 13} 37`, glow, 0.9);
+    if (atk) wCirc(c, x0 + 10, 33, 13, glow, null, 0.22);
+  }
+  if (mk >= 2) wRect(c, 46.2, 29.4, 1.4, 7.2, 0.4, W_STEEL_LIGHT);
+  if (mk >= 3) wCirc(c, 44, 33, 1.1, glow, W_OUT);
+}
+// One chevron per Mk level on the weapon arm's shoulder plate, and its class-colour stripe
+function wWeaponPauldron(c, x, y, w, mk) {
+  wRect(c, x, y, 13, 9, 2, W_ORANGE); wRect(c, x + 1, y + 5, 11, 3, 0, W_CLASS[w], W_OUT);
+  for (let k = 0; k < mk; k++) wPath(c, `M${x + 3.5 + k * 3} ${y + 1.5} l1.5 1.5 l1.5 -1.5`, null, W_OUT);
+}
+// The power cable from the back tank to the dock. (ex, ey) = where the dock's plug is.
+function wCable(c, d, w, ex, ey) {
+  wLine(c, d, '#2B2A2E', 2.4); wLine(c, d, W_CLASS[w], 0.7);
+  wCirc(c, ex, ey, 1.1, '#2B2A2E');
+}
+// Rotate a point (px, py) around (cx, cy)
+const wRot = (px, py, cx, cy, a) => [cx + (px - cx) * Math.cos(a) - (py - cy) * Math.sin(a), cy + (px - cx) * Math.sin(a) + (py - cy) * Math.cos(a)];
+
 // ---------- The whole walker ----------
 // view: 'front' (toward base), 'back' (deeper into the cave) or 'side'; flip = -1 faces left.
 // anim: { moving, digging }
@@ -213,7 +313,12 @@ function drawWalker(c, x, y, k, view, flip, t, ids, anim) {
 
   if (jets) wEll(c, 32, 60.5, 18, 2, W_CYAN, null, 0.18); else wEll(c, 32, 59.5, 22, 3, '#000', null, 0.35);
 
+  const wp = anim.weapon || { id: 'wrench', mk: 1, k: 0 };
+  const atkK = wp.k || 0, atk = atkK > 0;   // 0 = idle, then 1 → 0 through an attack
+  const melee = wp.id === 'wrench' || wp.id === 'hammer';
   if (view === 'side') {
+    // the dig arm is the far arm, raised a little so its tool shows above the weapon arm
+    c.save(); if ('filter' in c) c.filter = 'brightness(0.62)'; c.translate(-1, -8); wArmSide(c, ids.arms, jab, t); c.restore();
     wLeg(c, ids.legs, 23, liftB, true, t);
     c.save(); c.translate(0, -bob);
     wTankSide(c, ids.body, t);
@@ -225,8 +330,16 @@ function drawWalker(c, x, y, k, view, flip, t, ids, anim) {
     c.restore();
     wLeg(c, ids.legs, 31, liftA, false, t);
     c.save(); c.translate(0, -bob);
-    wRect(c, 26, 24, 14, 9, 2, W_ORANGE); wStripes(c, 27, 29, 12, 3);
-    wArmSide(c, ids.arms, jab, t);
+    // melee weapons swing from overhead down through the target; the others hold steady
+    const swing = atk && melee ? -1.25 + (1 - atkK) * 1.6 : 0;
+    if (atk && melee) { c.save(); c.globalAlpha = 0.45 * atkK; c.strokeStyle = '#EFE3D3'; c.lineWidth = 2.2; c.beginPath(); c.arc(40, 33, 22, -1.35, swing + 0.1); c.stroke(); c.restore(); }
+    c.save(); c.translate(40, 33); c.rotate(swing); c.translate(-40, -33);
+    wRect(c, 38, 30, 11, 6, 1.5, W_STEEL);
+    wWeaponSide(c, wp.id, atk && (!melee || atkK > 0.4), wp.mk, t);
+    c.restore();
+    const [ex, ey] = wRot(50, 37.6, 40, 33, swing), [hx, hy] = wRot(49, 44, 40, 33, swing);
+    wCable(c, `M12 36 C 18 47 ${hx.toFixed(1)} ${(hy + 2).toFixed(1)} ${ex.toFixed(1)} ${ey.toFixed(1)}`, wp.id, ex, ey);
+    wWeaponPauldron(c, 26, 24, wp.id, wp.mk);
     c.restore();
   } else {
     const back = view === 'back';
@@ -242,11 +355,23 @@ function drawWalker(c, x, y, k, view, flip, t, ids, anim) {
       wChest(c, ids.body);
       wCanopyFront(c, ids.head);
     }
-    wPauldrons(c);
-    // digging toward the camera (front) pushes the arms down the screen; digging deeper pushes them up
-    const j = back ? -jab : jab;
-    wArmDown(c, ids.arms, 6.5, anim.digging ? j : 0, t);
-    wArmDown(c, ids.arms, 49.5, anim.digging ? -j : 0, t);
+    // Arms punch toward the dig: hanging down when digging toward base,
+    // swung up over the shoulders when digging deeper (raise eases between the two).
+    const swing = (anim.raise || 0) * Math.PI;
+    const extA = anim.digging ? Math.max(0, jab) * 1.2 : 0, extB = anim.digging ? Math.max(0, -jab) * 1.2 : 0;
+    // the weapon is the mech's right arm: on screen left from the front, on screen right from behind
+    const wx = back ? 49.5 : 6.5, dx = back ? 6.5 : 49.5;
+    wArmDown(c, ids.arms, dx, Math.max(extA, extB), back ? swing : -swing, t);
+    const wRotA = atk ? (back ? -0.45 : 0.45) * Math.sin(atkK * Math.PI) : 0;
+    c.save(); c.translate(wx + 4, 31); c.rotate(wRotA); c.translate(-4, -31);
+    wRect(c, 0, 31, 8, 9, 1.5, W_STEEL);
+    wWeaponDown(c, wp.id, atk, wp.mk, t);
+    c.restore();
+    // cable: from the tank, down the outside of the arm to the dock's plug (it follows the arm)
+    const cx = wx + 4, [ex, ey] = wRot(back ? wx + 9 : wx - 1, 42, cx, 31, wRotA), [mx, my] = wRot(back ? wx + 11 : wx - 3, 36, cx, 31, wRotA);
+    wCable(c, `M${back ? wx - 2 : wx + 10} 27 C${back ? wx + 11 : wx - 3} 28 ${mx.toFixed(1)} ${my.toFixed(1)} ${ex.toFixed(1)} ${ey.toFixed(1)}`, wp.id, ex, ey);
+    wRect(c, back ? 4 : 47, 22, 13, 9, 2, W_ORANGE); wStripes(c, back ? 5 : 48, 27, 11, 3);
+    wWeaponPauldron(c, back ? 47 : 4, 22, wp.id, wp.mk);
     c.restore();
   }
   c.restore();

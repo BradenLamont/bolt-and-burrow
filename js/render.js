@@ -124,9 +124,10 @@ function drawFloor(c, r, x, y, s) {
   if (t === 'gate') { g.fillStyle = '#120d0a'; g.fillRect(x + s * 0.12, y, s * 0.76, s); }
   if (!town && DECO[idx(c, r)] && hash(c, r, 11) < 0.35) drawStalagmite(c, r, x, y, s);
   if (t === 'pad') drawPad(c, r, x, y, s);
-  if (outpostAt(c, r)) { // outpost landing pad
-    g.fillStyle = 'rgba(217,129,59,.16)'; g.fillRect(x, y, s, s);
-    g.strokeStyle = 'rgba(217,129,59,.35)'; g.lineWidth = 1; g.strokeRect(x + 0.5, y + 0.5, s - 1, s - 1);
+  if (outpostAt(c, r) && c !== BELT) { // the outpost's plank decking
+    g.fillStyle = '#6a4a30'; g.fillRect(x + 1, y + 1, s - 2, s - 2);
+    g.fillStyle = 'rgba(0,0,0,.3)'; for (let q = 1; q < 4; q++) g.fillRect(x + 1, y + q * s / 4, s - 2, 1);
+    g.fillStyle = '#8a6a44'; g.fillRect(x + s * 0.1, y + s * 0.1, 2, 2); g.fillRect(x + s * 0.85, y + s * 0.85, 2, 2);
   }
   if (onBelt(c, r)) drawBelt(x, y, s);
 }
@@ -677,7 +678,7 @@ function drawTripMech(X, Y, s) {
   if (m.where !== 'hook') return;
   const sx = X(m.x), groundY = Y(m.y) + s * 0.2;
   g.fillStyle = 'rgba(0,0,0,' + (0.3 - m.h * 0.1) + ')'; g.beginPath(); g.ellipse(sx, groundY, s * 0.35, s * 0.12, 0, 0, 7); g.fill();
-  drawWalker(g, sx, Y(m.y) + s * 0.4 - m.h * s, s * 1.15 / 64 * (1 + m.h * 0.12), 'front', 1, time, partIds(), { moving: false });
+  drawWalker(g, sx, Y(m.y) + s * 0.4 - m.h * s, s * 1.15 / 64 * (1 + m.h * 0.12), 'front', 1, time, partIds(), { moving: false, weapon: { id: S.weapon, mk: weaponMk(S.weapon), k: 0 } });
 }
 // The drilling scene between towns (fills the whole cave view)
 function drawTravel() {
@@ -953,32 +954,72 @@ function drawGates(X, Y, s, W) {
     g.fillText(cv == null ? 'COMING SOON' : open ? C.CAVES[cv].name.toUpperCase() : 'SEALED', sx + w / 2, sy + h * 0.82);
   });
 }
-function drawBaseBuilding(X, Y, s, W, B = C.BASE_BUILDING, label = 'OUTPOST') {
-  const x = X(B.cols[0]), w = (B.cols[1] - B.cols[0] + 1) * s, h = (B.rows[1] - B.rows[0] + 1) * s;
-  const y = Y(B.rows[1] + 1) - W * 2.2;
-  g.fillStyle = '#3a2b20'; g.fillRect(x, y, w, h);                                      // roof
-  g.fillStyle = '#4a372a'; for (let k = 1; k < 6; k++) g.fillRect(x, y + k * h / 6, w, 2);
-  g.fillStyle = '#2a1f17'; g.fillRect(x, y + h, w, W * 2.2);                            // front wall
-  g.fillStyle = '#e8a160'; g.fillRect(x + s * 0.4, y + h + W * 0.5, s * 0.5, W * 0.9);   // window
-  const dx = B.door != null ? X(B.door) + s * 0.2 : x + w - s * 1.1;
-  g.fillStyle = '#16110d'; g.fillRect(dx, y + h + W * 0.4, s * 0.6, W * 1.8);           // door
-  if (B.door != null) { // a shop you can walk into: warm light and an OPEN sign
-    g.fillStyle = 'rgba(232,161,96,.35)'; g.fillRect(dx + 2, y + h + W * 0.4 + 2, s * 0.6 - 4, W * 1.8 - 2);
-    g.fillStyle = '#d9813b'; g.fillRect(dx - s * 0.05, y + h + W * 0.05, s * 0.7, W * 0.32);
-    g.fillStyle = '#16110d'; g.font = '700 ' + Math.round(W * 0.28) + 'px "IBM Plex Mono", monospace'; g.textAlign = 'center';
-    g.fillText('OPEN', dx + s * 0.3, y + h + W * 0.3);
-  }
-  g.fillStyle = '#efe3d3'; g.font = '700 ' + Math.round(s * 0.42) + 'px "Pixelify Sans", monospace'; g.textAlign = 'center';
-  g.fillText(label, x + w / 2, y + h / 2 + s * 0.15);
+// ---------- Outposts: the Miner's Waystation look (v0.13.2) ----------
+// Helpers: a soft glow (rgb as "r,g,b"), centred text, the floor under a building's footprint (its cells are never
+// drawn as floor), and how full your battery is (the charge lamp fills as you recharge)
+function opGlow(x, y, r, rgb, a) { const gr = g.createRadialGradient(x, y, 0, x, y, r); gr.addColorStop(0, 'rgba(' + rgb + ',' + a + ')'); gr.addColorStop(1, 'rgba(' + rgb + ',0)'); g.fillStyle = gr; g.fillRect(x - r, y - r, r * 2, r * 2); }
+function opText(t, x, y, size, col) { g.fillStyle = col; g.font = '700 ' + Math.round(size) + 'px "Pixelify Sans", monospace'; g.textAlign = 'center'; g.fillText(t, x, y); }
+function opFloor(x, y, w, h, col) { g.fillStyle = col; g.fillRect(x, y, w, h); g.fillStyle = 'rgba(255,230,200,.05)'; for (let q = 0; q < 6; q++) g.fillRect(x + (q * 37 % w), y + (q * 53 % h), 3, 3); }
+const opCharge = () => Math.max(0, Math.min(1, P.battery / batteryMax()));
+// The entrance outpost: a timber hut on a stone footing, a pitched plank roof with a smoking chimney, a warm-lit
+// door, a lantern post that doubles as the charger (its amber ring fills as you charge) and an ore cart by the wall
+function drawBaseBuilding(X, Y, s, W) {
+  const B = C.BASE_BUILDING, x = X(B.cols[0]), w = (B.cols[1] - B.cols[0] + 1) * s, h = 2 * s;
+  const y = Y(B.rows[1] + 1) - W * 2.2, fh = W * 2.2;
+  opFloor(x, Y(B.rows[1] + 1), w, 2 * s, '#3a3128');
+  g.fillStyle = 'rgba(0,0,0,.3)'; g.fillRect(x + s * 0.15, y + h + fh, w, s * 0.15);
+  // stone footing and plank walls
+  g.fillStyle = '#5b5753'; g.fillRect(x, y + h + fh * 0.72, w, fh * 0.28);
+  for (let k = 0; k < 8; k++) { g.fillStyle = k % 2 ? '#6a655f' : '#4f4b47'; g.fillRect(x + k * w / 8 + 1, y + h + fh * 0.75, w / 8 - 2, fh * 0.22); }
+  g.fillStyle = '#6a4a30'; g.fillRect(x, y + h, w, fh * 0.72);
+  g.fillStyle = 'rgba(0,0,0,.25)'; for (let k = 1; k < 4; k++) g.fillRect(x, y + h + k * fh * 0.18, w, 1);
+  // pitched plank roof, seen from above: two slopes and a ridge
+  g.fillStyle = '#7a5230'; g.fillRect(x - s * 0.1, y, w + s * 0.2, h / 2);
+  g.fillStyle = '#5e3f26'; g.fillRect(x - s * 0.1, y + h / 2, w + s * 0.2, h / 2);
+  g.fillStyle = 'rgba(0,0,0,.25)'; for (let k = 0; k < 12; k++) { g.fillRect(x - s * 0.1 + k * (w + s * 0.2) / 12, y, 1, h); }
+  g.fillStyle = '#3a2b20'; g.fillRect(x - s * 0.1, y + h / 2 - 2, w + s * 0.2, 4);
+  // chimney with smoke
+  const cx = x + w * 0.78;
+  g.fillStyle = '#5b5753'; g.fillRect(cx, y - s * 0.25, s * 0.35, s * 0.6); g.fillStyle = '#2a2420'; g.fillRect(cx + 3, y - s * 0.22, s * 0.35 - 6, s * 0.12);
+  for (let k = 0; k < 3; k++) { const ph = (time * 0.5 + k / 3) % 1; g.fillStyle = 'rgba(160,150,140,' + (0.3 * (1 - ph)) + ')'; g.beginPath(); g.arc(cx + s * 0.17 + Math.sin(ph * 5) * s * 0.1, y - s * 0.3 - ph * s * 0.9, s * (0.1 + ph * 0.14), 0, 7); g.fill(); }
+  // door with warm light, window, hanging sign
+  const dx = x + w * 0.62, dy = y + h + fh * 0.12;
+  opGlow(dx + s * 0.3, y + h + fh, s * 1.2, '255,179,71', 0.25);
+  g.fillStyle = '#2a1f17'; g.fillRect(dx, dy, s * 0.6, fh * 0.62);
+  g.fillStyle = 'rgba(255,190,110,.55)'; g.fillRect(dx + 3, dy + 3, s * 0.6 - 6, fh * 0.62 - 3);
+  g.fillStyle = '#ffd98a'; g.fillRect(x + s * 0.4, dy + 2, s * 0.55, fh * 0.32);
+  g.strokeStyle = '#3a2b20'; g.lineWidth = 2; g.strokeRect(x + s * 0.4, dy + 2, s * 0.55, fh * 0.32);
+  g.beginPath(); g.moveTo(x + s * 0.675, dy + 2); g.lineTo(x + s * 0.675, dy + 2 + fh * 0.32); g.stroke();
+  g.fillStyle = '#3a2b20'; g.fillRect(x + w * 0.2, y + h * 0.18, w * 0.6, s * 0.5);
+  g.strokeStyle = '#d9813b'; g.lineWidth = 1.5; g.strokeRect(x + w * 0.2, y + h * 0.18, w * 0.6, s * 0.5);
+  opText('OUTPOST', x + w / 2, y + h * 0.18 + s * 0.36, s * 0.3, '#efe3d3');
+  // charging post with a cable reel, and an amber charge lamp that fills up
+  const px = x + w + s * 0.2, py = y + h + fh * 0.1;
+  g.fillStyle = '#3a2b20'; g.fillRect(px, py - s * 0.6, s * 0.3, s * 0.6 + fh * 0.9);
+  g.fillStyle = '#2B2A2E'; g.beginPath(); g.arc(px + s * 0.15, py, s * 0.2, 0, 7); g.fill();
+  g.strokeStyle = '#E8B33A'; g.lineWidth = 2; g.beginPath(); g.arc(px + s * 0.15, py, s * 0.13, 0, 7 * opCharge()); g.stroke();
+  g.fillStyle = '#ffd98a'; g.beginPath(); g.arc(px + s * 0.15, py - s * 0.62, s * 0.08, 0, 7); g.fill();
+  opGlow(px + s * 0.15, py - s * 0.62, s * 0.6, '255,200,110', 0.4);
+  // an ore cart by the wall
+  const ox = x - s * 0.8, oy = y + h + fh * 0.35;
+  g.fillStyle = '#4A5059'; g.beginPath(); g.moveTo(ox, oy); g.lineTo(ox + s * 0.7, oy); g.lineTo(ox + s * 0.6, oy + s * 0.4); g.lineTo(ox + s * 0.1, oy + s * 0.4); g.closePath(); g.fill();
+  g.fillStyle = '#e08a42'; g.beginPath(); g.ellipse(ox + s * 0.35, oy, s * 0.3, s * 0.1, 0, 0, 7); g.fill();
+  g.fillStyle = '#2B2A2E'; g.beginPath(); g.arc(ox + s * 0.18, oy + s * 0.45, s * 0.08, 0, 7); g.arc(ox + s * 0.52, oy + s * 0.45, s * 0.08, 0, 7); g.fill();
 }
+// The halfway outpost: a timber shack with a lantern, beside plank decking (the pad, drawn in drawFloor)
 function drawOutpost(k, X, Y, s, W) {
   const row = outpostRow(k), x = X(BELT + 2), y = Y(row + 1) - W * 1.6;
-  g.fillStyle = '#3a2b20'; g.fillRect(x, y, s, s * 2);
-  g.fillStyle = '#4b4038'; g.fillRect(x + s * 0.1, y + s * 0.1, s * 0.8, s * 1.8);
-  g.fillStyle = '#2a1f17'; g.fillRect(x, y + s * 2, s, W * 1.6);
-  g.fillStyle = 'rgba(217,129,59,' + (0.7 + Math.sin(time * 4) * 0.3) + ')'; g.beginPath(); g.arc(x + s * 0.5, y + s * 0.5, s * 0.14, 0, 7); g.fill();
-  g.fillStyle = '#efe3d3'; g.font = '700 ' + Math.round(s * 0.3) + 'px "Pixelify Sans", monospace'; g.textAlign = 'center';
-  g.fillText('OP' + k, x + s * 0.5, y + s * 1.3);
+  opFloor(x, Y(row + 1), s, 2 * s, cave().floor);
+  // a timber lean-to shack with a lantern on a pole
+  g.fillStyle = '#5e3f26'; g.fillRect(x - s * 0.05, y, s * 1.1, s * 2);
+  g.fillStyle = 'rgba(0,0,0,.25)'; for (let q = 1; q < 6; q++) g.fillRect(x - s * 0.05, y + q * s * 0.33, s * 1.1, 1);
+  g.fillStyle = '#6a4a30'; g.fillRect(x, y + s * 2, s, W * 1.6);
+  g.fillStyle = 'rgba(255,190,110,.55)'; g.fillRect(x + s * 0.3, y + s * 2 + W * 0.3, s * 0.4, W * 1.1);
+  g.fillStyle = '#3a2b20'; g.fillRect(x + s * 0.15, y + s * 0.6, s * 0.7, s * 0.4); opText('OP' + k, x + s * 0.5, y + s * 0.9, s * 0.26, '#efe3d3');
+  const lx = x - s * 0.18, ly = y + s * 0.4;
+  g.fillStyle = '#3a2b20'; g.fillRect(lx, ly, 3, s * 1.8);
+  opGlow(lx + 1, ly, s * 1.6, '255,179,71', 0.35);
+  g.fillStyle = '#ffd98a'; g.beginPath(); g.arc(lx + 1, ly, s * 0.1, 0, 7); g.fill();
 }
 
 const partIds = () => ({ head: part('head').id, arms: part('arms').id, body: part('body').id, legs: part('legs').id });
@@ -1039,9 +1080,8 @@ function render(dt) {
       const raiseTarget = view === 'back' && P.digging.length > 0 ? 1 : 0;
       P.armRaise = (P.armRaise || 0) + (raiseTarget - (P.armRaise || 0)) * Math.min(1, dt * 14);
       if (P.hitFlash > 0 && Math.sin(time * 60) > 0) g.globalAlpha = 0.5;
-      drawWalker(g, X(P.x), Y(P.y) + s * 0.4, s * 1.15 / 64, view, P.face, time, ids, { moving, digging: P.digging.length > 0, raise: P.armRaise });
+      drawWalker(g, X(P.x), Y(P.y) + s * 0.4, s * 1.15 / 64, view, P.face, time, ids, { moving, digging: P.digging.length > 0, raise: P.armRaise, weapon: { id: S.weapon, mk: weaponMk(S.weapon), k: (P.attackT || 0) / 0.25 } });
       g.globalAlpha = 1;
-      if (!inTown()) drawWeaponArm(X(P.x), Y(P.y), s);
     }
   }
 

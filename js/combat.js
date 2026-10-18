@@ -422,16 +422,3 @@ function drawCombatFx(X, Y, s) {
     g.globalAlpha = 1;
   }
 }
-// The weapon on the walker's weapon arm (drawn over the walker), swinging when it attacks
-function drawWeaponArm(x, y, s) {
-  const a = aimVec(), sw = (P.attackT || 0) / 0.25, ang = Math.atan2(-a.y, a.x) + (weapon().kind === 'melee' ? (sw - 0.5) * 1.6 : 0);
-  const len = s * (0.45 + (weapon().kind === 'shot' ? 0.1 : 0)), bx = x + Math.cos(ang) * s * 0.25, by = y - s * 0.35 + Math.sin(ang) * s * 0.15;
-  const ex = bx + Math.cos(ang) * len, ey = by + Math.sin(ang) * len * 0.8;
-  g.strokeStyle = '#4A5059'; g.lineWidth = Math.max(2, s * 0.08); g.beginPath(); g.moveTo(bx, by); g.lineTo(ex, ey); g.stroke();
-  const id = S.weapon;
-  if (id === 'hammer') { g.fillStyle = '#8E96A0'; g.save(); g.translate(ex, ey); g.rotate(ang); g.fillRect(-s * 0.08, -s * 0.15, s * 0.16, s * 0.3); g.restore(); }
-  else if (id === 'wrench') { g.strokeStyle = '#a8a39c'; g.lineWidth = 2; g.beginPath(); g.arc(ex, ey, s * 0.08, 0, 7); g.stroke(); }
-  else if (id === 'rivet') { g.fillStyle = '#5D646E'; g.beginPath(); g.arc(ex, ey, s * 0.07, 0, 7); g.fill(); if (P.attackT > 0.15) { g.fillStyle = '#ffd98a'; g.beginPath(); g.arc(ex + Math.cos(ang) * s * 0.1, ey + Math.sin(ang) * s * 0.1, s * 0.06, 0, 7); g.fill(); } }
-  else if (id === 'bulwark') { g.fillStyle = 'rgba(134,207,220,.7)'; g.save(); g.translate(ex, ey); g.rotate(ang); g.fillRect(-s * 0.05, -s * 0.2, s * 0.1, s * 0.4); g.restore(); }
-  else if (id === 'stun') { g.fillStyle = '#f2c94c'; g.beginPath(); g.arc(ex, ey, s * 0.07 + Math.sin(time * 10) * s * 0.02, 0, 7); g.fill(); }
-}
