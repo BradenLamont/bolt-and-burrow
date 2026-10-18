@@ -15,7 +15,7 @@ const CODE = { d: 'dirt', c: 'clay', e: 'stone', b: 'basalt', l: 'loose', r: 'ru
   f: 'fossil', q: 'relic', n: 'found', t: 'post', x: 'bedrock', G: 'granite', O: 'obsidian', h: 'cache', K: 'keycache', v: 'chasm', B: 'bridge', w: 'oldbridge', p: 'pad',
   E: 'exit', A: 'gate', L: 'gatelocked', Q: 'cliff', Y: 'tree', D: 'pedestal', R: 'rail',
   z: 'sand', U: 'boulder', a: 'aquifer', W: 'water', y: 'gas', m: 'beam',
-  i: 'rust', j: 'slag', C: 'cinder', S: 'scrap', M: 'magma', V: 'lava', T: 'crust', N: 'vent', H: 'board' };
+  i: 'rust', j: 'slag', C: 'cinder', S: 'scrap', M: 'magma', V: 'lava', T: 'crust', N: 'vent', H: 'board', Z: 'botcache' };
 const CHAR = Object.fromEntries(Object.entries(CODE).map(([k, v]) => [v, k]));
 const ORES = new Set(['copper', 'silver', 'gold', 'crystal']);
 // Tiles you can walk on even though they aren't empty
@@ -34,7 +34,7 @@ const freshState = () => ({
   mods: {},                     // mods you've built: { drill: level }
   grid: [],                     // mods placed in the computer: [{ id, x, y }]
   flux: 0,
-  bots: 0,                      // nano-bots (the first comes with the Ember Idol)
+  crew: null,                   // the nano-bot crew (crew.js): bots, paths, sockets, chips, presets, the daily bot-cache
   tools: {},                    // tools on your belt: { blast: 2 }
   weapon: 'wrench',             // the weapon on your weapon arm
   weapons: { wrench: 1 },       // weapons you own and their Mk (1–3)
@@ -43,7 +43,7 @@ const freshState = () => ({
   hints: [],                    // first-time hints already shown
   contracts: null,              // today's contracts: { day, list: [{ id, n, x, have, claimed }], bonus }
   tut: null,                    // the Cave 1 tutorial: null = not started, a step number, or 'done'
-  ver: 13,                      // save layout version
+  ver: 14,                      // save layout version
   cave: -1,                     // where you are: -1 = town, -2 = inside Pip's shop, 0+ = a cave
   town: 0,                      // which town on the train line you're in (or whose cave you're in)
   lineOpen: false,              // the test unlock for the train line (it also opens with the Core Heart)
@@ -79,6 +79,13 @@ try {
       if (S.cave === 3) { S.cave = -1; S.pos = null; }
       if (S.relics > 0 || S.caves[0].relicDone) S.tut = 'done';
       S.ver = 13;
+    }
+    // v0.14: nano-bots became a crew (crew.js turns the old bot count into standard bots), and the TOWN door
+    // in each cave's entrance hall became the big crawler (old doors are cleared out of saved caves)
+    if (S.ver < 14) {
+      S.crewOld = S.bots || 0; delete S.bots;
+      S.caves.forEach(c => { if (c.world) c.world = c.world.replace(/E/g, '.'); });
+      S.ver = 14;
     }
   }
 } catch (e) { /* storage unavailable: play without saving */ }

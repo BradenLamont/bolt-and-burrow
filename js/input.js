@@ -17,6 +17,7 @@ addEventListener('keydown', e => {
   if (popup && popupKey(e)) { e.preventDefault(); return; }
   if (paused()) return;                                                  // menus are open: the game ignores keys
   if (trip) { if (!e.repeat) skipTrip(); return; }                      // any key skips the train trip
+  if (crawlBusy()) { if (!e.repeat) skipCrawl(); return; }            // and the crawler ride
   if (e.code === C.LINE_TEST_KEY && onTownMap()) lineTestPress();
   const d = KEYMAP[e.code];
   if (d) { e.preventDefault(); if (!held.includes(d)) held.push(d); }
@@ -41,6 +42,7 @@ function mouseToWorld(e) {
 }
 cv.addEventListener('pointerdown', e => {
   if (trip) { skipTrip(); return; }
+  if (crawlBusy()) { skipCrawl(); return; }
   if (e.pointerType === 'mouse') {
     if (e.button !== 0 || inTown()) return;
     const w = mouseToWorld(e); aimAt(w.x, w.y); attackHeld = true; attack();

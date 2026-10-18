@@ -5,18 +5,19 @@ A browser mining game: steer a robot with swappable parts down through the earth
 **Play:** open `index.html`, or publish the repo with GitHub Pages.
 
 ## Controls
-- Desktop: arrow keys or WASD to move. Push into blocks to dig them (standing between two blocks digs both). Up goes deeper into the cave. Stand on the conveyor and hold Up or Down to ride it. E (or the action button) opens the train car, shop stand, counter or outpost you're standing at (the game pauses while it's open; E or Esc closes it), uses a bridge pad, or boards the train. Walk into an open gate in town to enter a cave; walk out the TOWN door to leave. In town, walk through the SHOP door to go inside, or stand at a train car's door to use it.
+- Desktop: arrow keys or WASD to move. Push into blocks to dig them (standing between two blocks digs both). Up goes deeper into the cave. Stand on the conveyor and hold Up or Down to ride it. E (or the action button) opens the train car, shop stand, counter or outpost you're standing at (the game pauses while it's open; E or Esc closes it), uses a bridge pad, or boards the train. Walk into an open gate in town to enter a cave; to leave, walk up the big crawler's ramp at the cave mouth and press E (it drives you home; any key skips the ride). In town, walk through the SHOP door to go inside, or stand at a train car's door to use it.
 - Computer (Lab car): tap a mod, then tap a cell. With a mouse you can also drag mods onto the grid.
+- Job board (Computer car): tap a bot's button, then tap sockets in order to draw its path (tap the last one again to undo; hold the button to clear). Tap a chip, then a socket, to place it; tap a placed chip to take it back.
 - F or J: attack with your weapon arm the way you face (or click the cave with a mouse to aim; ATTACK button on phones). Hold to keep attacking.
 - Space or Q: use your active skill. 1–4: use tools from your belt (or tap the buttons by Recall).
-- Esc or P (or the ⏸ button): the pause menu, with Mech & cargo, Train cars, Map, and Settings & hints (sound, volume, zoom, full screen, backup, reset, and every hint you've seen). M: sound on/off. ⛶ button: full screen.
+- Esc or P (or the ⏸ button): the pause menu, with Mech & cargo, Bots, Train cars, Map, and Settings & hints (sound, volume, zoom, full screen, backup, reset, and every hint you've seen). M: sound on/off. ⛶ button: full screen.
 - Phone: touch and drag anywhere on the cave for a joystick.
 - Recall button: emergency trip back to the cave entrance, keeping half your ore.
 
 ## Files
 - `index.html` – page layout and script load order
 - `css/style.css` – look and layout
-- `js/config.js` – every balance number (part stats, costs, blocks, conveyor, relic, materials, mods, nano-bots)
+- `js/config.js` – every balance number (part stats, costs, blocks, conveyor, relic, materials, mods, the nano-bot crew, chips, crawlers)
 - `js/state.js` – shared game state, saving, helpers
 - `js/sound.js` – sound effects (made in code, no sound files) and mute
 - `js/world.js` – the town and the three caves: generation, conveyor and outposts, chasms and bridges, caches, relic chambers, moving between town and caves
@@ -26,12 +27,14 @@ A browser mining game: steer a robot with swappable parts down through the earth
 - `js/trip.js` – riding the train between towns (boarding, the drilling scene, unloading)
 - `js/combat.js` – the weapon arm, enemies, bosses and the hull
 - `js/loot.js` – ore pixels, ore drops and the magnet, and the Computer car's Flux upgrades
-- `js/base.js` – the train base: storage, shop, forge, computer and mods, nano-bots
+- `js/base.js` – the train base: storage, shop, forge, computer and mods
 - `js/walker.js` – the Canopy Walker mech (every part, every facing, walk and dig animation)
-- `js/render.js` – drawing the cave, town, train, effects, the minimap and the nano-bot window
+- `js/render.js` – drawing the cave, town, train, effects and the minimap
 - `js/ui.js` – HUD, the tip line, key cues, and the pop-ups for train cars, shop stands, the counter and outposts
 - `js/menu.js` – the pause menu tabs, settings, full screen and the nano-bot box
 - `js/contracts.js` – the daily contracts board
+- `js/crew.js` – the nano-bot crew: bots and traits, jobs, the job board (chips and paths), fusing, presets, the daily bot-cache, crew contracts, the Bots tab and the away report
+- `js/crawler.js` – mobile outposts: the big crawler's ride home and the halfway crawler driving out
 - `js/tutorial.js` – Scout's first-run tutorial in Cave 1
 - `js/input.js` – keyboard and touch joystick
 - `js/main.js` – start-up and the main loop
@@ -222,6 +225,35 @@ A browser mining game: steer a robot with swappable parts down through the earth
 - Halfway outposts are a timber shack with a lantern, beside plank decking around the conveyor (the pad you stand on)
 - Same look in every cave, Hollowmouth and Rustvale (concept A from the concept board)
 
+## v0.14 – the nano-bot crew and mobile outposts
+**The crew**
+- Nano-bots are now a crew. Scout (the tutorial drone) joins as your first bot when the tutorial ends; it only does the Scout job. Standard bots (no trait, and they can be renamed) come with the Ember Idol, the Core Heart and the Foundry Heart, each with a chip or two
+- Eight unique bots, each with its own look, movement and one fixed trait (no levelling): Scout, Sparky (Guard zaps chain to a second enemy), Patch (better repairs, and gives back half the battery a cave-in costs), Smelt (Refine: 35% double output), Magpie (+1 magnet, and on Haul it grabs ore in range instantly), Tick (+4 h for base jobs while you're away), Dowser (marks hidden water and lava pockets) and Lucky (more coins from caches)
+- 4 bots work at once; the rest wait in the dock in the Computer car, and you can see them idling through its window
+- Jobs: Flux and Refine are base jobs that keep working while you're away (Refine turns stored ore into the best material you can afford). Repair, Scout, Haul and Guard are cave jobs: those bots fly around your mech and you can see them work (zaps, heals, scan rings, haul beams)
+
+**The job board**
+- The nano-bot window is now the job board: 8 chip sockets, and each equipped bot rides its own coloured path (cyan, orange, green, violet). Draw paths and place chips in the Computer car's Job board tab
+- A bot gets the bonus of every chip on its path (a chip on two paths counts for both). Paths of up to 4 sockets loop in 12 s; each socket past 4 adds 1.5 s. A bot with no path does the DVD-logo bounce with no bonuses
+- With no chips a Flux bot still makes 10 Flux a minute, as before
+- Chips: Flux Amp, Forge Accelerator, Repair Coil, Scout Lens, Haul Magnet, Guard Capacitor and Bus (bot speed). Fuse 3 matching Mk I chips into a Mk II. Overcharged chips (glowing red) give a big bonus with a drawback and only drop from the daily bot-cache and Rustvale treasure caches
+- Chips come from the daily bot-cache, the crew contract, first boss kills and Pip's chip of the day (for Flux at his counter)
+- Three saved layouts (chips and paths) to switch between
+
+**Around the crew**
+- Daily bot-cache: hidden in one of your open caves each day. Follow its signal in the tip line (faint, stronger, strong); it pings on the minimap when you're close. It always pays coins, Flux and a chip, with a 20% chance of a unique bot, guaranteed by the 7th cache without one. A unique you already have becomes an Overcharged chip
+- A Bots tab in the pause menu: the collection log (silhouettes for bots you haven't found), renaming, and where today's bot-cache is
+- "While you were away": a report of what each bot did while the game was closed
+- A crew contract each day on the contracts board (bot loops, Guard zaps, Repair patches, Refine bots, or finding the bot-cache), paying a chip as well
+- Scout introduces the job board, and every bot has its own chirp
+
+**Mobile outposts**
+- The entrance outpost is a big crawler parked at the cave mouth, replacing the TOWN door. Walk up its ramp and press E: the ramp folds up, the horn sounds and it drives off, then rolls out of the cave's gate in town, lets you out and backs into the tunnel. Any key skips the ride
+- Building the halfway outpost sends a small crawler up the conveyor, its headlights cutting through the dark, and it unfolds its legs, step and lantern at 25 m
+- A Haul bot on your crew rides on the big crawler's ore hopper, which fills up as your storage does
+- Saves: your existing nano-bots become standard bots on the crew. Saved caves get the crawler in place of the old door
+- Balancing sheet: a Nano-bot crew tab (loop times and Flux per minute by path length and chips, other jobs, the bot-cache odds)
+
 ## The plan (agreed October 2026)
 
 ### v0.8 – the train base, materials and the computer (done)
@@ -253,12 +285,12 @@ A browser mining game: steer a robot with swappable parts down through the earth
 - Active skills (1 at a time): dash, drill burst, scan pulse, shield, charged attack. The nano-bots recharge them; some also cost battery
 
 ### Done since
-- v0.10 the Drill Liner and Town 2 · v0.11 split dig and weapon arms, enemies and bosses · v0.12 ore drops and Flux upgrades · v0.12.1 full screen · v0.13 Rustvale, daily contracts, the tutorial, lava hazards hinted by glow
+- v0.10 the Drill Liner and Town 2 · v0.11 split dig and weapon arms, enemies and bosses · v0.12 ore drops and Flux upgrades · v0.12.1 full screen · v0.13 Rustvale, daily contracts, the tutorial, lava hazards hinted by glow · v0.14 the nano-bot crew, the job board and mobile outposts
 
 ### Saved for later (grouped)
 Ideas we've talked about but held off on, in one place.
 
-**Next major update**
+**Next up**
 - Pilot customization (the pilot robot is separate from the mech): colours, antenna or hat
 
 **Gear and loot**
@@ -273,9 +305,6 @@ Ideas we've talked about but held off on, in one place.
 - A computer expansion (+2 cells) at the end of each town, installed with Flux
 
 **Nano-bots**
-- Nano-bot jobs: Refine, Repair, Scout (with an offline cap)
-- More nano-bots with their own movement patterns, and ways for them to interact with each other and the player
-- Spend Flux to speed up the nano-bot's paths or upgrade the chips
 - A nano-bot widget outside the game (much later)
 
 **Caves (left over from v0.9)**

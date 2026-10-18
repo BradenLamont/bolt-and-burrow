@@ -217,7 +217,7 @@ function caveIn(c, r) {
     T[idx(cc, rr)] = 'rubble';
   }
   P.shake = 0.35;
-  if (Math.hypot(c + 0.5 - P.x, r + 0.5 - P.y) < R.hitRadius) hurt('cave-in', 'Cave-in!', 'Unstable rock collapsed on you.');
+  if (Math.hypot(c + 0.5 - P.x, r + 0.5 - P.y) < R.hitRadius && hurt('cave-in', 'Cave-in!', 'Unstable rock collapsed on you.')) crewAfterCaveIn();
 }
 
 // Walking into a boulder pushes it one block if the space beyond is open

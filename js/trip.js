@@ -92,4 +92,4 @@ function craneTarget() {
   const m = mechState();
   return m.where === 'hook' ? m : null;
 }
-const walkerHidden = () => !!trip && mechState().where !== 'out';
+const walkerHidden = () => (!!trip && mechState().where !== 'out') || crawlHides();

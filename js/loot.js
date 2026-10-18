@@ -34,7 +34,7 @@ function pickupFloat(type) {
   }
   lastPick = { type, n: 1, f: floatText(P.x, P.y + 0.8, '+' + label, C.BLOCKS[type].ore) };
 }
-const magnetRange = () => C.ORE_DROP.magnet + coreVal('magnet');
+const magnetRange = () => C.ORE_DROP.magnet + coreVal('magnet') + (crewHas('magpie') ? 1 : 0);   // Magpie adds 1
 let fullWarnT = 0;
 function updateDrops(dt) {
   if (inTown()) { drops = []; return; }

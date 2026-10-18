@@ -30,6 +30,14 @@ function buildOutpost(k) {
   T[idx(BELT + 2, row - 1)] = 'post';
 }
 
+// The big crawler's footprint at the cave mouth (it replaced the old hut and TOWN door in v0.14): solid where
+// it stands, with its ramp clear beside it. Saved caves get the same footprint when they load.
+function parkCrawler() {
+  const B = C.BASE_BUILDING, R = C.CRAWLER.ramp;
+  for (let r = B.rows[0]; r <= B.rows[1]; r++) for (let c = B.cols[0]; c <= B.cols[1]; c++) T[idx(c, r)] = 'found';
+  for (let r = R.rows[0]; r <= R.rows[1]; r++) for (let c = R.col; c <= R.col + 1; c++) if (T[idx(c, r)] === 'found' || T[idx(c, r)] === 'exit') T[idx(c, r)] = null;
+}
+
 // ---------- Bridges ----------
 // A pad deploys the bridge in the two chasm cells beyond it (deeper into the cave), using one of
 // this cave's bridge keys.
@@ -167,9 +175,7 @@ function genCave() {
     T[idx(c, r)] = 'vent'; n++;
   }
   // 6. The entrance outpost and exit door, outposts and the relic
-  const B = C.BASE_BUILDING;
-  for (let r = B.rows[0]; r <= B.rows[1]; r++) for (let c = B.cols[0]; c <= B.cols[1]; c++) T[idx(c, r)] = 'found';
-  T[idx(C.EXIT.col, C.EXIT.row)] = 'exit';
+  parkCrawler();
   for (let k = 1; k <= cs.outposts; k++) buildOutpost(k);
   // 7. Bosses: a hall before the relic chamber for a mini-boss, or (Cave 3) a boss room that replaces it.
   //    The big boss carries the relic, so it isn't placed in the rock.
@@ -260,11 +266,13 @@ function loadArea() {
     T = Array.from(cs.world, ch => (ch === '.' ? null : CODE[ch] || null));
     SEEN = cs.seen && cs.seen.length === n ? Uint8Array.from(cs.seen, ch => Number(ch) || 0) : new Uint8Array(n);
     DECO = cs.deco && cs.deco.length === n ? Uint8Array.from(cs.deco, ch => Number(ch) || 0) : new Uint8Array(n);
+    parkCrawler();
   } else genCave();
+  placeDailyCache();   // today's bot-cache (crew.js)
 }
 function arrive(x, y, dir) {
   P.x = x; P.y = y; P.dir = dir; P.digging = [];
-  clearHazards(); flares.length = 0; clearDrops(); lastCell = -1; markSeen(); spawnFoes();
+  clearHazards(); clearMarks(); flares.length = 0; clearDrops(); lastCell = -1; markSeen(); spawnFoes();
   resizeMinimap(); resize();
   [camX, camY] = cameraTarget();
   save(); updateUI();
@@ -280,16 +288,16 @@ function enterCave(k) {
   if (!S.seenNotes.includes(cv.id)) { S.seenNotes.push(cv.id); toast(caveLabel(k) + ': ' + cv.name, cv.note); }
   else toast(null, caveLabel(k) + ': ' + cv.name);
 }
-// Walk out of a cave's exit door
-function goToTown() {
-  sfx('door');
+// Back to town (the crawler ride drops you at the cave's gate)
+function goToTown(quiet) {
+  if (!quiet) sfx('door');
   const from = S.cave;
   stashCave();
   S.cave = -1;
   loadArea();
   const gk = Math.max(0, TOWN().gates.indexOf(from));
   arrive(C.TOWN.gates[gk] + 0.5, C.TOWN.gateRow - 1.5, 'down');
-  toast(null, 'Back in town.');
+  if (!quiet) toast(null, 'Back in town.');
 }
 // Walk through the SHOP door in town, and back out again
 function enterShop() {

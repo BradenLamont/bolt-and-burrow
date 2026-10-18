@@ -74,8 +74,11 @@ function updateTutorial(dt) {
 }
 function tutDigged() { if (tutActive()) tutDug++; }
 function endTutorial(skipped) {
-  S.tut = 'done'; scout.leaving = 1.5; tutGrub = null; save();
-  if (skipped) toast('Scout', 'No problem! I\'ll be on the train. The Ember Idol waits at the far end of this cave.');
+  S.tut = 'done'; scout.leaving = 1.5; tutGrub = null;
+  // Scout joins the crew as its first bot, with a couple of chips for the job board
+  if (!crewCount() || !crew().bots.some(b => b.type === 'scout')) { addBot('scout'); giveChip('scout', 1); giveChip('flux', 1); }
+  save();
+  setTimeout(() => toast('Scout joined your crew!', 'I\'m your first nano-bot. I\'ll fly with you and light up the rock. Visit the Computer car on the train and I\'ll show you the job board.'), skipped ? 0 : 7500);
   updateUI();
 }
 function drawTutorial(X, Y, s, W) {

@@ -99,7 +99,12 @@ function claimRelic() {
   sfx('relic');
   if (k === CORE) extra = ' Hollowmouth is complete: the active row of your computer is open, and the train line to Rustvale is open. Board at the Engine car!';
   if (k === C.CAVES.length - 1) extra = ' Rustvale is complete! The old foundry is quiet at last.';
-  if (k === 0 && !S.bots) { S.bots = 1; extra = ' A nano-bot was sealed inside it! It now makes Flux for your computer, even while you\'re away.'; }
+  // the Ember Idol, the Core Heart and the Foundry Heart each hold a standard nano-bot (and a chip or two)
+  const gift = { 0: ['flux'], [CORE]: ['bus', 'forge'], [C.CAVES.length - 1]: ['guard'] }[k];
+  if (gift) {
+    const b = addBot('standard'); gift.forEach(t => giveChip(t, k === C.CAVES.length - 1 ? 2 : 1));
+    extra += ' A nano-bot was sealed inside it! ' + botName(b) + (b.slot >= 0 ? ' is on your job board, making Flux' : ' is waiting in the dock in the Computer car') + '. It came with ' + gift.map(t => C.CHIPS[t].name).join(' and ') + ' chip' + (gift.length > 1 ? 's' : '') + '.';
+  }
   toast(cv.relic.name + ' recovered!', 'You claimed ' + fmt(cv.relic.reward) + ' coins. ' +
     (next ? 'Its pedestal in town now glows, and the gate to ' + caveLabel(k + 1) + ', ' + next.name + ', is open.' : k === CORE ? '' : 'Nice work. That\'s everything in this cave.') + extra);
   if (onTownMap()) genTown();
@@ -116,7 +121,7 @@ function breakBlock(c, r) {
   if (B.hp >= 9) P.shake = Math.max(P.shake, 0.12);
   contractEvent('dig'); tutDigged();
   if (t === 'scrap') floatText(c + 0.5, r + 0.9, 'Salvage!', '#8E96A0');
-  sfx(B.value || t === 'relic' || t === 'cache' || t === 'keycache' ? 'ore' : 'break');
+  sfx(B.value || t === 'relic' || t === 'cache' || t === 'keycache' || t === 'botcache' ? 'ore' : 'break');
   // every block pays a few coins (more for hard rock and deeper caves)
   if (B.coin) {
     const coins = Math.max(1, Math.round(B.coin * cave().coinMult * (1 + modVal('prospector'))));
@@ -133,6 +138,7 @@ function breakBlock(c, r) {
     save();
   }
   if (t === 'cache') openCache(c, r);
+  if (t === 'botcache') openBotCache(c, r);
   if (t === 'keycache') {
     S.keys[S.cave]++;
     const coins = Math.round(C.CACHE.coins[0] * cave().valueMult);
@@ -144,7 +150,7 @@ function breakBlock(c, r) {
 }
 // Treasure cache: coins plus a few pieces of this cave's best ore
 function openCache(c, r) {
-  const coins = Math.round((C.CACHE.coins[0] + Math.random() * (C.CACHE.coins[1] - C.CACHE.coins[0])) * cave().valueMult);
+  const coins = Math.round((C.CACHE.coins[0] + Math.random() * (C.CACHE.coins[1] - C.CACHE.coins[0])) * cave().valueMult * (crewHas('lucky') ? 1.25 : 1));
   S.coins += coins;
   const ores = Object.keys(cave().ores), best = ores[ores.length - 1];
   const got = C.CACHE.ores;
@@ -152,7 +158,8 @@ function openCache(c, r) {
   contractEvent('cache');
   burst(c + 0.5, r + 0.5, '#F2C94C', 24);
   floatText(c + 0.5, r + 0.9, '+' + fmt(coins), '#F2C94C');
-  toast('Treasure cache!', '+' + fmt(coins) + ' coins' + (got ? ' and ' + got + ' ' + C.BLOCKS[best].label : '') + '.');
+  const chip = cacheChip();   // Rustvale caches sometimes hold an Overcharged chip
+  toast('Treasure cache!', '+' + fmt(coins) + ' coins' + (got ? ' and ' + got + ' ' + C.BLOCKS[best].label : '') + (chip ? ', and an ' + chip + ' chip!' : '') + '.');
 }
 // Hard rock the current arms can't break
 const HARD_HINT = {
@@ -283,7 +290,6 @@ function finishMove() {
   if (!inTown()) contractEvent('depth', depthOf(pRow()));
   const here = at(pCol(), pRow());
   if (here === 'gate') return enterCave(gateCave(C.TOWN.gates.indexOf(pCol())));
-  if (here === 'exit') return goToTown();
   if (here === 'shopdoor') return inShop() ? leaveShop() : enterShop();
   if (padReady(pCol(), pRow())) hintOnce('pad', 'Bridge pad', S.keys[S.cave] ? 'Press E or tap Deploy to use a ' + keyName(S.cave) + '.' : 'You need a ' + keyName(S.cave) + '. Marked caches before the chasm hold them.');
 }
@@ -308,6 +314,7 @@ function markSeen() {
 }
 // The action button: deploy a bridge when standing on a ready bridge pad
 function actionHere() {
+  if (atRamp() && !crawlBusy()) return { label: 'Board crawler · ride to town', run: startCrawl };
   const pk = spotPanel();   // train cars, shop stands, Pip's counter and outposts open as pop-ups
   if (pk) return { label: 'Open ' + PANEL_NAME[pk](), run: () => openPopup(pk) };
   if (townSpot() === 'engine' && !trip) return { label: lineIsOpen() ? 'Board train · to ' + C.TOWNS[(S.town + 1) % C.TOWNS.length].name : 'Board train', run: startTrip };

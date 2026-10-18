@@ -74,12 +74,13 @@ new ResizeObserver(resize).observe(stage);
 new ResizeObserver(resize).observe($('botView'));
 
 // Camera targets: keep the robot centred, but don't scroll past the yard at the bottom
+let camFocus = null;   // { x, y } while a cutscene (the halfway crawler driving out) holds the camera
 function cameraTarget() {
-  const s = CELL, worldW = COLS * s;
-  const tx = worldW <= VW ? (worldW - VW) / 2 : Math.max(0, Math.min(worldW - VW, P.x * s - VW / 2));
+  const s = CELL, worldW = COLS * s, F = camFocus || P;
+  const tx = worldW <= VW ? (worldW - VW) / 2 : Math.max(0, Math.min(worldW - VW, F.x * s - VW / 2));
   if (inShop()) return [(C.SHOP.door + C.SHOP.doorW / 2) * s - VW / 2, -(padTop + (VH - padTop - padBot - ROWS * s) / 2) + s * 0.25];
   if (inTown()) return [tx, -(padTop + (VH - padTop - padBot - ROWS * s) / 2) + s * 0.25];   // the whole town fits between the HUD and controls
-  let ty = (ROWS - P.y) * s - VH * 0.5;
+  let ty = (ROWS - F.y) * s - VH * 0.5;
   ty = Math.min(ty, ROWS * s - VH + s * 2.2);   // at the cave mouth, leave a little room below so the mech isn't on the bottom edge
   ty = Math.max(ty, -s * 0.6);                  // or the top row
   return [tx, ty];
@@ -334,8 +335,8 @@ function drawWall(t, c, r, x, y, s, W) {
   if (t === 'counter') return drawCounter(c, r, x, y, s, W);
   if (t === 'boulder') return drawBoulder(c, r, x, y, s, W);
   if (t === 'board') return drawBoard(c, r, x, y, s, W);
-  const hidden = t === 'cache' ? seen !== 2 : (ORES.has(t) || t === 'fossil' || t === 'relic' || t === 'keycache' || t === 'gas' || t === 'aquifer' || t === 'magma') && !seen;
-  const look = hidden ? baseFor(c, r) : t;
+  const hidden = t === 'botcache' ? !botCacheShown(c, r) : t === 'cache' ? seen !== 2 : (ORES.has(t) || t === 'fossil' || t === 'relic' || t === 'keycache' || t === 'gas' || t === 'aquifer' || t === 'magma') && !seen;
+  const look = hidden || t === 'botcache' ? baseFor(c, r) : t;
   const base = look === 'shopwall' ? (garageShop() ? '#3B3F46' : '#3d2b1f') : look === 'cliff' && inTown() ? TOWN().look.cliff : C.BLOCKS[look].color || C.BLOCKS[baseFor(c, r)].color;
   const ty = y - W; // top face
   const front = at(c, r - 1);
@@ -390,6 +391,7 @@ function drawWall(t, c, r, x, y, s, W) {
     g.fillStyle = '#9fe3f0'; g.beginPath(); g.arc(x + s * 0.42, ty + s * 0.51, s * 0.08, 0, 7); g.fill();
     g.fillRect(x + s * 0.48, ty + s * 0.49, s * 0.2, s * 0.05); g.fillRect(x + s * 0.6, ty + s * 0.49, s * 0.04, s * 0.1);
   }
+  if (!hidden && t === 'botcache') drawBotCache(c, r, x, ty, s);
   if (!hidden && t === 'cache') { // a treasure cache the scanner has found
     g.fillStyle = '#5a3a1e'; rr2(g, x + s * 0.2, ty + s * 0.32, s * 0.6, s * 0.42, s * 0.05); g.fill();
     g.fillStyle = '#7a5230'; rr2(g, x + s * 0.2, ty + s * 0.24, s * 0.6, s * 0.16, s * 0.06); g.fill();
@@ -628,7 +630,7 @@ function drawTrain(X, Y, s, W) {
         const m = modAt(xx, yy), gx = cx - CPc.cols * cw / 2 + xx * cw, gy = cy - CPc.rows * ch / 2 + yy * ch;
         g.fillStyle = m ? modColor(m.id) : 'rgba(134,207,220,.12)'; g.fillRect(gx + 1, gy + 1, cw - 2, ch - 2);
       }
-      if (S.bots) { const a = time * 1.6; g.fillStyle = '#c9d3d6'; g.beginPath(); g.arc(cx + Math.cos(a) * rx * 0.75, cy + Math.sin(a) * ry * 0.7, s * 0.05, 0, 7); g.fill(); }
+      if (crewCount()) { const a = time * 1.6; g.fillStyle = '#c9d3d6'; g.beginPath(); g.arc(cx + Math.cos(a) * rx * 0.75, cy + Math.sin(a) * ry * 0.7, s * 0.05, 0, 7); g.fill(); }
       for (const wx of [x + s * 0.15, x + w - s * 0.75]) {
         g.fillStyle = '#0d2a33'; g.fillRect(wx, winY, s * 0.6, winH);
         g.fillStyle = 'rgba(134,207,220,' + (0.5 + Math.sin(time * 3 + wx) * 0.2) + ')';
@@ -654,7 +656,8 @@ function drawTrain(X, Y, s, W) {
       g.fillStyle = '#0d2a33'; g.fillRect(sx2, winY, sw, winH);
       { const ids = Object.keys(C.CORE), n = ids.length, bh = (winH - 6) / n; ids.forEach((id, k) => { g.fillStyle = 'rgba(134,207,220,.25)'; g.fillRect(sx2 + 3, winY + 3 + k * bh, sw - 6, Math.max(1, bh - 1)); g.fillStyle = '#86cfdc'; g.fillRect(sx2 + 3, winY + 3 + k * bh, (sw - 6) * coreLevel(id) / C.CORE[id].max, Math.max(1, bh - 1)); }); }
       g.fillStyle = '#0d2a33'; g.fillRect(x + w - s * 0.75, winY, s * 0.6, winH);
-      g.fillStyle = 'rgba(134,207,220,.7)'; g.font = '700 ' + Math.round(s * 0.16) + 'px "Pixelify Sans", monospace'; g.textAlign = 'center'; g.fillText(fmt(S.flux), x + w - s * 0.45, winY + winH * 0.7);
+      // the right window: docked nano-bots idling inside, or your Flux when the dock is empty
+      if (!drawDockWindow(x + w - s * 0.75, winY, s * 0.6, winH, s)) { g.fillStyle = 'rgba(134,207,220,.7)'; g.font = '700 ' + Math.round(s * 0.16) + 'px "Pixelify Sans", monospace'; g.textAlign = 'center'; g.fillText(fmt(S.flux), x + w - s * 0.45, winY + winH * 0.7); }
     }
     if (car.id !== 'engine') { // the door you stand in front of
       const dx = X(door) + s * 0.2;
@@ -1069,10 +1072,10 @@ function render(dt) {
       if (r === C.TOWN.gateRow) drawGates(X, Y, s, W);
       if (r === C.TOWN.station.railRow) { drawTrain(X, Y, s, W); drawTripMech(X, Y, s); }
     } else {
-      if (r === C.BASE_BUILDING.rows[0]) drawBaseBuilding(X, Y, s, W);
+      if (r === C.BASE_BUILDING.rows[1]) drawCaveCrawler(X, Y, s, W);   // the big crawler (the entrance outpost)
       if (r === BASE_ROWS - 1) drawCaveSign(X, Y, s);
     }
-    for (let k2 = 1; k2 <= outpostCount(); k2++) if (r === outpostRow(k2) - 1) drawOutpost(k2, X, Y, s, W);
+    for (let k2 = 1; k2 <= outpostCount(); k2++) if (r === outpostRow(k2) - 1) drawHalfwayCrawler(k2, X, Y, s, W);
     if (r === walkerRow && !walkerHidden()) {
       // The Canopy Walker: feet sit near the bottom of its block; it faces the way it last moved
       const view = P.dir === 'up' ? 'back' : P.dir === 'down' ? 'front' : 'side';
@@ -1115,6 +1118,7 @@ function render(dt) {
     };
     hole(px, py, lightRadius() * s);
     flares.forEach(fl => hole(X(fl.x), Y(fl.y), C.TOOLS.flare.radius * s * Math.min(1, fl.t / 3)));
+    crawlerLights(hole, X, Y, s);   // crawler headlights and lanterns light the dark
     g.drawImage(fogCv, 0, 0, VW, VH);
     flares.forEach(fl => { // the flare itself
       g.fillStyle = 'rgba(255,120,80,' + (0.6 + Math.sin(time * 20) * 0.3) + ')'; g.beginPath(); g.arc(X(fl.x), Y(fl.y), s * 0.12, 0, 7); g.fill();
@@ -1134,6 +1138,10 @@ function render(dt) {
       }
       if (t === 'fossil' && !SEEN[idx(c, r)] && dist <= lightRadius() + 2.5) { // an unseen fossil glows faintly when close
         g.fillStyle = 'rgba(234,223,196,' + (0.12 + Math.sin(time * 3) * 0.08) + ')'; g.beginPath(); g.arc(cx, cy, s * 0.45, 0, 7); g.fill();
+      }
+      if (t === 'botcache' && botCacheShown(c, r)) { // the bot-cache's antenna blinks through the dark
+        g.strokeStyle = 'rgba(134,207,220,' + (0.35 + Math.sin(time * 6) * 0.25) + ')'; g.lineWidth = 1.5;
+        g.beginPath(); g.arc(cx, cy, s * (0.42 + (time % 1) * 0.2), 0, 7); g.stroke();
       }
       if (t === 'cache' && SEEN[idx(c, r)] === 2) { // scanned caches ping through the dark
         g.strokeStyle = 'rgba(242,201,76,' + (0.35 + Math.sin(time * 4) * 0.2) + ')'; g.lineWidth = 1.5;
@@ -1158,6 +1166,8 @@ function render(dt) {
   }
 
   if (!inTown()) { drawFoes(X, Y, s, true); drawCombatFx(X, Y, s); }
+  drawCrewWorld(X, Y, s, W);
+  drawCrawlers(X, Y, s, W, 'over');
   // skill effects: scan pulse rings, the shield bubble and the drill-burst glow
   pulses.forEach(pl => {
     g.strokeStyle = 'rgba(134,207,220,' + (1 - pl.t) + ')'; g.lineWidth = 3;
@@ -1203,8 +1213,9 @@ function renderMinimap(dt) {
 // Draws the explored cave on any canvas, MM pixels per block (the minimap, and the pause menu's big map)
 function drawCaveMap(mg, MM, mcv) {
   mg.clearRect(0, 0, mcv.width, mcv.height);
+  const sg = dailySignal(), ping = sg && sg.dist < C.CREW.daily.ping;   // the bot-cache pings once you're close
   for (let r = 0; r < ROWS - 1; r++) for (let c = 0; c < COLS; c++) {
-    const i = idx(c, r); if (!SEEN[i] && r >= BASE_ROWS) continue;
+    const i = idx(c, r); if (!SEEN[i] && r >= BASE_ROWS && !(ping && T[i] === 'botcache')) continue;
     const t = T[i], y = (ROWS - 2 - r) * MM, x = c * MM;
     let col = '#4a3a2c';
     if (r < BASE_ROWS) col = isFloor(t) ? '#3c4a2c' : '#4b4038';
@@ -1217,6 +1228,7 @@ function drawCaveMap(mg, MM, mcv) {
     else if (t === 'relic') col = '#c9a2ff';
     else if (t === 'cache' && SEEN[i] === 2) col = '#f2c94c';
     else if (t === 'keycache') col = '#9fe3f0';
+    else if (t === 'botcache' && (SEEN[i] === 2 || ping)) col = Math.sin(time * 4) > 0 ? '#9fe3f0' : '#4a7a70';
     else if (ORES.has(t)) col = C.BLOCKS[t].ore;
     mg.fillStyle = col; mg.fillRect(x, y, MM, MM);
   }
@@ -1227,50 +1239,4 @@ function drawCaveMap(mg, MM, mcv) {
   if (MM > 3 || Math.sin(time * 8) > -0.4) { mg.fillStyle = '#9fe3f0'; mg.fillRect(P.x * MM - pd / 2, (ROWS - 1 - P.y) * MM - pd / 2, pd, pd); }
 }
 
-// ---------- Nano-bot window (its own panel) ----------
-// A circuit board with the nano-bot zipping between chips, making Flux.
-const CHIPS = [[0.18, 0.35], [0.45, 0.7], [0.72, 0.3], [0.86, 0.72]];
-function renderBots() {
-  // keep the canvas matched to the box (it changes size when the box shrinks, grows or reappears)
-  const cw = pcv.clientWidth, ch = pcv.clientHeight;
-  if (cw && ch && (Math.abs(cw - PW) > 0.5 || Math.abs(ch - PH) > 0.5)) [PW, PH] = fit(pcv, pg);
-  if (!cw || !ch) return;
-  const w = PW, h = PH;
-  pg.fillStyle = '#0d1714'; pg.fillRect(0, 0, w, h);
-  pg.strokeStyle = '#1d3a31'; pg.lineWidth = 2;
-  for (let k = 0; k < CHIPS.length; k++) {   // traces between the chips
-    const [ax, ay] = CHIPS[k], [bx, by] = CHIPS[(k + 1) % CHIPS.length];
-    pg.beginPath(); pg.moveTo(ax * w, ay * h); pg.lineTo(bx * w, ay * h); pg.lineTo(bx * w, by * h); pg.stroke();
-  }
-  pg.fillStyle = '#16302a'; for (let x = 8; x < w; x += 16) for (let y = 8; y < h; y += 16) pg.fillRect(x, y, 1, 1);
-  const cs = Math.max(14, Math.min(w, h) * 0.16);
-  CHIPS.forEach(([cx, cy], k) => {
-    pg.fillStyle = '#22262b'; pg.fillRect(cx * w - cs / 2, cy * h - cs / 2, cs, cs);
-    pg.fillStyle = '#8d9499'; for (let p = 0; p < 4; p++) { pg.fillRect(cx * w - cs / 2 - 3, cy * h - cs / 2 + 2 + p * cs / 4, 3, 2); pg.fillRect(cx * w + cs / 2, cy * h - cs / 2 + 2 + p * cs / 4, 3, 2); }
-    pg.fillStyle = 'rgba(134,207,220,' + (S.bots ? 0.35 + Math.sin(time * 2 + k) * 0.2 : 0.1) + ')'; pg.fillRect(cx * w - cs / 4, cy * h - cs / 4, cs / 2, cs / 2);
-  });
-  if (S.bots) {
-    // the bot follows the traces: along x, then along y, chip to chip
-    const t = (time * 0.35) % CHIPS.length, k = Math.floor(t), f = t - k;
-    const [ax, ay] = CHIPS[k], [bx, by] = CHIPS[(k + 1) % CHIPS.length];
-    const half = Math.abs(bx - ax) * w / (Math.abs(bx - ax) * w + Math.abs(by - ay) * h + 1e-6);
-    const x = f < half ? ax + (bx - ax) * (f / half) : bx, y = f < half ? ay : ay + (by - ay) * ((f - half) / (1 - half));
-    const bx2 = x * w, by2 = y * h - 4 + Math.sin(time * 8) * 1.5, r = Math.max(6, cs * 0.38);
-    pg.fillStyle = 'rgba(134,207,220,.18)'; pg.beginPath(); pg.arc(bx2, by2, r * 1.8, 0, 7); pg.fill();
-    pg.fillStyle = '#c9d3d6'; pg.beginPath(); pg.arc(bx2, by2, r, 0, 7); pg.fill();
-    pg.strokeStyle = '#d9813b'; pg.lineWidth = 2; pg.beginPath(); pg.arc(bx2, by2, r * 0.75, Math.PI * 0.15, Math.PI * 0.85); pg.stroke();
-    pg.fillStyle = '#16110d'; pg.beginPath(); pg.arc(bx2, by2 - r * 0.1, r * 0.42, 0, 7); pg.fill();
-    pg.fillStyle = '#86cfdc'; pg.beginPath(); pg.arc(bx2 + Math.sign(Math.cos(time)) * r * 0.08, by2 - r * 0.1, r * 0.2, 0, 7); pg.fill();
-    // a spark of Flux each time it reaches a chip
-    if (f < 0.25) { pg.globalAlpha = 1 - f * 4; pg.fillStyle = '#86cfdc'; pg.font = '600 11px "IBM Plex Mono", monospace'; pg.textAlign = 'center'; pg.fillText('+flux', ax * w, ay * h - cs * 0.7 - f * 30); pg.globalAlpha = 1; }
-  }
-  pg.textAlign = 'left'; pg.fillStyle = '#86cfdc'; pg.font = '500 16px "Pixelify Sans", monospace';
-  pg.fillText('FLUX ' + fmt(S.flux), 10, 22);
-  if (!S.bots) {
-    pg.fillStyle = 'rgba(11,8,6,.7)'; pg.fillRect(0, 0, w, h);
-    pg.fillStyle = '#a8937c'; pg.textAlign = 'center'; pg.font = '500 16px "Pixelify Sans", monospace';
-    pg.fillText('No nano-bot yet', w / 2, h / 2 - 4);
-    pg.font = '400 11px "IBM Plex Mono", monospace';
-    pg.fillText('Sealed in the Ember Idol, Cave 1', w / 2, h / 2 + 14);
-  }
-}
+// (The nano-bot window, the job board, is drawn in crew.js)

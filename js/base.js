@@ -151,13 +151,4 @@ function upgradeMod(id) {
   save();
 }
 
-// ---------- Nano-bots ----------
-const fluxRate = () => S.bots * C.NANOBOT.fluxPerMin / 60;   // Flux per second
-function updateBots(dt) { S.flux += fluxRate() * dt; }
-// Called on start-up: Flux made while the game was closed (capped)
-function offlineFlux() {
-  const away = Math.min((Date.now() - S.last) / 1000, C.NANOBOT.offlineCapHours * 3600);
-  const gain = Math.floor(away * fluxRate());
-  if (away > 30 && gain > 0) { S.flux += gain; return gain; }
-  return 0;
-}
+// (Nano-bots moved to crew.js in v0.14)

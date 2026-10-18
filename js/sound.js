@@ -65,6 +65,10 @@ const SFX = {
   pull:   () => { tone(120, 0.35, 'sine', 0.2, 300); noise(0.3, 0.1, 400, 1); },
   pop:    () => { tone(500, 0.08, 'triangle', 0.12, 200); noise(0.08, 0.15, 1500, 1); },
   spit:   () => { noise(0.15, 0.12, 1800, 2); tone(300, 0.1, 'sine', 0.06, 500); },
+  horn:   () => { tone(220, 0.35, 'sawtooth', 0.12, 215); tone(277, 0.35, 'sawtooth', 0.1, 272); tone(220, 0.25, 'sawtooth', 0.12, 215, 0.45); tone(277, 0.25, 'sawtooth', 0.1, 272, 0.45); },
+  ramp:   () => { noise(0.3, 0.2, 260, 1.5); tone(120, 0.25, 'square', 0.08, 80); tone(600, 0.05, 'square', 0.06, 500, 0.28); },
+  engine: () => { noise(0.4, 0.14, 120 + Math.random() * 60, 1.2); tone(55, 0.35, 'sawtooth', 0.06, 50); },
+  unfold: () => { [0, 0.12, 0.24, 0.36].forEach(d => tone(400 - d * 300, 0.08, 'square', 0.06, 300, d)); noise(0.2, 0.12, 900, 2, 0.4); },
   relic:  () => { [523, 659, 784, 1047].forEach((f, k) => tone(f, 0.25, 'triangle', 0.15, f, k * 0.12)); },
 };
 let lastDig = 0;

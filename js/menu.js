@@ -1,5 +1,5 @@
 // Bolt & Burrow — the pause menu (Esc, P or the ⏸ button), full screen, and the nano-bot box.
-// Tabs: Mech & cargo, Train cars (a read-only look; use a car at its door), Map, Settings & hints.
+// Tabs: Mech & cargo, Bots (the crew's collection log), Train cars (a read-only look; use a car at its door), Map, Settings & hints.
 // The game is paused while the menu is open. The forge and nano-bots keep working, as they do while you're away.
 'use strict';
 
@@ -37,7 +37,7 @@ function mechTab() {
     row('Computer mods (Lab car)', mods.length ? mods.join(', ') : 'None installed') +
     row('Flux upgrades (Computer car)', core.length ? core.join(', ') : 'None yet') +
     row('Tool belt · ' + beltTypes().length + '/' + beltSlots() + ' slots', beltTypes().length ? beltTypes().map(id => C.TOOLS[id].name + ' ×' + S.tools[id]).join(', ') : 'Empty', 'Buy tools at Pip\'s counter.') +
-    row('Nano-bots', S.bots ? S.bots + ' · ' + fmt(fluxRate() * 60) + ' Flux a minute' : 'None yet', S.bots ? 'They keep working while you\'re away (up to ' + C.NANOBOT.offlineCapHours + ' h).' : 'The first is sealed inside the Ember Idol, Cave 1\'s relic.') + '</div>';
+    row('Nano-bot crew', crewCount() ? crewCount() + ' bot' + (crewCount() > 1 ? 's' : '') + ' · ' + equipped().length + ' equipped · ' + fmt(crewFluxPerMin()) + ' Flux a minute' : 'None yet', crewCount() ? 'Base jobs keep working while you\'re away (up to ' + offlineCap() + ' h). See the Bots tab.' : 'Scout joins your crew when you finish the Cave 1 tutorial.') + '</div>';
   h += '<small class="sub">Cargo · ' + cargoCount() + '/' + cargoMax() + '</small>' + cargoList();
   return h;
 }
@@ -78,7 +78,7 @@ function settingsTab() {
     `<div class="row"><div><small>Nano-bot box</small>${seg('botbox', [['open', 'Shown'], ['mini', 'Shrunk']], $('botBox').classList.contains('mini') ? 'mini' : 'open')}<span>Shrunk, it shows just your Flux. In town it always shrinks so your train stays in view.</span></div></div></div>`;
   h += '<small class="sub">Controls</small>' + (touchUI
     ? '<dl class="keylist"><dt>Drag</dt><dd>Move (the joystick appears under your thumb); push into blocks to dig</dd><dt>Buttons</dt><dd>Attack, skill, tools, recall, and Open / Board at stations</dd><dt>&#x23F8;</dt><dd>This menu</dd></dl>'
-    : '<dl class="keylist"><dt>Arrows / WASD</dt><dd>Move; push into blocks to dig; up goes deeper</dd><dt>E</dt><dd>Open the car, stand, counter or outpost you\'re at; bridge pads; board the train</dd><dt>F / J or click</dt><dd>Attack (click aims)</dd><dt>Space / Q</dt><dd>Active skill</dd><dt>1–4</dt><dd>Tools on your belt</dd><dt>Esc / P</dt><dd>This menu (or close a pop-up)</dd><dt>M</dt><dd>Sound on / off</dd></dl>');
+    : '<dl class="keylist"><dt>Arrows / WASD</dt><dd>Move; push into blocks to dig; up goes deeper</dd><dt>E</dt><dd>Open the car, stand, counter or outpost you\'re at; bridge pads; board the train or the crawler</dd><dt>F / J or click</dt><dd>Attack (click aims)</dd><dt>Space / Q</dt><dd>Active skill</dd><dt>1–4</dt><dd>Tools on your belt</dd><dt>Esc / P</dt><dd>This menu (or close a pop-up)</dd><dt>M</dt><dd>Sound on / off</dd></dl>');
   h += '<small class="sub">Save backup</small>' + backupView();
   h += `<small class="sub">Start over</small><div class="row"><div><span>Wipes all progress in this browser. Make a backup first if you might want it back.</span></div><button type="button" data-act="reset" class="${resetArmed ? 'armed' : ''}">${resetArmed ? 'Click again to reset' : 'Reset progress'}</button></div>`;
   const log = (S.hintLog || []).slice().reverse();

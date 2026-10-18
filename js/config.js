@@ -11,9 +11,8 @@ const CONFIG = {
   COLS: 25,          // cave width in blocks (the outer columns are bedrock walls)
   ROWS: 62,          // cave length in blocks: yard + about 55 m of cave (the last row is bedrock)
   BASE_ROWS: 4,      // rows 0–3 of every cave are its entrance hall (with the entrance outpost)
-  BASE_BUILDING: { cols: [3, 6], rows: [0, 1] }, // the entrance outpost building
+  BASE_BUILDING: { cols: [3, 6], rows: [0, 2] }, // the big crawler parked at the cave mouth (the entrance outpost)
   SPAWN: { col: 9, row: 2 },                     // where you arrive in a cave
-  EXIT: { col: 9, row: 0 },                      // the door back to town
 
   // ----- The town -----
   // Walk into an open gate to enter that cave. A cave's gate opens once you bring home
@@ -128,7 +127,8 @@ const CONFIG = {
     granite:  { hp: 10, coin: 4, needs: 1, color: '#8c8286', label: 'Granite' },
     obsidian: { hp: 16, coin: 6, needs: 2, color: '#241d2c', label: 'Obsidian' },
     cache:   { hp: 4 },                         // a hidden treasure cache
-    keycache: { hp: 4 },                        // a marked cache holding one of this cave's bridge keys
+    keycache: { hp: 4 },
+    botcache: { hp: 4 },                        // the daily bot-cache (v0.14), found by its signal                        // a marked cache holding one of this cave's bridge keys
     chasm:   { hp: Infinity },                  // a drop you can't cross or dig
     bridge:  { hp: Infinity },                  // a deployed bridge (walkable)
     oldbridge: { hp: Infinity },                // an old bridge (walkable)
@@ -396,6 +396,14 @@ const CONFIG = {
       { id: 'depth',   text: n => 'Reach ' + n + ' m deep in any cave',         n: [20, 30, 40, 50],   coins: 80,  flux: 15 },
       { id: 'tools',   text: n => 'Use ' + n + ' tools from your belt',         n: [2, 3, 4, 5],       coins: 70,  flux: 10 },
     ],
+    // One crew contract a day once you have a bot (separate from the three; it pays a Mk I chip too)
+    crew: [
+      { id: 'loops',    text: n => 'Have your bots finish ' + n + ' loops',     n: [20, 30, 40, 60],  coins: 70,  flux: 20 },
+      { id: 'zaps',     text: n => 'Guard bots zap enemies ' + n + ' times',    n: [8, 12, 16, 24],   coins: 80,  flux: 20, needs: 'guard' },
+      { id: 'heals',    text: n => 'Repair bots patch your hull ' + n + ' times', n: [5, 8, 12, 16],  coins: 70,  flux: 20, needs: 'repair' },
+      { id: 'botrefine', text: n => 'Have Refine bots make ' + n + ' materials', n: [3, 5, 8, 12],    coins: 80,  flux: 20, needs: 'refine' },
+      { id: 'botcache', text: () => 'Find today\'s bot-cache',                 n: [1, 1, 1, 1],      coins: 90,  flux: 25 },
+    ],
     perDay: 3, tierMult: 2.2, bonus: { coins: 150, flux: 40 },   // bonus for finishing all three (× tier for coins)
   },
 
@@ -403,8 +411,70 @@ const CONFIG = {
   // Scout, a little guide drone, shows new players the basics in Cave 1, then flies home to the train.
   TUTORIAL: { digBlocks: 5 },
 
-  // ----- Nano-bots -----
-  // The first nano-bot comes with the Ember Idol (Cave 1's relic). Nano-bots make Flux, even while
-  // you're away (up to offlineCapHours).
-  NANOBOT: { fluxPerMin: 10, offlineCapHours: 8 },
+  // ----- The nano-bot crew (v0.14) -----
+  // Bots: Scout joins when the tutorial ends; standard bots come with the Ember Idol, the Core Heart and the
+  // Foundry Heart; unique bots (one fixed trait each, no levelling) come from the daily bot-cache.
+  // Up to equipMax bots are equipped (each rides its own coloured path on the job board); the rest wait in
+  // the dock in the Computer car. Every equipped bot does one job, one "pulse" of work per loop of its path.
+  // A loop takes loopBase + loopPerSocket × (sockets on the path) seconds, but never less than pathFloor (so a
+  // path of up to 4 sockets loops in 12 s, and every socket past 4 adds 1.5 s); Bus chips speed bots up from there.
+  // A bot with no path bounces around the board (the DVD-logo bounce) and works every idleLoop seconds with no
+  // chip bonuses. With no chips, a Flux bot loops every 12 s for 2 Flux: 10 Flux a minute (the same as before).
+  CREW: {
+    equipMax: 4, sockets: 8, maxPath: 8,
+    loopBase: 6, loopPerSocket: 1.5, pathFloor: 12, idleLoop: 12, minLoop: 3,
+    fluxPerLoop: 2,            // Flux job
+    refinePerLoop: 1,          // Refine job: batches of stored ore refined per loop (the best material you can afford)
+    repairPerLoop: 3,          // Repair job: hull per loop (Patch ×1.6)
+    scoutRadius: 4,            // Scout job: blocks lit up and scanned around you per loop (+1.5 per chip bonus; Scout +2)
+    haulRadius: 4,             // Haul job: ore pieces within this range are pulled to you each loop
+    guardDmg: 2.5, guardRange: 5, guardTier: 0.35,   // Guard job: a zap at the nearest enemy (+35% per cave)
+    offlineCapHours: 8,        // base jobs (Flux, Refine) keep working this long while you're away (Tick adds 4 h)
+    chipBonus: [0.25, 0.6, 1.2],   // job bonus from a chip on the path: Mk I, Mk II, Overcharged
+    busBonus: [0.15, 0.35, 0.6],   // bot speed from a Bus chip
+    fuse: 3,                   // matching Mk I chips fused into one Mk II (Computer car)
+    pipChip: 150,              // Flux for Pip's chip of the day
+    rustOvercharged: 0.08,     // chance a Rustvale treasure cache holds an Overcharged chip
+    bossChip: true,            // the first kill of each boss and mini-boss drops a Mk I chip
+    // The daily bot-cache: hidden in one of your open caves, found by its signal. Always pays coins, Flux
+    // and a chip; uniqueChance of a unique bot, guaranteed on the pity-th day without one. A duplicate
+    // unique turns into an Overcharged chip.
+    daily: { uniqueChance: 0.2, pity: 7, overcharged: 0.1, coins: [120, 260], flux: 40,
+             faint: 22, strong: 10, ping: 8 },   // signal: faint beyond `faint` blocks, strong within `strong`
+  },
+  BOTS: {
+    standard: { name: 'Nano-bot', unique: false, col: '#c9d3d6', trait: 'No trait. Any job.', move: 'Glides along its path' },
+    scout:  { name: 'Scout',  unique: true, col: '#86cfdc', only: 'scout', trait: 'Scout job only. Lights up 2 blocks farther and marks gas, vents and unstable rock.', move: 'Hovers on its rotor', chirp: [1400, 1900] },
+    sparky: { name: 'Sparky', unique: true, col: '#f2c94c', best: 'guard', trait: 'On Guard, its zap chains to a second enemy.', move: 'Zig-zags, crackling', chirp: [900, 1800] },
+    patch:  { name: 'Patch',  unique: true, col: '#e2705a', best: 'repair', trait: 'Repairs 60% more on Repair, and gives back half the battery a cave-in costs you.', move: 'Bobs gently', chirp: [700, 1050] },
+    smelt:  { name: 'Smelt',  unique: true, col: '#ff8c3c', best: 'refine', trait: 'On Refine, a 35% chance of double output.', move: 'Waddles, puffing smoke', chirp: [300, 420] },
+    magpie: { name: 'Magpie', unique: true, col: '#9fb3e8', best: 'haul', trait: '+1 magnet range. On Haul, it grabs ore pieces in range instantly.', move: 'Swoops between chips', chirp: [1600, 1200] },
+    tick:   { name: 'Tick',   unique: true, col: '#8fd18a', best: 'flux', trait: '+4 h on how long base jobs work while you\'re away.', move: 'Steps in time, tick-tock', chirp: [1200, 1200] },
+    dowser: { name: 'Dowser', unique: true, col: '#5aa9d6', trait: 'Shows hidden water and lava pockets near you.', move: 'Wanders, rod twitching', chirp: [500, 800] },
+    lucky:  { name: 'Lucky',  unique: true, col: '#f2d27a', trait: '+25% coins from treasure caches, +50% from the daily bot-cache.', move: 'Rolls like a coin', chirp: [1047, 1568] },
+  },
+  JOBS: {
+    flux:   { name: 'Flux',   base: true, chip: 'flux',   col: '#86cfdc', text: 'Makes Flux each loop, even while you\'re away.' },
+    refine: { name: 'Refine', base: true, chip: 'forge',  col: '#ff8c3c', text: 'Refines a batch of stored ore each loop into the best material you can afford, even while you\'re away.' },
+    repair: { name: 'Repair', chip: 'repair', col: '#e2705a', text: 'In caves: patches your hull each loop.' },
+    scout:  { name: 'Scout',  chip: 'scout',  col: '#9fe3f0', text: 'In caves: lights up the rock around you and pings caches each loop.' },
+    haul:   { name: 'Haul',   chip: 'haul',   col: '#9fb3e8', text: 'In caves: pulls in ore pieces around you each loop.' },
+    guard:  { name: 'Guard',  chip: 'guard',  col: '#f2c94c', text: 'In caves: zaps the nearest enemy each loop.' },
+  },
+  // Chips go in the job board's sockets. A bot gets the bonus of every chip on its path (a chip on two paths
+  // counts for both bots). Overcharged chips (rare) give a big bonus with a drawback for every bot that uses them.
+  CHIPS: {
+    flux:   { name: 'Flux Amp',          icon: 'F', col: '#86cfdc', job: 'flux',   over: { kind: 'slow', v: 0.25, text: 'bots using it run 25% slower' } },
+    forge:  { name: 'Forge Accelerator', icon: 'R', col: '#ff8c3c', job: 'refine', over: { kind: 'flux', v: 3, text: 'each Refine loop costs 3 Flux' } },
+    repair: { name: 'Repair Coil',       icon: '+', col: '#e2705a', job: 'repair', over: { kind: 'battery', v: 1, text: 'each loop drains 1 battery' } },
+    scout:  { name: 'Scout Lens',        icon: 'S', col: '#9fe3f0', job: 'scout',  over: { kind: 'battery', v: 1, text: 'each loop drains 1 battery' } },
+    haul:   { name: 'Haul Magnet',       icon: 'H', col: '#9fb3e8', job: 'haul',   over: { kind: 'slow', v: 0.25, text: 'bots using it run 25% slower' } },
+    guard:  { name: 'Guard Capacitor',   icon: 'G', col: '#f2c94c', job: 'guard',  over: { kind: 'battery', v: 1.5, text: 'each loop drains 1.5 battery' } },
+    bus:    { name: 'Bus',               icon: '»', col: '#8fd18a', job: null,     over: { kind: 'weak', v: 0.25, text: 'bots using it do 25% less work' } },
+  },
+  // ----- Mobile outposts (v0.14) -----
+  // The entrance outpost is a big crawler parked at the cave mouth: board it on its ramp to ride home.
+  // The halfway outpost is a small crawler that drives up the conveyor when you build it, then unfolds.
+  CRAWLER: { ramp: { col: 7, rows: [0, 1] }, board: 0.7, close: 0.6, drive: 1.6, emerge: 1.5, open: 0.5, out: 0.6, back: 1.2,
+             smallDrive: 3.2, unfold: 0.8 },
 };

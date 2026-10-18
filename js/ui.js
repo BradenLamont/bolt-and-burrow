@@ -124,6 +124,7 @@ function outpostRows() {
       : 'The path is clear. Build the outpost at ' + depthOf(outpostRow(1)) + ' m.';
   }
   html += `<div class="row"><div><small>Conveyor · halfway outpost</small><strong>${CS().outposts ? 'Reaches the outpost at ' + depthOf(beltEnd()) + ' m' : 'No outpost in this cave yet'}</strong><span>${note}</span></div>${btn}</div>`;
+  if (station() === 'entrance') html += `<div class="row"><div><small>The crawler</small><strong>Ride home to ${TOWN().name}</strong><span>Or walk up its ramp (the right side) and press E.</span></div><button type="button" data-act="crawl">Board crawler</button></div>`;
   if (outpostCount()) {
     const here = station() === 'outpost' ? 1 : 0;
     let b = '';
@@ -275,10 +276,12 @@ $('popBody').addEventListener('click', e => {
   if (act === 'extend') {
     if (!station() || extendMaxed() || beltBlocked().length || S.coins < extendCost()) return;
     S.coins -= extendCost(); CS().outposts++; buildOutpost(CS().outposts);
-    toast('Outpost built', 'The conveyor now reaches ' + depthOf(beltEnd()) + ' m. Recharge and send ore home from there.');
+    closePopup(); startSmallCrawler(CS().outposts);
+    toast('Outpost built', 'A crawler is driving up the conveyor to ' + depthOf(beltEnd()) + ' m. Recharge and send ore home from there.');
     save();
   }
   if (act === 'travel') travelTo(Number(id));
+  if (act === 'crawl') { closePopup(); startCrawl(); }
   updateUI();
 });
 $('skill').addEventListener('click', () => { useSkill(); updateUI(); });
@@ -329,7 +332,7 @@ function updateUI() {
   $('depth').textContent = (inTown() ? 0 : depthOf(pRow())) + ' m';
   $('biome').textContent = inShop() ? 'Pip\'s shop' : inTown() ? 'Town ' + (S.town + 1) + ' · ' + TOWN().name : caveLabel(S.cave) + ' · ' + (st === 'entrance' ? 'entrance' : st === 'outpost' ? 'halfway outpost' : cave().name);
   $('coins').textContent = fmt(S.coins);
-  $('flux').hidden = !S.bots && S.flux < 1;
+  $('flux').hidden = !crewCount() && S.flux < 1;
   $('flux').textContent = fmt(S.flux) + ' Flux';
 
   // battery bar with a "trip back" marker
@@ -359,7 +362,7 @@ function updateUI() {
   const FIRST = {
     forge: ['Forge car', 'Refine ore from storage into materials. Mixed recipes need more than one kind of ore.'],
     lab: ['Lab car', 'Build mods with materials and coins, then place them in the computer. Each mod has a fixed shape.'],
-    computer: ['Computer car', 'Spend Flux on permanent upgrades: magnet range, hull plating, damage mitigation, field repair, weapon power, prospector\'s luck and scanner range.'],
+    computer: ['Computer car', 'Your nano-bot crew lives here: pick their jobs, draw their paths on the job board and place chips. Flux upgrades for your mech are in its last tab.'],
     storage: ['Storage car', 'Everything you send home ends up here. Sell it at Pip\'s counter or refine it in the Forge car.'],
     board: ['Contracts board', 'Three contracts a day, picked at random. Finish them anywhere, then claim coins and Flux here. Do all three for a bonus.'],
     engine: ['Engine car', 'Board here to ride the train to another town. The line opens with the Core Heart.'],
@@ -392,9 +395,10 @@ function updateUI() {
   const sx = cr.left + P.x * CELL - camX, sy = cr.top + (ROWS - P.y) * CELL - camY;
   bb.classList.toggle('ghost', sx > br.left - CELL && sx < br.right + CELL && sy > br.top - CELL && sy < br.bottom + CELL * 0.5);
   const mini = bb.classList.contains('mini') || inTown();
-  $('botTag').textContent = mini && S.bots ? fmt(S.flux) + ' Flux' : S.bots ? S.bots + ' nano-bot' + (S.bots > 1 ? 's' : '') : 'None yet';
-  $('botTag').classList.toggle('open', S.bots > 0);
-  $('botBox').title = S.bots ? 'Making ' + fmt(fluxRate() * 60) + ' Flux a minute, even while you\'re away (up to ' + C.NANOBOT.offlineCapHours + ' h)' : 'The first nano-bot is sealed inside the Ember Idol, Cave 1\'s relic';
+  const nb = crewCount(), ne = equipped().length;
+  $('botTag').textContent = mini && nb ? fmt(S.flux) + ' Flux' : nb ? ne + '/' + C.CREW.equipMax + ' working' : 'None yet';
+  $('botTag').classList.toggle('open', nb > 0);
+  $('botBox').title = nb ? 'The job board: ' + fmt(crewFluxPerMin()) + ' Flux a minute. Change jobs, chips and paths in the Computer car.' : 'Scout joins your crew when you finish the Cave 1 tutorial';
 
   $('skipTut').hidden = !tutActive() || paused();
   renderTip(low);
@@ -405,6 +409,7 @@ function updateUI() {
 // Messages and first-time hints show in the tip line; when there's no message it says what you can do here.
 function idleTip(low) {
   if (trip) return 'Riding the Drill Liner · press any key or tap to skip';
+  if (crawling()) return 'Riding the crawler home · press any key or tap to skip';
   if (tutActive()) return tt('Scout') + TUT[S.tut].text();
   if (low) return '<span class="warn">Low battery · head back to an outpost on the conveyor</span>';
   if (inShop()) {
@@ -416,7 +421,7 @@ function idleTip(low) {
   if (inTown()) {
     if (P.hull < hullMax() - 0.5) return tt('Repairing hull') + 'Back home, your hull repairs itself in a few seconds.';
     const t = townSpot();
-    const CAR = { forge: 'Refine ore from storage into materials.', lab: 'Build mods and place them in the computer grid.', computer: 'Spend Flux on permanent upgrades for your mech.', storage: 'Everything you send home ends up here.' };
+    const CAR = { forge: 'Refine ore from storage into materials.', lab: 'Build mods and place them in the computer grid.', computer: 'Your nano-bot crew: jobs, the job board, chips and Flux upgrades.', storage: 'Everything you send home ends up here.' };
     if (t === 'engine') return tt('Engine car') + (lineIsOpen() ? 'The Drill Liner takes your whole train to ' + C.TOWNS[(S.town + 1) % C.TOWNS.length].name + '.' : 'The line to ' + C.TOWNS[1].name + ' opens when you bring home the Core Heart from Cave 3.');
     if (CAR[t]) return tt(PANEL_NAME[t]()) + CAR[t];
     if (t === 'board') return tt('Contracts board') + 'Three new contracts every day. Press E to see them and claim rewards.';
@@ -424,6 +429,7 @@ function idleTip(low) {
     return (TOWN().shop ? 'Walk through the big door of <b>Pip\'s shop</b> to buy parts and sell.' : 'Pip hasn\'t opened a shop here yet.') + ' Stand at a train car\'s door to use the <b>Forge</b>, <b>Lab</b>, <b>Storage</b> or <b>Computer</b>.';
   }
   if (station()) return tt(station() === 'outpost' ? 'Halfway outpost' : 'Entrance outpost') + 'Your battery recharges and ore rides the conveyor home. Open it to build or fast travel.';
+  if (signalTip()) return signalTip();
   if (cargoCount() >= cargoMax()) return '<span class="warn">Cargo full</span> · bring it to an outpost and the conveyor sends it home.';
   return caveLabel(S.cave) + ' · ' + cave().name + '. Bring ore to an outpost and the conveyor sends it home to the train.';
 }

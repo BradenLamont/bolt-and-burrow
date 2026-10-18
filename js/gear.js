@@ -62,7 +62,7 @@ function revealAround(x, y, rad, scan) {
     for (let c = Math.max(0, Math.floor(x - rad)); c <= Math.min(COLS - 1, Math.ceil(x + rad)); c++) {
       if (Math.hypot(c + 0.5 - x, r + 0.5 - y) > rad) continue;
       const i = idx(c, r);
-      if (scan && T[i] === 'cache') SEEN[i] = 2;
+      if (scan && (T[i] === 'cache' || T[i] === 'botcache')) SEEN[i] = 2;
       else if (!SEEN[i]) SEEN[i] = 1;
     }
 }
@@ -76,7 +76,7 @@ function updateSkills(dt) {
   updateFlares(dt);
   for (let k = pulses.length - 1; k >= 0; k--) { pulses[k].t += dt; if (pulses[k].t > 1) pulses.splice(k, 1); }
   const id = activeSkill();
-  if (!id || !S.bots) return;
+  if (!id || !crewCount()) return;
   const was = S.skillCharge;
   S.skillCharge = Math.min(1, S.skillCharge + dt / skillTime(id));
   if (was < 1 && S.skillCharge >= 1) { sfx('ready'); hintOnce('skill-ready', C.MODS[id].name + ' ready', 'Press Space or Q, or tap the skill button, to use it. Your nano-bot recharges it.'); }

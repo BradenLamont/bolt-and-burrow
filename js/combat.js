@@ -182,6 +182,7 @@ function killFoe(f) {
   if (!f.boss && Math.random() < 0.2) dropOre(Object.keys(cave().ores)[0], f.x, f.y, 1);
   if (f.boss) {
     CS().bossDone = true; P.shake = 0.6;
+    if (C.CREW.bossChip) bossChip();   // a boss's first (and only) kill drops a chip for the job board
     if (F.boss === 'big') {
       S.relicHeld = S.cave + 1;   // the boss carried the relic
       toast(F.name + ' defeated!', 'It dropped the ' + cave().relic.name + '. Carry it home to claim it. (+' + fmt(coins) + ' coins, +' + F.flux + ' Flux)');
