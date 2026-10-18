@@ -127,6 +127,10 @@ $('menuBody').addEventListener('change', e => {
   if (e.target.id === 'saveFile' && e.target.files[0]) e.target.files[0].text().then(loadSaveText);
 });
 $('pauseBtn').addEventListener('click', () => { toggleMenu(); });
+// Switching tabs or windows opens the pause menu, so nothing can hit you while you're away
+const autoPause = () => { if (gameReady && !paused()) openMenu(); };
+document.addEventListener('visibilitychange', () => { if (document.hidden) autoPause(); });
+addEventListener('blur', autoPause);
 
 // ---------- Full screen (the browser's own; turns phones sideways where allowed) ----------
 const fsOK = !!(document.fullscreenEnabled || document.webkitFullscreenEnabled);
@@ -152,6 +156,6 @@ function setBotBox(mini, init) {
 {
   let pref = null;
   try { pref = localStorage.getItem('bolt-burrow-botbox'); } catch (e) {}
-  setBotBox(pref ? pref === 'mini' : innerWidth < 720, true);   // phones start with it shrunk
+  setBotBox(pref ? pref === 'mini' : innerWidth < 720 || innerHeight < 520, true);   // phones start with it shrunk
 }
 $('botToggle').addEventListener('click', () => setBotBox(!$('botBox').classList.contains('mini')));

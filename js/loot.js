@@ -20,9 +20,20 @@ function dropOre(type, x, y, n = 1, spread = 1.4) {
 function dropBlockOre(t, c, r) {
   let n = orePieces(c, r);
   if (Math.random() < modVal('sorter')) n++;   // the Sorter mod sometimes finds one more
+  if (Math.random() < coreVal('prospector')) n++;   // so does the Prospector's luck Flux upgrade
   for (let k = 0; k < n; k++) { const p = pixelAt(c, r, k % C.ORE_DROP.oreMax); dropOre(t, c + p.x, r + 1 - p.y, 1, 1.1); }
 }
 const clearDrops = () => { drops = []; };
+// Pickups of the same ore close together stack into one counter ("+3 Copper") instead of a float per piece
+let lastPick = null;
+function pickupFloat(type) {
+  const label = C.BLOCKS[type].label;
+  if (lastPick && lastPick.type === type && lastPick.f.life > 0.5 && floats.includes(lastPick.f)) {
+    lastPick.n++; lastPick.f.text = '+' + lastPick.n + ' ' + label; lastPick.f.life = 1.1; lastPick.f.x = P.x; lastPick.f.y = P.y + 0.8;
+    return;
+  }
+  lastPick = { type, n: 1, f: floatText(P.x, P.y + 0.8, '+' + label, C.BLOCKS[type].ore) };
+}
 const magnetRange = () => C.ORE_DROP.magnet + coreVal('magnet');
 let fullWarnT = 0;
 function updateDrops(dt) {
@@ -40,7 +51,7 @@ function updateDrops(dt) {
     if (isFloor(at(Math.floor(nx), Math.floor(d.y))) || at(Math.floor(nx), Math.floor(d.y)) === 'chasm') d.x = nx; else d.vx *= -0.4;
     if (isFloor(at(Math.floor(d.x), Math.floor(ny))) || at(Math.floor(d.x), Math.floor(ny)) === 'chasm') d.y = ny; else d.vy *= -0.4;
     if (dist < 0.45 && d.t > 0.35) {
-      if (cargoCount() < cargoMax()) { cargoAdd(d.type); d.got = true; sfx('ore'); floatText(P.x, P.y + 0.8, '+' + C.BLOCKS[d.type].label, C.BLOCKS[d.type].ore); }
+      if (cargoCount() < cargoMax()) { cargoAdd(d.type); d.got = true; sfx('ore'); pickupFloat(d.type); }
     }
   }
   drops = drops.filter(d => !d.got);

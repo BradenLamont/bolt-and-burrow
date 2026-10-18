@@ -184,6 +184,17 @@ A browser mining game: steer a robot with swappable parts down through the earth
 - The nano-bot window sits in the bottom-right corner. Tap its header to shrink it to a Flux counter; it shrinks itself in town so the train stays in view, and turns see-through when your mech walks under it
 - On a phone held upright the town fills the screen's height and scrolls sideways
 
+## v0.12.2 – polish
+- Fixed the screen flashing when you walked up to something you can use or opened a pop-up: the Open button made the bottom strip a few pixels taller, which resized (and blanked) the game for a frame. The bottom strip is now a fixed height, and the game redraws straight away whenever it does resize
+- Two new Flux upgrades in the Computer car: Prospector's luck (8% a level chance of one more ore piece from each ore block) and Scanner range (+1 block a level, and it works even if your canopy has no scanner)
+- Pop-ups work from the keyboard: W/S or the arrow keys pick a button, E presses it, and E with nothing picked (or Esc) closes it
+- Phones turned sideways get a slim one-row HUD and a one-line tip, so the game keeps more of the screen
+- Picking up several pieces of the same ore shows one stacking counter ("+3 copper") instead of a float per piece
+- Entering a cave starts the camera a little higher, so your mech isn't on the bottom edge
+- Switching tabs or windows opens the pause menu, so nothing can hit you while you're away
+- In town, the tip line says when your hull is being repaired
+- Balancing sheet: the two new upgrades on the Flux upgrades tab
+
 ## The plan (agreed October 2026)
 
 ### v0.8 – the train base, materials and the computer (done)

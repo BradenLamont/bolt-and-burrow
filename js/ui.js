@@ -25,15 +25,40 @@ let popup = null, menuOpen = false;
 const paused = () => !!(popup || menuOpen);
 function openPopup(k) {
   popup = k; held.length = 0; joyH = joyV = null; attackHeld = false;
-  $('popup').hidden = false; panelHTML = ''; titleSig = ''; sfx('click');
+  $('popup').hidden = false; panelHTML = ''; titleSig = ''; popSel = null; sfx('click');
   renderPanel();
-  $('popup').querySelector('.x').focus({ preventScroll: true });
+  $('popup').querySelector('.sheet').focus({ preventScroll: true });
 }
 function closePopup() {
   if (!popup) return;
   popup = null; selMod = null; $('popup').hidden = true; sfx('click');
   if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
   updateUI();
+}
+// Keyboard in pop-ups: W/S or the arrows pick a button, E (or Enter/Space) presses it; E with nothing picked closes
+let popSel = null;   // { act, id, x, y } of the picked button, so it stays picked when the panel redraws
+const popButtons = () => [...$('popBody').querySelectorAll('button:not([disabled])')];
+const selKey = b => ({ act: b.dataset.act, id: b.dataset.id, x: b.dataset.x, y: b.dataset.y });
+const sameSel = (b, k) => k && b.dataset.act === k.act && b.dataset.id === k.id && b.dataset.x === k.x && b.dataset.y === k.y;
+let popIdx = -1;
+function markSel() {
+  const bs = popButtons();
+  if (popSel) { const i = bs.findIndex(b => sameSel(b, popSel)); if (i >= 0) popIdx = i; else popIdx = Math.min(popIdx, bs.length - 1); }
+  bs.forEach((b, i) => b.classList.toggle('kbsel', !!popSel && i === popIdx));
+  if (popSel && bs[popIdx]) { popSel = selKey(bs[popIdx]); bs[popIdx].scrollIntoView({ block: 'nearest' }); }
+}
+function popupKey(e) {
+  const nav = { ArrowDown: 1, KeyS: 1, ArrowRight: 1, KeyD: 1, ArrowUp: -1, KeyW: -1, ArrowLeft: -1, KeyA: -1 }[e.code];
+  const bs = popButtons();
+  if (nav) {
+    if (bs.length) { popIdx = !popSel ? (nav > 0 ? 0 : bs.length - 1) : (popIdx + nav + bs.length) % bs.length; popSel = selKey(bs[popIdx]); markSel(); sfx('click'); }
+    return true;
+  }
+  if (e.code === 'KeyE' || e.code === 'Enter' || e.code === 'Space') {
+    if (!e.repeat) { if (popSel && bs[popIdx]) bs[popIdx].click(); else if (e.code === 'KeyE') closePopup(); }
+    return true;
+  }
+  return false;
 }
 $('popup').addEventListener('click', e => { if (e.target === $('popup') || e.target.closest('[data-close]')) closePopup(); });
 
@@ -218,7 +243,7 @@ function renderPanel() {
   if (popup) {
     const [title, chip, body] = PANEL[popup]();
     if (title + chip !== titleSig) { titleSig = title + chip; $('popTitle').textContent = title; $('popChip').innerHTML = chip; }
-    if (body !== panelHTML && !dragging) { panelHTML = body; $('popBody').innerHTML = body; }
+    if (body !== panelHTML && !dragging) { panelHTML = body; $('popBody').innerHTML = body; markSel(); }
   }
   // numbers that change every frame are written straight in, so the buttons aren't rebuilt
   document.querySelectorAll('[data-live="flux"]').forEach(e => (e.textContent = fmt(S.flux) + ' Flux'));
@@ -334,7 +359,7 @@ function updateUI() {
   const FIRST = {
     forge: ['Forge car', 'Refine ore from storage into materials. Mixed recipes need more than one kind of ore.'],
     lab: ['Lab car', 'Build mods with materials and coins, then place them in the computer. Each mod has a fixed shape.'],
-    computer: ['Computer car', 'Spend Flux on permanent upgrades: magnet range, hull plating, damage mitigation, field repair and weapon power.'],
+    computer: ['Computer car', 'Spend Flux on permanent upgrades: magnet range, hull plating, damage mitigation, field repair, weapon power, prospector\'s luck and scanner range.'],
     storage: ['Storage car', 'Everything you send home ends up here. Sell it at Pip\'s counter or refine it in the Forge car.'],
     engine: ['Engine car', 'Board here to ride the train to another town. The line opens with the Core Heart.'],
     stand: ['Display stand', 'Each stand shows every tier of one part. Press E (or tap the button) to look and buy. The weapon rack sells weapons for your weapon arm.'],
@@ -386,6 +411,7 @@ function idleTip(low) {
     return 'Walk up to a <b>display stand</b> or to <b>Pip</b> at the counter. The door at the bottom leads back to town.';
   }
   if (inTown()) {
+    if (P.hull < hullMax() - 0.5) return tt('Repairing hull') + 'Back home, your hull repairs itself in a few seconds.';
     const t = townSpot();
     const CAR = { forge: 'Refine ore from storage into materials.', lab: 'Build mods and place them in the computer grid.', computer: 'Spend Flux on permanent upgrades for your mech.', storage: 'Everything you send home ends up here.' };
     if (t === 'engine') return tt('Engine car') + (lineIsOpen() ? 'The Drill Liner takes your whole train to ' + C.TOWNS[(S.town + 1) % C.TOWNS.length].name + '.' : 'The line to ' + C.TOWNS[1].name + ' opens when you bring home the Core Heart from Cave 3.');

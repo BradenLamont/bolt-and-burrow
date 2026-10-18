@@ -15,7 +15,7 @@ function burst(x, y, col, n) {
     particles.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: 0.35 + Math.random() * 0.35, col });
   }
 }
-function floatText(x, y, text, col) { floats.push({ x, y, text, col, life: 1.1 }); }
+function floatText(x, y, text, col) { const f = { x, y, text, col, life: 1.1 }; floats.push(f); return f; }
 function updateEffects(dt) {
   particles.forEach(p => { p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 0.92; p.vy *= 0.92; p.life -= dt; });
   particles = particles.filter(p => p.life > 0);
@@ -37,13 +37,22 @@ function fit(canvas, ctx) {
 const ZOOMS = { close: 8, normal: 10, far: 13, farther: 16 };
 let zoom = 'normal';
 try { zoom = localStorage.getItem('bolt-burrow-zoom') || 'normal'; if (!ZOOMS[zoom]) zoom = 'normal'; } catch (e) {}
+let gameReady = false;   // set by main.js once the world is loaded
+let lastSize = '';
 function resize() {
+  // Resizing a canvas wipes it, so only do it when the size really changed, then redraw straight away
+  // (otherwise the browser shows one blank frame: a flash)
+  const sr = cv.getBoundingClientRect(), br = pcv.getBoundingClientRect();
+  const sig = [sr.width, sr.height, br.width, br.height, S.cave, S.town, ROWS, zoom].join();
+  if (sig === lastSize) return;
+  lastSize = sig;
   [VW, VH] = fit(cv, g); [PW, PH] = fit(pcv, pg);
   // the HUD and controls now have their own strips above and below the game, so nothing covers it
   padTop = 4; padBot = 4;
   // the town and shop fit the screen's height (on a phone held upright the town scrolls sideways); caves use the zoom setting
   const rows = ZOOMS[zoom];
   CELL = Math.max(18, Math.floor(inTown() ? Math.min(VW / (VW < VH ? 9 : 15), (VH - padTop - padBot) / (ROWS + 0.4)) : Math.min(VW / (rows * 1.5), VH / rows)));
+  if (gameReady) { render(0); renderBots(); }
 }
 new ResizeObserver(resize).observe(stage);
 new ResizeObserver(resize).observe($('botView'));
@@ -55,7 +64,7 @@ function cameraTarget() {
   if (inShop()) return [(C.SHOP.door + C.SHOP.doorW / 2) * s - VW / 2, -(padTop + (VH - padTop - padBot - ROWS * s) / 2) + s * 0.25];
   if (inTown()) return [tx, -(padTop + (VH - padTop - padBot - ROWS * s) / 2) + s * 0.25];   // the whole town fits between the HUD and controls
   let ty = (ROWS - P.y) * s - VH * 0.5;
-  ty = Math.min(ty, ROWS * s - VH + s * 0.4);   // don't scroll far past the bottom row
+  ty = Math.min(ty, ROWS * s - VH + s * 2.2);   // at the cave mouth, leave a little room below so the mech isn't on the bottom edge
   ty = Math.max(ty, -s * 0.6);                  // or the top row
   return [tx, ty];
 }
@@ -479,7 +488,7 @@ function drawTrain(X, Y, s, W) {
       for (let k = 0; k < 6; k++) { g.fillStyle = '#1a1f27'; g.fillRect(x + s * 0.15 + k * (w - s * 0.3) / 6, top + roofH * 0.2, (w - s * 0.3) / 6 - 3, roofH * 0.6); g.fillStyle = Math.sin(time * 3 + k * 1.7) > 0.3 ? '#86cfdc' : '#3a5a66'; g.fillRect(x + s * 0.2 + k * (w - s * 0.3) / 6, top + roofH * 0.3, 3, 3); }
       const sx2 = x + s * 0.15, sw = s * 0.75;
       g.fillStyle = '#0d2a33'; g.fillRect(sx2, winY, sw, winH);
-      Object.keys(C.CORE).forEach((id, k) => { g.fillStyle = 'rgba(134,207,220,.25)'; g.fillRect(sx2 + 3, winY + 3 + k * (winH - 6) / 5, sw - 6, Math.max(1, (winH - 6) / 5 - 2)); g.fillStyle = '#86cfdc'; g.fillRect(sx2 + 3, winY + 3 + k * (winH - 6) / 5, (sw - 6) * coreLevel(id) / C.CORE[id].max, Math.max(1, (winH - 6) / 5 - 2)); });
+      { const ids = Object.keys(C.CORE), n = ids.length, bh = (winH - 6) / n; ids.forEach((id, k) => { g.fillStyle = 'rgba(134,207,220,.25)'; g.fillRect(sx2 + 3, winY + 3 + k * bh, sw - 6, Math.max(1, bh - 1)); g.fillStyle = '#86cfdc'; g.fillRect(sx2 + 3, winY + 3 + k * bh, (sw - 6) * coreLevel(id) / C.CORE[id].max, Math.max(1, bh - 1)); }); }
       g.fillStyle = '#0d2a33'; g.fillRect(x + w - s * 0.75, winY, s * 0.6, winH);
       g.fillStyle = 'rgba(134,207,220,.7)'; g.font = '700 ' + Math.round(s * 0.16) + 'px "Pixelify Sans", monospace'; g.textAlign = 'center'; g.fillText(fmt(S.flux), x + w - s * 0.45, winY + winH * 0.7);
     }

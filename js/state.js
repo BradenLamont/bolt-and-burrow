@@ -112,7 +112,7 @@ function hash(a, b, c) { let h = (a * 374761393 + b * 668265263 + c * 1442695041
 const part = slot => C.PARTS[slot].tiers[S.tiers[slot]];
 // modVal(id) is a mod's effect if it's placed in the computer, otherwise 0 (see base.js)
 const lightRadius = () => part('head').val.light + modVal('lamp');
-const rockScan = () => part('head').val.scan;
+const rockScan = () => part('head').val.scan + coreVal('scanner');   // canopy scanner + the Scanner range Flux upgrade
 const digPower = () => part('arms').val * (1 + modVal('drill') + modVal('overclock'));
 const batteryMax = () => Math.round(part('body').val.battery * (1 + modVal('coolant')));
 const drainMult = () => (modVal('overclock') ? 1.1 : 1);   // Overclock costs 10% more battery

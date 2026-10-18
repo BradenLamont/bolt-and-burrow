@@ -14,7 +14,7 @@ addEventListener('keydown', e => {
   // Esc / P: the pause menu (or close a pop-up). E also closes a pop-up. M: sound on/off
   if (e.code === 'Escape' || e.code === 'KeyP') { e.preventDefault(); if (!e.repeat) { if (popup) closePopup(); else toggleMenu(); } return; }
   if (e.code === 'KeyM' && !e.repeat) { toggleMute(); renderMenu(); updateUI(); }
-  if (popup && e.code === 'KeyE') { e.preventDefault(); if (!e.repeat) closePopup(); return; }
+  if (popup && popupKey(e)) { e.preventDefault(); return; }
   if (paused()) return;                                                  // menus are open: the game ignores keys
   if (trip) { if (!e.repeat) skipTrip(); return; }                      // any key skips the train trip
   if (e.code === C.LINE_TEST_KEY && onTownMap()) lineTestPress();

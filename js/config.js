@@ -280,6 +280,8 @@ const CONFIG = {
     mitigate: { name: 'Damage mitigation', per: 0.06, max: 5, unit: v => '−' + pct(v) + ' damage taken', text: 'Every hit to your hull is reduced (up to 30%).' },
     repair:   { name: 'Field repair',      per: 0.5,  max: 5, unit: v => v + ' hull a second', text: 'Your hull slowly repairs itself away from outposts.' },
     weapon:   { name: 'Weapon power',      per: 0.1,  max: 5, unit: v => '+' + pct(v) + ' weapon damage', text: 'More damage from every weapon on your weapon arm.' },
+    prospector: { name: 'Prospector\'s luck', per: 0.08, max: 5, unit: v => pct(v) + ' chance of an extra ore piece', text: 'Each ore block you break may hold one more piece than its pixels show.' },
+    scanner:  { name: 'Scanner range',     per: 1,    max: 5, unit: v => '+' + v + ' block' + (v === 1 ? '' : 's') + ' scanner range', text: 'Finds caches and outlines unstable rock from farther away. Works even if your canopy has no scanner.' },
   },
   CORE_COST: [30, 60, 120, 240, 400],
 

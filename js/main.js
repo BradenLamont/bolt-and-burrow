@@ -32,6 +32,7 @@ spawnFoes();
 markSeen();
 resize();
 [camX, camY] = cameraTarget();
+gameReady = true;
 
 if (isNewGame) {
   setTimeout(() => toast('Bolt & Burrow', 'Welcome to town. Your train is your base. Walk up the path to the Cave 1 gate. Bring each cave\'s relic home to open the next gate.'), 300);
